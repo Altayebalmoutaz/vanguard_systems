@@ -1,0 +1,13 @@
+{
+  "patient_id": "00000000-0000-4000-8000-000000000004",
+  "first_name": "Elephant",
+  "last_name": "Dent",
+  "dob": "1984-02-29",
+  "subscriber_id": "88877788",
+  "primary_payer_id": "10134",
+  "trigger_event": "PRE_APPOINTMENT",
+  "provider_organization_name": "One",
+  "stedi_provider_npi": "1999999984",
+  "practice_id": "vgd_mock_brooklyn",
+  "rendering_provider_npi": "1104023674"
+}

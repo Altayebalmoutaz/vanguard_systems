@@ -1,0 +1,162 @@
+[project]
+name = "vanguard-md"
+version = "0.1.0"
+description = "Vanguard MD — FastAPI-based dental + medical RCM automation backend"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "Proprietary" }
+authors = [{ name = "Vanguard MD" }]
+
+# Pinned upper bounds prevent surprise major-version drift in CI.
+# Keep ranges tight; bump deliberately and run the full test suite.
+dependencies = [
+    "fastapi>=0.115,<0.120",
+    "uvicorn[standard]>=0.32,<0.40",
+    "pydantic>=2.7,<3",
+    "pydantic-settings>=2.4,<3",
+    "python-dotenv>=1.0,<2",
+    "python-multipart>=0.0.9,<1",
+    "supabase>=2.7,<3",
+    "psycopg[binary]>=3.2,<4",
+    "httpx>=0.27,<1",
+    "pypdf>=5.0,<6",
+    # Presidio + spaCy for PHI scrubbing.
+    # NOTE: spaCy models are installed via a separate command (see README) because PEP 517
+    # cannot pull from arbitrary URLs; we declare the loader package as a runtime dep.
+    "presidio-analyzer>=2.2,<3",
+    "presidio-anonymizer>=2.2,<3",
+    "spacy>=3.7,<4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0,<9",
+    "pytest-asyncio>=0.23,<1",
+    "pytest-cov>=5.0,<7",
+    "respx>=0.22,<1",
+    "ruff>=0.6,<1",
+    "mypy>=1.10,<2",
+    "types-requests>=2.31,<3",
+]
+scripts = [
+    # Used by scripts/generate_cdt2024_master_sql.py to ingest CDT 2024 spreadsheets.
+    "openpyxl>=3.1,<4",
+]
+
+[project.urls]
+Homepage = "https://github.com/vanguard-md"  # update with real URL when public
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+exclude = [
+    "tests*",
+    "eligibility_dashboard*",
+    "supabase*",
+    "archive*",
+    "docs*",
+    "scripts*",
+]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "--tb=short",
+]
+filterwarnings = [
+    "error::DeprecationWarning",
+    "ignore::DeprecationWarning:pydantic.*",
+    "ignore::DeprecationWarning:supabase.*",
+]
+markers = [
+    "slow: tests that hit external APIs or take >1s",
+    "integration: tests that require Supabase or Stedi credentials",
+]
+
+[tool.coverage.run]
+source = ["app"]
+branch = true
+omit = [
+    "*/__init__.py",
+]
+
+[tool.coverage.report]
+fail_under = 60
+show_missing = true
+skip_covered = true
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = [
+    "archive",
+    "eligibility_dashboard",
+    "supabase/functions",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "UP",   # pyupgrade
+    "SIM",  # flake8-simplify
+    "RUF",  # ruff-specific
+]
+ignore = [
+    "E501",  # line length handled by formatter
+    "B008",  # FastAPI uses Depends() in defaults
+    # The (str, Enum) pattern is widely used as Pydantic field types; switching to
+    # StrEnum changes __str__ semantics in a way that can affect log output and
+    # f-string formatting. Pydantic v2 already serialises both to .value, so the
+    # PEP 663 modernisation is purely stylistic and we skip it here.
+    "UP042",
+    # PEP 695 type parameter syntax on `class Foo[T](BaseModel)` is not yet a
+    # universally supported Pydantic pattern; keep `Generic[T]` until upstream
+    # confirms parity.
+    "UP046",
+    # The eligibility doctrine + Stedi 271 docstrings deliberately use en-dash
+    # (–) and other Unicode glyphs to mirror the X12 spec wording. Treating them
+    # as "ambiguous" produces noise without security benefit.
+    "RUF001",  # ambiguous-unicode-character-string
+    "RUF002",  # ambiguous-unicode-character-docstring
+    "RUF003",  # ambiguous-unicode-character-comment
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["B011", "SIM117"]
+"scripts/**/*.py" = ["E402"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = false
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_unreachable = true
+exclude = [
+    "archive/",
+    "eligibility_dashboard/",
+    "supabase/functions/",
+    "venv/",
+    ".venv/",
+]
+
+[[tool.mypy.overrides]]
+module = ["supabase.*", "presidio_analyzer.*", "presidio_anonymizer.*", "openpyxl.*"]
+ignore_missing_imports = true

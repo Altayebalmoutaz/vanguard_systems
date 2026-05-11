@@ -1,0 +1,76 @@
+{
+  "tradingPartnerServiceId": "77777",
+  "payer": {
+    "entityIdentifier": "Payer",
+    "name": "Delta Dental of Example State",
+    "payorIdentification": "77777"
+  },
+  "subscriber": {
+    "memberId": "DDP5566778899",
+    "firstName": "Morgan",
+    "lastName": "Patel",
+    "dateOfBirth": "20010408",
+    "subscriberStatus": "Active",
+    "address": {
+      "address1": "55 Maple Ave",
+      "city": "Phoenix",
+      "state": "AZ",
+      "postalCode": "85003"
+    }
+  },
+  "planStatus": [
+    {
+      "status": "Active Coverage",
+      "planDetails": "Delta Dental PPO — in network",
+      "serviceTypeCodes": ["35"]
+    }
+  ],
+  "benefitsInformation": [
+    {
+      "code": "1",
+      "name": "Active Coverage",
+      "serviceTypeCodes": ["35"],
+      "procedureCode": "D0120",
+      "planNetworkDescription": "In Network",
+      "benefitsDateInformation": {
+        "planBegin": "20260101"
+      }
+    },
+    {
+      "code": "C",
+      "name": "Deductible Remaining",
+      "serviceTypeCodes": ["35"],
+      "benefitAmount": 200.0,
+      "planNetworkDescription": "In Network"
+    },
+    {
+      "code": "F",
+      "name": "Remaining",
+      "serviceTypeCodes": ["35"],
+      "benefitAmount": 950.0,
+      "planNetworkDescription": "In Network"
+    },
+    {
+      "code": "A",
+      "name": "Coinsurance",
+      "serviceTypeCodes": ["35"],
+      "benefitPercent": 0.3,
+      "planNetworkDescription": "In Network"
+    },
+    {
+      "code": "N",
+      "name": "Not covered",
+      "serviceTypeCodes": ["35"],
+      "procedureCode": "D2740",
+      "planNetworkDescription": "In Network",
+      "additionalInformation": [
+        {
+          "description": "Benefit code N — requested CDT not covered under this plan"
+        }
+      ],
+      "benefitsDateInformation": {
+        "benefitDate": "20260419"
+      }
+    }
+  ]
+}

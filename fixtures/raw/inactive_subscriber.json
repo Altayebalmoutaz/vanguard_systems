@@ -1,0 +1,47 @@
+{
+  "tradingPartnerServiceId": "10156",
+  "payer": {
+    "entityIdentifier": "Payer",
+    "name": "MetLife Dental",
+    "payorIdentification": "10156"
+  },
+  "subscriber": {
+    "memberId": "MLF9988776655",
+    "firstName": "Riley",
+    "lastName": "Chen",
+    "dateOfBirth": "19761201",
+    "subscriberStatus": "Terminated",
+    "address": {
+      "address1": "9 Harbor View",
+      "city": "Seattle",
+      "state": "WA",
+      "postalCode": "98101"
+    }
+  },
+  "planStatus": [
+    {
+      "status": "Inactive Coverage",
+      "planDetails": "Coverage ended — subscriber not active",
+      "serviceTypeCodes": ["35"]
+    }
+  ],
+  "planDateInformation": {
+    "planBegin": "20230101",
+    "planEnd": "20241231"
+  },
+  "benefitsInformation": [
+    {
+      "code": "1",
+      "name": "Inactive Coverage",
+      "serviceTypeCodes": ["35"],
+      "benefitsDateInformation": {
+        "planEnd": "20241231"
+      },
+      "additionalInformation": [
+        {
+          "description": "Administrative EB only — no deductible, max, or cost-share rows (subscriber terminated)"
+        }
+      ]
+    }
+  ]
+}

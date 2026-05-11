@@ -1,0 +1,14 @@
+{
+  "patient_id": "00000000-0000-4000-8000-000000000015",
+  "first_name": "Beaver",
+  "last_name": "Dent",
+  "dob": "1969-06-28",
+  "subscriber_id": "404404404",
+  "primary_payer_id": "52133",
+  "trigger_event": "PRE_APPOINTMENT",
+  "cdt_codes": ["D1110"],
+  "provider_organization_name": "One",
+  "stedi_provider_npi": "1999999984",
+  "practice_id": "vgd_mock_brooklyn",
+  "rendering_provider_npi": "1104023674"
+}

@@ -1,0 +1,17 @@
+{
+  "fixture_name": "cigna_inactive",
+  "trading_partner_service_id": "62308",
+  "coverage_order": "primary",
+  "request_procedure_codes": ["D1110"],
+  "raw_271": {
+    "subscriber": { "subscriberStatus": "Terminated" },
+    "planStatus": [{ "status": "Inactive Coverage" }],
+    "benefitsInformation": [
+      { "code": "C", "name": "Deductible", "benefitAmount": 1000.0 },
+      { "code": "F", "name": "Annual Maximum", "benefitAmount": 1200.0 }
+    ]
+  },
+  "expected": {
+    "is_active": false
+  }
+}

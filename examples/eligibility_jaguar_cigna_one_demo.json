@@ -1,0 +1,13 @@
+{
+  "patient_id": "00000000-0000-4000-8000-000000000003",
+  "first_name": "Jaguar",
+  "last_name": "Dent",
+  "dob": "1996-05-05",
+  "subscriber_id": "U3141592653",
+  "primary_payer_id": "62308",
+  "trigger_event": "PRE_APPOINTMENT",
+  "provider_organization_name": "One",
+  "stedi_provider_npi": "1999999984",
+  "practice_id": "vgd_mock_brooklyn",
+  "rendering_provider_npi": "1104023674"
+}

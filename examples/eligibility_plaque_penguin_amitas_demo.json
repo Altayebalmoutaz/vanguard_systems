@@ -1,0 +1,15 @@
+{
+  "patient_id": "00000000-0000-4000-8000-000000000002",
+  "first_name": "Falcon",
+  "last_name": "Dent",
+  "dob": "1985-06-07",
+  "subscriber_id": "007007007",
+  "primary_payer_id": "AMTAS00425",
+  "trigger_event": "PRE_APPOINTMENT",
+  "cdt_codes": ["D1110"],
+  "provider_first_name": "Plaque",
+  "provider_last_name": "Penguin",
+  "stedi_provider_npi": "1999999984",
+  "practice_id": "vgd_mock_brooklyn",
+  "rendering_provider_npi": "1104023674"
+}

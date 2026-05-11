@@ -1,0 +1,99 @@
+{
+  "tradingPartnerServiceId": "87726",
+  "payer": {
+    "entityIdentifier": "Payer",
+    "name": "UnitedHealthcare Dental",
+    "payorIdentification": "87726"
+  },
+  "subscriber": {
+    "memberId": "UHC78901234",
+    "firstName": "Jordan",
+    "lastName": "Rivera",
+    "dateOfBirth": "19900315",
+    "gender": "F",
+    "subscriberStatus": "Active",
+    "address": {
+      "address1": "100 Main St",
+      "city": "Austin",
+      "state": "TX",
+      "postalCode": "78701"
+    }
+  },
+  "planStatus": [
+    {
+      "status": "Active Coverage",
+      "planDetails": "UnitedHealthcare Dental PPO — in network",
+      "serviceTypeCodes": ["35"]
+    }
+  ],
+  "benefitsInformation": [
+    {
+      "code": "1",
+      "name": "Active Coverage",
+      "serviceTypeCodes": ["35"],
+      "procedureCode": "D0120",
+      "planNetworkDescription": "In Network",
+      "additionalInformation": [
+        {
+          "description": "Preventive — in network"
+        }
+      ],
+      "benefitsDateInformation": {
+        "planBegin": "20260101",
+        "planEnd": "20261231"
+      }
+    },
+    {
+      "code": "C",
+      "name": "Deductible",
+      "serviceTypeCodes": ["35"],
+      "benefitAmount": 1500.0,
+      "planNetworkDescription": "In Network",
+      "benefitsDateInformation": {
+        "timePeriodQualifier": "23",
+        "begin": "20260101",
+        "end": "20261231"
+      }
+    },
+    {
+      "code": "C",
+      "name": "Deductible Remaining",
+      "serviceTypeCodes": ["35"],
+      "benefitAmount": 275.5,
+      "planNetworkDescription": "In Network"
+    },
+    {
+      "code": "F",
+      "name": "Annual Maximum",
+      "serviceTypeCodes": ["35"],
+      "benefitAmount": 2500.0,
+      "planNetworkDescription": "In Network"
+    },
+    {
+      "code": "F",
+      "name": "Remaining",
+      "serviceTypeCodes": ["35"],
+      "benefitAmount": 1825.0,
+      "planNetworkDescription": "In Network"
+    },
+    {
+      "code": "B",
+      "name": "Co-Payment",
+      "serviceTypeCodes": ["35"],
+      "benefitAmount": 25.0,
+      "planNetworkDescription": "In Network",
+      "additionalInformation": [
+        {
+          "description": "Office visit copay — preventive (AMT)"
+        }
+      ]
+    },
+    {
+      "code": "A",
+      "name": "Coinsurance",
+      "serviceTypeCodes": ["35"],
+      "benefitPercent": 0.2,
+      "planNetworkDescription": "In Network"
+    }
+  ]
+}

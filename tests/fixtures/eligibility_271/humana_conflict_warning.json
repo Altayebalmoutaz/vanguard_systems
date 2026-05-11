@@ -1,0 +1,25 @@
+{
+  "fixture_name": "humana_conflict_warning",
+  "trading_partner_service_id": "61101",
+  "coverage_order": "primary",
+  "request_procedure_codes": ["D2740"],
+  "raw_271": {
+    "subscriber": { "subscriberStatus": "Active" },
+    "planStatus": [{ "status": "Active Coverage", "planDetails": "in network plan" }],
+    "benefitsInformation": [
+      { "code": "C", "name": "Deductible", "benefitAmount": 1000.0 },
+      { "code": "C", "name": "Deductible Met", "benefitAmount": 200.0 },
+      { "code": "C", "name": "Deductible Remaining", "benefitAmount": 500.0 },
+      { "code": "F", "name": "Annual Maximum", "benefitAmount": 2000.0 },
+      { "code": "F", "name": "Remaining", "benefitAmount": 1200.0 },
+      { "code": "A", "name": "Coinsurance", "benefitPercent": 0.5 }
+    ]
+  },
+  "expected": {
+    "is_active": true,
+    "in_network": true,
+    "coverage_percent": 50.0,
+    "deductible_remaining": 800.0,
+    "warning_contains": ["deductible_remaining conflict"]
+  }
+}

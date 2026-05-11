@@ -1,0 +1,20 @@
+[
+  {
+    "PatPlanNum": 101,
+    "InsSubNum": 201,
+    "PlanNum": 301,
+    "CarrierNum": 401,
+    "CarrierName": "Sample Carrier",
+    "SubscriberID": "SUB-123456",
+    "Ordinal": 1
+  },
+  {
+    "PatPlanNum": 102,
+    "InsSubNum": 202,
+    "PlanNum": 302,
+    "CarrierNum": 402,
+    "CarrierName": "Secondary Carrier",
+    "SubscriberID": "SUB-SECONDARY",
+    "Ordinal": 2
+  }
+]

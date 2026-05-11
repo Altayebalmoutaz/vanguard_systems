@@ -1,0 +1,78 @@
+{
+  "clinical_note": "Adult prophylaxis only; no restorative planned today.",
+  "patient_age": 38,
+  "insurance": "Delta Dental PPO",
+  "patient": {
+    "name": "Jane Doe",
+    "dob": "1987-03-15"
+  },
+  "provider": {
+    "name": "Dr. Smith DDS",
+    "npi": "1234567890"
+  },
+  "billing": {
+    "claim_frequency_code": "1",
+    "place_of_service": "11",
+    "patient_account_number": "ACCT-2001",
+    "patient_sex": "F",
+    "patient_address": {
+      "line1": "101 Main St",
+      "city": "Albany",
+      "state": "NY",
+      "postal_code": "12207"
+    },
+    "subscriber": {
+      "member_id": "MEM12345",
+      "relationship_to_patient": "self",
+      "name": "Jane Doe",
+      "dob": "1987-03-15",
+      "address": {
+        "line1": "101 Main St",
+        "city": "Albany",
+        "state": "NY",
+        "postal_code": "12207"
+      }
+    },
+    "billing_provider": {
+      "name": "Capital Dental Group",
+      "npi": "1234567890",
+      "tax_id": "123456789",
+      "taxonomy_code": "1223G0001X",
+      "address": {
+        "line1": "200 Clinic Rd",
+        "city": "Albany",
+        "state": "NY",
+        "postal_code": "12208"
+      }
+    },
+    "rendering_provider": {
+      "name": "Dr. Smith DDS",
+      "npi": "1234567890",
+      "taxonomy_code": "1223G0001X"
+    },
+    "payer": {
+      "payer_name": "Delta Dental PPO",
+      "payer_id": "DDPPO01",
+      "plan_name": "PPO Plus"
+    },
+    "diagnosis_codes": ["K02.9"],
+    "service_lines": [
+      {
+        "line_number": 1,
+        "service_date": "2026-01-20",
+        "cdt_code": "D1110",
+        "units": 1,
+        "charge_amount": 125.00,
+        "diagnosis_pointers": [1],
+        "tooth_number": null,
+        "surface": null,
+        "prior_auth_number": null
+      }
+    ],
+    "total_charge_amount": 125.00
+  },
+  "mock_era": {
+    "status": "paid",
+    "reason": ""
+  }
+}

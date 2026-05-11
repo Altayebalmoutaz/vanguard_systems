@@ -1,0 +1,1998 @@
+{
+  "cached": false,
+  "layer0_warnings": [],
+  "primary": {
+    "check_id": "b53ead47-0c16-4ddc-b22c-334e89b53cda",
+    "canonical": {
+      "payer_id": "84103",
+      "checked_at": "2026-04-28 09:45:06.685255+00:00",
+      "coverage_order": "primary",
+      "is_active": true,
+      "inactive_reason": null,
+      "is_covered": true,
+      "in_network": null,
+      "coverage_percent": 100.0,
+      "copay": null,
+      "coinsurance": 0.0,
+      "deductible_total": null,
+      "deductible_met": null,
+      "deductible_remaining": 50.0,
+      "annual_max_total": 1500.0,
+      "annual_max_used": null,
+      "annual_max_remaining": 1356.0,
+      "procedure_details": [
+        {
+          "cdt_code": "D1110",
+          "procedure_covered": true,
+          "waiting_period_end": null,
+          "waiting_period_category": "basic",
+          "non_covered_reason": null
+        }
+      ],
+      "has_secondary": false,
+      "secondary_payer_id": null,
+      "raw_response": {
+        "meta": {
+          "senderId": "STEDI",
+          "submitterId": "117151744",
+          "applicationMode": "test",
+          "traceId": "1",
+          "outboundTraceId": "01KQ9QMR8EEST05K9CTS0VJW8N"
+        },
+        "controlNumber": "679943098",
+        "reassociationKey": "679943098",
+        "tradingPartnerServiceId": "84103",
+        "provider": {
+          "providerName": "ONE",
+          "entityIdentifier": "Provider",
+          "entityType": "Non-Person Entity",
+          "npi": "1999999984"
+        },
+        "subscriber": {
+          "memberId": "AFK987654321",
+          "firstName": "AARDVARK",
+          "lastName": "DENT",
+          "entityIdentifier": "Insured or Subscriber",
+          "entityType": "Person",
+          "dateOfBirth": "19701212",
+          "groupNumber": "CAA28A0001",
+          "address": {
+            "address1": "123 BRIGHT SMILE BLVD",
+            "city": "TOOTHVILLE",
+            "state": "CA",
+            "postalCode": "11111"
+          }
+        },
+        "payer": {
+          "entityIdentifier": "Payer",
+          "entityType": "Non-Person Entity",
+          "name": "ANTHEM BLUE CROSS",
+          "payorIdentification": "84103"
+        },
+        "planInformation": {
+          "groupNumber": "CAA28A0001",
+          "groupDescription": "FAMILY DENTAL PPO"
+        },
+        "planDateInformation": {
+          "plan": "20240101-20241231",
+          "eligibility": "20240101"
+        },
+        "planStatus": [
+          {
+            "statusCode": "1",
+            "status": "Active Coverage",
+            "planDetails": "84103 DENTAL",
+            "serviceTypeCodes": [
+              "30"
+            ]
+          },
+          {
+            "statusCode": "1",
+            "status": "Active Coverage",
+            "serviceTypeCodes": [
+              "35"
+            ]
+          }
+        ],
+        "benefitsInformation": [
+          {
+            "code": "P",
+            "name": "Benefit Disclaimer",
+            "additionalInformation": [
+              {
+                "description": "UNLESS OTHERWISE REQUIRED BY STATE LAW, THIS NOTICE IS NOT A GUARANTEE OF PAYMENT. BENEFITS ARE SUBJECT TO ALL CONTRACT LIMITATIONS AND THE MEMBERS ELIGIBILITY STATUS ON THE DATE OF SERVICE. FOR ANY QUESTIONS PLEASE CALL PHONE NUMBER ON BACK OF MEMBERS CARD"
+              }
+            ]
+          },
+          {
+            "code": "1",
+            "name": "Active Coverage",
+            "serviceTypeCodes": [
+              "30"
+            ],
+            "serviceTypes": [
+              "Health Benefit Plan Coverage"
+            ],
+            "planCoverage": "84103 DENTAL",
+            "benefitsRelatedEntity": {
+              "entityIdentifier": "Party Performing Verification",
+              "entityType": "Non-Person Entity",
+              "entityName": "Blue Cross and Blue Shield of Kansas City",
+              "entityIdentification": "PI",
+              "entityIdentificationValue": "47171"
+            },
+            "benefitsRelatedEntities": [
+              {
+                "entityIdentifier": "Party Performing Verification",
+                "entityType": "Non-Person Entity",
+                "entityName": "Blue Cross and Blue Shield of Kansas City",
+                "entityIdentification": "PI",
+                "entityIdentificationValue": "47171"
+              },
+              {
+                "entityIdentifier": "Party Performing Verification",
+                "entityType": "Non-Person Entity",
+                "entityName": "Blue Cross and Blue Shield of Kansas City",
+                "entityIdentification": "PI",
+                "entityIdentificationValue": "47171"
+              }
+            ]
+          },
+          {
+            "code": "F",
+            "name": "Limitations",
+            "serviceTypeCodes": [
+              "32"
+            ],
+            "serviceTypes": [
+              "Plan Waiting Period"
+            ],
+            "quantityQualifierCode": "MN",
+            "quantityQualifier": "Month",
+            "benefitQuantity": "0",
+            "additionalInformation": [
+              {
+                "description": "WAITING PERIOD FROM MEMBER'S WAIT START DATE"
+              }
+            ]
+          },
+          {
+            "code": "F",
+            "name": "Limitations",
+            "serviceTypeCodes": [
+              "35"
+            ],
+            "serviceTypes": [
+              "Dental Care"
+            ],
+            "quantityQualifierCode": "S7",
+            "quantityQualifier": "Age, High Value",
+            "benefitQuantity": "26",
+            "additionalInformation": [
+              {
+                "description": "CHILD AGE"
+              }
+            ]
+          },
+          {
+            "code": "F",
+            "name": "Limitations",
+            "serviceTypeCodes": [
+              "35"
+            ],
+            "serviceTypes": [
+              "Dental Care"
+            ],
+            "quantityQualifierCode": "S7",
+            "quantityQualifier": "Age, High Value",
+            "benefitQuantity": "26",
+            "additionalInformation": [
+              {
+                "description": "STUDENT AGE"
+              }
+            ]
+          },
+          {
+            "code": "1",
+            "name": "Active Coverage",
+            "coverageLevelCode": "FAM",
+            "coverageLevel": "Family",
+            "serviceTypeCodes": [
+              "35"
+            ],
+            "serviceTypes": [
+              "Dental Care"
+            ],
+            "insuranceTypeCode": "GP",
+            "insuranceType": "Group Policy",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable"
+          },
+          {
+            "code": "D",
+            "name": "Benefit Description",
+            "serviceTypeCodes": [
+              "23"
+            ],
+            "serviceTypes": [
+              "Diagnostic Dental"
+            ],
+            "planCoverage": "OON",
+            "benefitPercent": "0.9",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No"
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "serviceTypeCodes": [
+              "23"
+            ],
+            "serviceTypes": [
+              "Diagnostic Dental"
+            ],
+            "planCoverage": "OON",
+            "benefitPercent": "0.1",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No"
+          },
+          {
+            "code": "D",
+            "name": "Benefit Description",
+            "serviceTypeCodes": [
+              "23"
+            ],
+            "serviceTypes": [
+              "Diagnostic Dental"
+            ],
+            "planCoverage": "PRIME2",
+            "benefitPercent": "1",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes"
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "serviceTypeCodes": [
+              "23"
+            ],
+            "serviceTypes": [
+              "Diagnostic Dental"
+            ],
+            "planCoverage": "PRIME2",
+            "benefitPercent": "0",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes"
+          },
+          {
+            "code": "D",
+            "name": "Benefit Description",
+            "serviceTypeCodes": [
+              "24"
+            ],
+            "serviceTypes": [
+              "Periodontics"
+            ],
+            "planCoverage": "OON",
+            "benefitPercent": "0.5",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No",
+            "additionalInformation": [
+              {
+                "description": "NONSURGICAL PERIODONTICS"
+              }
+            ]
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "serviceTypeCodes": [
+              "24"
+            ],
+            "serviceTypes": [
+              "Periodontics"
+            ],
+            "planCoverage": "OON",
+            "benefitPercent": "0.5",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No",
+            "additionalInformation": [
+              {
+                "description": "NONSURGICAL PERIODONTICS"
+              }
+            ]
+          },
+          {
+            "code": "D",
+            "name": "Benefit Description",
+            "serviceTypeCodes": [
+              "24"
+            ],
+            "serviceTypes": [
+              "Periodontics"
+            ],
+            "planCoverage": "OON",
+            "benefitPercent": "0.5",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No",
+            "additionalInformation": [
+              {
+                "description": "SURGICAL PERIODONTICS"
+              }
+            ]
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "serviceTypeCodes": [
+              "24"
+            ],
+            "serviceTypes": [
+              "Periodontics"
+            ],
+            "planCoverage": "OON",
+            "benefitPercent": "0.5",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No",
+            "additionalInformation": [
+              {
+                "description": "SURGICAL PERIODONTICS"
+              }
+            ]
+          },
+          {
+            "code": "D",
+            "name": "Benefit Description",
+            "serviceTypeCodes": [
+              "24"
+            ],
+            "serviceTypes": [
+              "Periodontics"
+            ],
+            "planCoverage": "PRIME7",
+            "benefitPercent": "0.5",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes",
+            "additionalInformation": [
+              {
+                "description": "NONSURGICAL PERIODONTICS"
+              }
+            ]
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "serviceTypeCodes": [
+              "24"
+            ],
+            "serviceTypes": [
+              "Periodontics"
+            ],
+            "planCoverage": "PRIME7",
+            "benefitPercent": "0.5",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes",
+            "additionalInformation": [
+              {
+                "description": "NONSURGICAL PERIODONTICS"
+              }
+            ]
+          },
+          {
+            "code": "D",
+            "name": "Benefit Description",
+            "serviceTypeCodes": [
+              "24"
+            ],
+            "serviceTypes": [
+              "Periodontics"
+            ],
+            "planCoverage": "PRIME8",
+            "benefitPercent": "0.5",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes",
+            "additionalInformation": [
+              {
+                "description": "SURGICAL PERIODONTICS"
+              }
+            ]
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "serviceTypeCodes": [
+              "24"
+            ],
+            "serviceTypes": [
+              "Periodontics"
+            ],
+            "planCoverage": "PRIME8",
+            "benefitPercent": "0.5",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes",
+            "additionalInformation": [
+              {
+                "description": "SURGICAL PERIODONTICS"
+              }
+            ]
+          },
+          {
+            "code": "D",
+            "name": "Benefit Description",
+            "serviceTypeCodes": [
+              "25"
+            ],
+            "serviceTypes": [
+              "Restorative"
+            ],
+            "planCoverage": "OON",
+            "benefitPercent": "0.7",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No",
+            "additionalInformation": [
+              {
+                "description": "BASIC RESTORATIVE"
+              }
+            ]
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "serviceTypeCodes": [
+              "25"
+            ],
+            "serviceTypes": [
+              "Restorative"
+            ],
+            "planCoverage": "OON",
+            "benefitPercent": "0.3",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No",
+            "additionalInformation": [
+              {
+                "description": "BASIC RESTORATIVE"
+              }
+            ]
+          },
+          {
+            "code": "D",
+            "name": "Benefit Description",
+            "serviceTypeCodes": [
+              "25"
+            ],
+            "serviceTypes": [
+              "Restorative"
+            ],
+            "planCoverage": "OON",
+            "benefitPercent": "0.5",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No",
+            "additionalInformation": [
+              {
+                "description": "MAJOR RESTORATIVE"
+              }
+            ]
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "serviceTypeCodes": [
+              "25"
+            ],
+            "serviceTypes": [
+              "Restorative"
+            ],
+            "planCoverage": "OON",
+            "benefitPercent": "0.5",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No",
+            "additionalInformation": [
+              {
+                "description": "MAJOR RESTORATIVE"
+              }
+            ]
+          },
+          {
+            "code": "D",
+            "name": "Benefit Description",
+            "serviceTypeCodes": [
+              "25"
+            ],
+            "serviceTypes": [
+              "Restorative"
+            ],
+            "planCoverage": "PRIME4",
+            "benefitPercent": "0.8",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes",
+            "additionalInformation": [
+              {
+                "description": "BASIC RESTORATIVE"
+              }
+            ]
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "serviceTypeCodes": [
+              "25"
+            ],
+            "serviceTypes": [
+              "Restorative"
+            ],
+            "planCoverage": "PRIME4",
+            "benefitPercent": "0.2",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes",
+            "additionalInformation": [
+              {
+                "description": "BASIC RESTORATIVE"
+              }
+            ]
+          },
+          {
+            "code": "D",
+            "name": "Benefit Description",
+            "serviceTypeCodes": [
+              "25"
+            ],
+            "serviceTypes": [
+              "Restorative"
+            ],
+            "planCoverage": "PRIME13",
+            "benefitPercent": "0.5",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes",
+            "additionalInformation": [
+              {
+                "description": "MAJOR RESTORATIVE"
+              }
+            ]
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "serviceTypeCodes": [
+              "25"
+            ],
+            "serviceTypes": [
+              "Restorative"
+            ],
+            "planCoverage": "PRIME13",
+            "benefitPercent": "0.5",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes",
+            "additionalInformation": [
+              {
+                "description": "MAJOR RESTORATIVE"
+              }
+            ]
+          },
+          {
+            "code": "D",
+            "name": "Benefit Description",
+            "serviceTypeCodes": [
+              "26"
+            ],
+            "serviceTypes": [
+              "Endodontics"
+            ],
+            "planCoverage": "OON",
+            "benefitPercent": "0.5",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No",
+            "additionalInformation": [
+              {
+                "description": "NONSURGICAL ENDODONTICS"
+              }
+            ]
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "serviceTypeCodes": [
+              "26"
+            ],
+            "serviceTypes": [
+              "Endodontics"
+            ],
+            "planCoverage": "OON",
+            "benefitPercent": "0.5",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No",
+            "additionalInformation": [
+              {
+                "description": "NONSURGICAL ENDODONTICS"
+              }
+            ]
+          },
+          {
+            "code": "D",
+            "name": "Benefit Description",
+            "serviceTypeCodes": [
+              "26"
+            ],
+            "serviceTypes": [
+              "Endodontics"
+            ],
+            "planCoverage": "OON",
+            "benefitPercent": "0.5",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No",
+            "additionalInformation": [
+              {
+                "description": "SURGICAL ENDODONTICS"
+              }
+            ]
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "serviceTypeCodes": [
+              "26"
+            ],
+            "serviceTypes": [
+              "Endodontics"
+            ],
+            "planCoverage": "OON",
+            "benefitPercent": "0.5",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No",
+            "additionalInformation": [
+              {
+                "description": "SURGICAL ENDODONTICS"
+              }
+            ]
+          },
+          {
+            "code": "D",
+            "name": "Benefit Description",
+            "serviceTypeCodes": [
+              "26"
+            ],
+            "serviceTypes": [
+              "Endodontics"
+            ],
+            "planCoverage": "PRIME5",
+            "benefitPercent": "0.5",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes",
+            "additionalInformation": [
+              {
+                "description": "NONSURGICAL ENDODONTICS"
+              }
+            ]
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "serviceTypeCodes": [
+              "26"
+            ],
+            "serviceTypes": [
+              "Endodontics"
+            ],
+            "planCoverage": "PRIME5",
+            "benefitPercent": "0.5",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes",
+            "additionalInformation": [
+              {
+                "description": "NONSURGICAL ENDODONTICS"
+              }
+            ]
+          },
+          {
+            "code": "D",
+            "name": "Benefit Description",
+            "serviceTypeCodes": [
+              "26"
+            ],
+            "serviceTypes": [
+              "Endodontics"
+            ],
+            "planCoverage": "PRIME6",
+            "benefitPercent": "0.5",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes",
+            "additionalInformation": [
+              {
+                "description": "SURGICAL ENDODONTICS"
+              }
+            ]
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "serviceTypeCodes": [
+              "26"
+            ],
+            "serviceTypes": [
+              "Endodontics"
+            ],
+            "planCoverage": "PRIME6",
+            "benefitPercent": "0.5",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes",
+            "additionalInformation": [
+              {
+                "description": "SURGICAL ENDODONTICS"
+              }
+            ]
+          },
+          {
+            "code": "D",
+            "name": "Benefit Description",
+            "serviceTypeCodes": [
+              "36"
+            ],
+            "serviceTypes": [
+              "Dental Crowns"
+            ],
+            "planCoverage": "OON",
+            "benefitPercent": "0.5",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No"
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "serviceTypeCodes": [
+              "36"
+            ],
+            "serviceTypes": [
+              "Dental Crowns"
+            ],
+            "planCoverage": "OON",
+            "benefitPercent": "0.5",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No"
+          },
+          {
+            "code": "D",
+            "name": "Benefit Description",
+            "serviceTypeCodes": [
+              "36"
+            ],
+            "serviceTypes": [
+              "Dental Crowns"
+            ],
+            "planCoverage": "PRIME14",
+            "benefitPercent": "0.5",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes"
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "serviceTypeCodes": [
+              "36"
+            ],
+            "serviceTypes": [
+              "Dental Crowns"
+            ],
+            "planCoverage": "PRIME14",
+            "benefitPercent": "0.5",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes"
+          },
+          {
+            "code": "D",
+            "name": "Benefit Description",
+            "serviceTypeCodes": [
+              "38"
+            ],
+            "serviceTypes": [
+              "Orthodontics"
+            ],
+            "planCoverage": "OON",
+            "benefitPercent": "0",
+            "quantityQualifierCode": "S7",
+            "quantityQualifier": "Age, High Value",
+            "benefitQuantity": "19",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No"
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "serviceTypeCodes": [
+              "38",
+              "38"
+            ],
+            "serviceTypes": [
+              "Orthodontics",
+              "Orthodontics"
+            ],
+            "planCoverage": "OON",
+            "benefitPercent": "1",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No"
+          },
+          {
+            "code": "D",
+            "name": "Benefit Description",
+            "serviceTypeCodes": [
+              "38"
+            ],
+            "serviceTypes": [
+              "Orthodontics"
+            ],
+            "planCoverage": "OON",
+            "benefitPercent": "0",
+            "quantityQualifierCode": "S8",
+            "quantityQualifier": "Age, Low Value",
+            "benefitQuantity": "0",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No"
+          },
+          {
+            "code": "D",
+            "name": "Benefit Description",
+            "serviceTypeCodes": [
+              "38"
+            ],
+            "serviceTypes": [
+              "Orthodontics"
+            ],
+            "planCoverage": "PRIME18",
+            "benefitPercent": "0",
+            "quantityQualifierCode": "S7",
+            "quantityQualifier": "Age, High Value",
+            "benefitQuantity": "19",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes"
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "serviceTypeCodes": [
+              "38",
+              "38"
+            ],
+            "serviceTypes": [
+              "Orthodontics",
+              "Orthodontics"
+            ],
+            "planCoverage": "PRIME18",
+            "benefitPercent": "1",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes"
+          },
+          {
+            "code": "D",
+            "name": "Benefit Description",
+            "serviceTypeCodes": [
+              "38"
+            ],
+            "serviceTypes": [
+              "Orthodontics"
+            ],
+            "planCoverage": "PRIME18",
+            "benefitPercent": "0",
+            "quantityQualifierCode": "S8",
+            "quantityQualifier": "Age, Low Value",
+            "benefitQuantity": "0",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes"
+          },
+          {
+            "code": "D",
+            "name": "Benefit Description",
+            "serviceTypeCodes": [
+              "39"
+            ],
+            "serviceTypes": [
+              "Prosthodontics"
+            ],
+            "planCoverage": "OON",
+            "benefitPercent": "0.5",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No",
+            "additionalInformation": [
+              {
+                "description": "PROSTHETICS"
+              }
+            ]
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "serviceTypeCodes": [
+              "39"
+            ],
+            "serviceTypes": [
+              "Prosthodontics"
+            ],
+            "planCoverage": "OON",
+            "benefitPercent": "0.5",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No",
+            "additionalInformation": [
+              {
+                "description": "PROSTHETICS"
+              }
+            ]
+          },
+          {
+            "code": "D",
+            "name": "Benefit Description",
+            "serviceTypeCodes": [
+              "39"
+            ],
+            "serviceTypes": [
+              "Prosthodontics"
+            ],
+            "planCoverage": "OON",
+            "benefitPercent": "0.5",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No",
+            "additionalInformation": [
+              {
+                "description": "BRIDGES"
+              }
+            ]
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "serviceTypeCodes": [
+              "39"
+            ],
+            "serviceTypes": [
+              "Prosthodontics"
+            ],
+            "planCoverage": "OON",
+            "benefitPercent": "0.5",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No",
+            "additionalInformation": [
+              {
+                "description": "BRIDGES"
+              }
+            ]
+          },
+          {
+            "code": "D",
+            "name": "Benefit Description",
+            "serviceTypeCodes": [
+              "39"
+            ],
+            "serviceTypes": [
+              "Prosthodontics"
+            ],
+            "planCoverage": "PRIME16",
+            "benefitPercent": "0.5",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes",
+            "additionalInformation": [
+              {
+                "description": "PROSTHETICS"
+              }
+            ]
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "serviceTypeCodes": [
+              "39"
+            ],
+            "serviceTypes": [
+              "Prosthodontics"
+            ],
+            "planCoverage": "PRIME16",
+            "benefitPercent": "0.5",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes",
+            "additionalInformation": [
+              {
+                "description": "PROSTHETICS"
+              }
+            ]
+          },
+          {
+            "code": "D",
+            "name": "Benefit Description",
+            "serviceTypeCodes": [
+              "39"
+            ],
+            "serviceTypes": [
+              "Prosthodontics"
+            ],
+            "planCoverage": "PRIME17",
+            "benefitPercent": "0.5",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes",
+            "additionalInformation": [
+              {
+                "description": "BRIDGES"
+              }
+            ]
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "serviceTypeCodes": [
+              "39"
+            ],
+            "serviceTypes": [
+              "Prosthodontics"
+            ],
+            "planCoverage": "PRIME17",
+            "benefitPercent": "0.5",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes",
+            "additionalInformation": [
+              {
+                "description": "BRIDGES"
+              }
+            ]
+          },
+          {
+            "code": "D",
+            "name": "Benefit Description",
+            "serviceTypeCodes": [
+              "40"
+            ],
+            "serviceTypes": [
+              "Oral Surgery"
+            ],
+            "planCoverage": "OON",
+            "benefitPercent": "0.7",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No",
+            "additionalInformation": [
+              {
+                "description": "SIMPLE ORAL SURGERY"
+              }
+            ]
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "serviceTypeCodes": [
+              "40"
+            ],
+            "serviceTypes": [
+              "Oral Surgery"
+            ],
+            "planCoverage": "OON",
+            "benefitPercent": "0.3",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No",
+            "additionalInformation": [
+              {
+                "description": "SIMPLE ORAL SURGERY"
+              }
+            ]
+          },
+          {
+            "code": "D",
+            "name": "Benefit Description",
+            "serviceTypeCodes": [
+              "40"
+            ],
+            "serviceTypes": [
+              "Oral Surgery"
+            ],
+            "planCoverage": "OON",
+            "benefitPercent": "0.5",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No",
+            "additionalInformation": [
+              {
+                "description": "COMPLEX ORAL SURGERY"
+              }
+            ]
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "serviceTypeCodes": [
+              "40"
+            ],
+            "serviceTypes": [
+              "Oral Surgery"
+            ],
+            "planCoverage": "OON",
+            "benefitPercent": "0.5",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No",
+            "additionalInformation": [
+              {
+                "description": "COMPLEX ORAL SURGERY"
+              }
+            ]
+          },
+          {
+            "code": "D",
+            "name": "Benefit Description",
+            "serviceTypeCodes": [
+              "40"
+            ],
+            "serviceTypes": [
+              "Oral Surgery"
+            ],
+            "planCoverage": "PRIME9",
+            "benefitPercent": "0.8",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes",
+            "additionalInformation": [
+              {
+                "description": "SIMPLE ORAL SURGERY"
+              }
+            ]
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "serviceTypeCodes": [
+              "40"
+            ],
+            "serviceTypes": [
+              "Oral Surgery"
+            ],
+            "planCoverage": "PRIME9",
+            "benefitPercent": "0.2",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes",
+            "additionalInformation": [
+              {
+                "description": "SIMPLE ORAL SURGERY"
+              }
+            ]
+          },
+          {
+            "code": "D",
+            "name": "Benefit Description",
+            "serviceTypeCodes": [
+              "40"
+            ],
+            "serviceTypes": [
+              "Oral Surgery"
+            ],
+            "planCoverage": "PRIME10",
+            "benefitPercent": "0.5",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes",
+            "additionalInformation": [
+              {
+                "description": "COMPLEX ORAL SURGERY"
+              }
+            ]
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "serviceTypeCodes": [
+              "40"
+            ],
+            "serviceTypes": [
+              "Oral Surgery"
+            ],
+            "planCoverage": "PRIME10",
+            "benefitPercent": "0.5",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes",
+            "additionalInformation": [
+              {
+                "description": "COMPLEX ORAL SURGERY"
+              }
+            ]
+          },
+          {
+            "code": "D",
+            "name": "Benefit Description",
+            "serviceTypeCodes": [
+              "41"
+            ],
+            "serviceTypes": [
+              "Routine (Preventive) Dental"
+            ],
+            "planCoverage": "OON",
+            "benefitPercent": "0.9",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No"
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "serviceTypeCodes": [
+              "41"
+            ],
+            "serviceTypes": [
+              "Routine (Preventive) Dental"
+            ],
+            "planCoverage": "OON",
+            "benefitPercent": "0.1",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No"
+          },
+          {
+            "code": "D",
+            "name": "Benefit Description",
+            "serviceTypeCodes": [
+              "41"
+            ],
+            "serviceTypes": [
+              "Routine (Preventive) Dental"
+            ],
+            "planCoverage": "PRIME1",
+            "benefitPercent": "1",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes"
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "serviceTypeCodes": [
+              "41"
+            ],
+            "serviceTypes": [
+              "Routine (Preventive) Dental"
+            ],
+            "planCoverage": "PRIME1",
+            "benefitPercent": "0",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes"
+          },
+          {
+            "code": "F",
+            "name": "Limitations",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "serviceTypeCodes": [
+              "38"
+            ],
+            "serviceTypes": [
+              "Orthodontics"
+            ],
+            "planCoverage": "OON",
+            "timeQualifierCode": "25",
+            "timeQualifier": "Contract",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No"
+          },
+          {
+            "code": "F",
+            "name": "Limitations",
+            "coverageLevelCode": "FAM",
+            "coverageLevel": "Family",
+            "serviceTypeCodes": [
+              "38"
+            ],
+            "serviceTypes": [
+              "Orthodontics"
+            ],
+            "planCoverage": "OON",
+            "timeQualifierCode": "25",
+            "timeQualifier": "Contract",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No"
+          },
+          {
+            "code": "F",
+            "name": "Limitations",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "serviceTypeCodes": [
+              "38"
+            ],
+            "serviceTypes": [
+              "Orthodontics"
+            ],
+            "planCoverage": "OON",
+            "timeQualifierCode": "32",
+            "timeQualifier": "Lifetime",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No"
+          },
+          {
+            "code": "F",
+            "name": "Limitations",
+            "coverageLevelCode": "FAM",
+            "coverageLevel": "Family",
+            "serviceTypeCodes": [
+              "38"
+            ],
+            "serviceTypes": [
+              "Orthodontics"
+            ],
+            "planCoverage": "OON",
+            "timeQualifierCode": "32",
+            "timeQualifier": "Lifetime",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No"
+          },
+          {
+            "code": "F",
+            "name": "Limitations",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "serviceTypeCodes": [
+              "38"
+            ],
+            "serviceTypes": [
+              "Orthodontics"
+            ],
+            "planCoverage": "PRIME18",
+            "timeQualifierCode": "25",
+            "timeQualifier": "Contract",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes"
+          },
+          {
+            "code": "F",
+            "name": "Limitations",
+            "coverageLevelCode": "FAM",
+            "coverageLevel": "Family",
+            "serviceTypeCodes": [
+              "38"
+            ],
+            "serviceTypes": [
+              "Orthodontics"
+            ],
+            "planCoverage": "PRIME18",
+            "timeQualifierCode": "25",
+            "timeQualifier": "Contract",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes"
+          },
+          {
+            "code": "F",
+            "name": "Limitations",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "serviceTypeCodes": [
+              "38"
+            ],
+            "serviceTypes": [
+              "Orthodontics"
+            ],
+            "planCoverage": "PRIME18",
+            "timeQualifierCode": "32",
+            "timeQualifier": "Lifetime",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes"
+          },
+          {
+            "code": "F",
+            "name": "Limitations",
+            "coverageLevelCode": "FAM",
+            "coverageLevel": "Family",
+            "serviceTypeCodes": [
+              "38"
+            ],
+            "serviceTypes": [
+              "Orthodontics"
+            ],
+            "planCoverage": "PRIME18",
+            "timeQualifierCode": "32",
+            "timeQualifier": "Lifetime",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes"
+          },
+          {
+            "code": "F",
+            "name": "Limitations",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "serviceTypeCodes": [
+              "35"
+            ],
+            "serviceTypes": [
+              "Dental Care"
+            ],
+            "planCoverage": "OON",
+            "timeQualifierCode": "25",
+            "timeQualifier": "Contract",
+            "benefitAmount": "1500",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No"
+          },
+          {
+            "code": "F",
+            "name": "Limitations",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "serviceTypeCodes": [
+              "35"
+            ],
+            "serviceTypes": [
+              "Dental Care"
+            ],
+            "planCoverage": "OON",
+            "timeQualifierCode": "29",
+            "timeQualifier": "Remaining",
+            "benefitAmount": "1356",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No"
+          },
+          {
+            "code": "F",
+            "name": "Limitations",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "serviceTypeCodes": [
+              "35"
+            ],
+            "serviceTypes": [
+              "Dental Care"
+            ],
+            "planCoverage": "PRIME35",
+            "timeQualifierCode": "25",
+            "timeQualifier": "Contract",
+            "benefitAmount": "1500",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes"
+          },
+          {
+            "code": "F",
+            "name": "Limitations",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "serviceTypeCodes": [
+              "35"
+            ],
+            "serviceTypes": [
+              "Dental Care"
+            ],
+            "planCoverage": "PRIME35",
+            "timeQualifierCode": "29",
+            "timeQualifier": "Remaining",
+            "benefitAmount": "1356",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes"
+          },
+          {
+            "code": "C",
+            "name": "Deductible",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "serviceTypeCodes": [
+              "38"
+            ],
+            "serviceTypes": [
+              "Orthodontics"
+            ],
+            "planCoverage": "OON",
+            "timeQualifierCode": "25",
+            "timeQualifier": "Contract",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No"
+          },
+          {
+            "code": "C",
+            "name": "Deductible",
+            "coverageLevelCode": "FAM",
+            "coverageLevel": "Family",
+            "serviceTypeCodes": [
+              "38"
+            ],
+            "serviceTypes": [
+              "Orthodontics"
+            ],
+            "planCoverage": "OON",
+            "timeQualifierCode": "25",
+            "timeQualifier": "Contract",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No"
+          },
+          {
+            "code": "C",
+            "name": "Deductible",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "serviceTypeCodes": [
+              "38"
+            ],
+            "serviceTypes": [
+              "Orthodontics"
+            ],
+            "planCoverage": "OON",
+            "timeQualifierCode": "32",
+            "timeQualifier": "Lifetime",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No"
+          },
+          {
+            "code": "C",
+            "name": "Deductible",
+            "coverageLevelCode": "FAM",
+            "coverageLevel": "Family",
+            "serviceTypeCodes": [
+              "38"
+            ],
+            "serviceTypes": [
+              "Orthodontics"
+            ],
+            "planCoverage": "OON",
+            "timeQualifierCode": "32",
+            "timeQualifier": "Lifetime",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No"
+          },
+          {
+            "code": "C",
+            "name": "Deductible",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "serviceTypeCodes": [
+              "38"
+            ],
+            "serviceTypes": [
+              "Orthodontics"
+            ],
+            "planCoverage": "PRIME18",
+            "timeQualifierCode": "25",
+            "timeQualifier": "Contract",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes"
+          },
+          {
+            "code": "C",
+            "name": "Deductible",
+            "coverageLevelCode": "FAM",
+            "coverageLevel": "Family",
+            "serviceTypeCodes": [
+              "38"
+            ],
+            "serviceTypes": [
+              "Orthodontics"
+            ],
+            "planCoverage": "PRIME18",
+            "timeQualifierCode": "25",
+            "timeQualifier": "Contract",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes"
+          },
+          {
+            "code": "C",
+            "name": "Deductible",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "serviceTypeCodes": [
+              "38"
+            ],
+            "serviceTypes": [
+              "Orthodontics"
+            ],
+            "planCoverage": "PRIME18",
+            "timeQualifierCode": "32",
+            "timeQualifier": "Lifetime",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes"
+          },
+          {
+            "code": "C",
+            "name": "Deductible",
+            "coverageLevelCode": "FAM",
+            "coverageLevel": "Family",
+            "serviceTypeCodes": [
+              "38"
+            ],
+            "serviceTypes": [
+              "Orthodontics"
+            ],
+            "planCoverage": "PRIME18",
+            "timeQualifierCode": "32",
+            "timeQualifier": "Lifetime",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes"
+          },
+          {
+            "code": "C",
+            "name": "Deductible",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "serviceTypeCodes": [
+              "35"
+            ],
+            "serviceTypes": [
+              "Dental Care"
+            ],
+            "planCoverage": "OON",
+            "timeQualifierCode": "29",
+            "timeQualifier": "Remaining",
+            "benefitAmount": "50",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No"
+          },
+          {
+            "code": "C",
+            "name": "Deductible",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "serviceTypeCodes": [
+              "35"
+            ],
+            "serviceTypes": [
+              "Dental Care"
+            ],
+            "planCoverage": "PRIME35",
+            "timeQualifierCode": "29",
+            "timeQualifier": "Remaining",
+            "benefitAmount": "50",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes"
+          }
+        ],
+        "errors": [],
+        "x12": "ISA*00*          *00*          *ZZ*STEDI          *01*117151744      *260428*0945*^*00501*679943098*0*T*`~GS*HB*STEDI*117151744*20260428*094506*1*X*005010X279A1~ST*271*0001*005010X279A1~BHT*0022*11*1*20260325*0901~HL*1**20*1~NM1*PR*2*ANTHEM BLUE CROSS*****PI*84103~HL*2*1*21*1~NM1*1P*2*ONE*****XX*1999999984~HL*3*2*22*0~NM1*IL*1*DENT*AARDVARK****MI*AFK987654321~REF*6P*CAA28A0001~REF*6P*CAA28A0001*FAMILY DENTAL PPO~N3*123 BRIGHT SMILE BLVD~N4*TOOTHVILLE*CA*11111~DMG*D8*19701212~DTP*291*RD8*20240101-20241231~DTP*307*D8*20240101~EB*P~MSG*UNLESS OTHERWISE REQUIRED BY STATE LAW, THIS NOTICE IS NOT A GUARANTEE OF PAYMENT. BENEFITS ARE SUBJECT TO ALL CONTRACT LIMITATIONS AND THE MEMBERS ELIGIBILITY STATUS ON THE DATE OF SERVICE. FOR ANY QUESTIONS PLEASE CALL PHONE NUMBER ON BACK OF MEMBERS CARD~EB*1**30**84103 DENTAL~LS*2120~NM1*VER*2*Blue Cross and Blue Shield of Kansas City*****PI*47171~NM1*VER*2*Blue Cross and Blue Shield of Kansas City*****PI*47171~LE*2120~EB*F**32******MN*0~MSG*WAITING PERIOD FROM MEMBER'S WAIT START DATE~EB*F**35******S7*26~MSG*CHILD AGE~EB*F**35******S7*26~MSG*STUDENT AGE~EB*1*FAM*35*GP********W~EB*D**23**OON***.9****N~EB*A**23**OON***.1****N~EB*D**23**PRIME2***1****Y~EB*A**23**PRIME2***0****Y~EB*D**24**OON***.5****N~MSG*NONSURGICAL PERIODONTICS~EB*A**24**OON***.5****N~MSG*NONSURGICAL PERIODONTICS~EB*D**24**OON***.5****N~MSG*SURGICAL PERIODONTICS~EB*A**24**OON***.5****N~MSG*SURGICAL PERIODONTICS~EB*D**24**PRIME7***.5****Y~MSG*NONSURGICAL PERIODONTICS~EB*A**24**PRIME7***.5****Y~MSG*NONSURGICAL PERIODONTICS~EB*D**24**PRIME8***.5****Y~MSG*SURGICAL PERIODONTICS~EB*A**24**PRIME8***.5****Y~MSG*SURGICAL PERIODONTICS~EB*D**25**OON***.7****N~MSG*BASIC RESTORATIVE~EB*A**25**OON***.3****N~MSG*BASIC RESTORATIVE~EB*D**25**OON***.5****N~MSG*MAJOR RESTORATIVE~EB*A**25**OON***.5****N~MSG*MAJOR RESTORATIVE~EB*D**25**PRIME4***.8****Y~MSG*BASIC RESTORATIVE~EB*A**25**PRIME4***.2****Y~MSG*BASIC RESTORATIVE~EB*D**25**PRIME13***.5****Y~MSG*MAJOR RESTORATIVE~EB*A**25**PRIME13***.5****Y~MSG*MAJOR RESTORATIVE~EB*D**26**OON***.5****N~MSG*NONSURGICAL ENDODONTICS~EB*A**26**OON***.5****N~MSG*NONSURGICAL ENDODONTICS~EB*D**26**OON***.5****N~MSG*SURGICAL ENDODONTICS~EB*A**26**OON***.5****N~MSG*SURGICAL ENDODONTICS~EB*D**26**PRIME5***.5****Y~MSG*NONSURGICAL ENDODONTICS~EB*A**26**PRIME5***.5****Y~MSG*NONSURGICAL ENDODONTICS~EB*D**26**PRIME6***.5****Y~MSG*SURGICAL ENDODONTICS~EB*A**26**PRIME6***.5****Y~MSG*SURGICAL ENDODONTICS~EB*D**36**OON***.5****N~EB*A**36**OON***.5****N~EB*D**36**PRIME14***.5****Y~EB*A**36**PRIME14***.5****Y~EB*D**38**OON***0*S7*19**N~EB*A**38^38**OON***1****N~EB*D**38**OON***0*S8*0**N~EB*D**38**PRIME18***0*S7*19**Y~EB*A**38^38**PRIME18***1****Y~EB*D**38**PRIME18***0*S8*0**Y~EB*D**39**OON***.5****N~MSG*PROSTHETICS~EB*A**39**OON***.5****N~MSG*PROSTHETICS~EB*D**39**OON***.5****N~MSG*BRIDGES~EB*A**39**OON***.5****N~MSG*BRIDGES~EB*D**39**PRIME16***.5****Y~MSG*PROSTHETICS~EB*A**39**PRIME16***.5****Y~MSG*PROSTHETICS~EB*D**39**PRIME17***.5****Y~MSG*BRIDGES~EB*A**39**PRIME17***.5****Y~MSG*BRIDGES~EB*D**40**OON***.7****N~MSG*SIMPLE ORAL SURGERY~EB*A**40**OON***.3****N~MSG*SIMPLE ORAL SURGERY~EB*D**40**OON***.5****N~MSG*COMPLEX ORAL SURGERY~EB*A**40**OON***.5****N~MSG*COMPLEX ORAL SURGERY~EB*D**40**PRIME9***.8****Y~MSG*SIMPLE ORAL SURGERY~EB*A**40**PRIME9***.2****Y~MSG*SIMPLE ORAL SURGERY~EB*D**40**PRIME10***.5****Y~MSG*COMPLEX ORAL SURGERY~EB*A**40**PRIME10***.5****Y~MSG*COMPLEX ORAL SURGERY~EB*D**41**OON***.9****N~EB*A**41**OON***.1****N~EB*D**41**PRIME1***1****Y~EB*A**41**PRIME1***0****Y~EB*F*IND*38**OON*25*0*****N~EB*F*FAM*38**OON*25*0*****N~EB*F*IND*38**OON*32*0*****N~EB*F*FAM*38**OON*32*0*****N~EB*F*IND*38**PRIME18*25*0*****Y~EB*F*FAM*38**PRIME18*25*0*****Y~EB*F*IND*38**PRIME18*32*0*****Y~EB*F*FAM*38**PRIME18*32*0*****Y~EB*F*IND*35**OON*25*1500*****N~EB*F*IND*35**OON*29*1356*****N~EB*F*IND*35**PRIME35*25*1500*****Y~EB*F*IND*35**PRIME35*29*1356*****Y~EB*C*IND*38**OON*25*0*****N~EB*C*FAM*38**OON*25*0*****N~EB*C*IND*38**OON*32*0*****N~EB*C*FAM*38**OON*32*0*****N~EB*C*IND*38**PRIME18*25*0*****Y~EB*C*FAM*38**PRIME18*25*0*****Y~EB*C*IND*38**PRIME18*32*0*****Y~EB*C*FAM*38**PRIME18*32*0*****Y~EB*C*IND*35**OON*29*50*****N~EB*C*IND*35**PRIME35*29*50*****Y~SE*150*0001~GE*1*1~IEA*1*679943098~",
+        "eligibilitySearchId": "019dd37a-610e-7de1-89b5-4c4fee2577b8",
+        "id": "ec_019dd37a-610e-7de1-89b5-4c3c20e02141"
+      },
+      "payer_aaa_errors": [],
+      "stedi_aaa_actions": [],
+      "stedi_warnings": [],
+      "response_complete": true,
+      "missing_fields": [],
+      "normalization_version": "1.0",
+      "normalization_warnings": [],
+      "dental_benefit_breakdown": {
+        "coinsurance_patient_pct_by_stc": {
+          "23": 0.0,
+          "25": 20.0,
+          "36": 50.0,
+          "38": 100.0
+        },
+        "ortho_lifetime_max": 0.0,
+        "limitation_notes": [
+          "[Benefit Disclaimer] UNLESS OTHERWISE REQUIRED BY STATE LAW, THIS NOTICE IS NOT A GUARANTEE OF PAYMENT. BENEFITS ARE SUBJECT TO ALL CONTRACT LIMITATIONS AND THE MEMBERS ELIGIBILITY STATUS ON THE DATE OF SERVICE. FOR ANY QUESTIONS PLEASE CALL PHONE NUMBER ON BACK OF MEMBERS CARD",
+          "[Limitations] WAITING PERIOD FROM MEMBER'S WAIT START DATE"
+        ]
+      },
+      "dental_calculator_ready": {
+        "network_status": {
+          "in_network": {
+            "remaining_deductible": 50.0,
+            "deductible_total": null,
+            "deductible_met": null,
+            "coinsurance_percent": 0.0,
+            "copay_amount": null,
+            "annual_max_remaining": 1356.0,
+            "annual_max_total": 1500.0,
+            "coverage_levels": [
+              "IND"
+            ],
+            "time_periods": [
+              "unknown",
+              "contract",
+              "remaining"
+            ],
+            "prior_auth_required": null,
+            "source_benefit_indexes": [
+              8,
+              9,
+              36,
+              37,
+              56,
+              57,
+              58,
+              59,
+              62,
+              63,
+              74,
+              75,
+              85
+            ],
+            "limitations_notes": []
+          },
+          "out_of_network": {
+            "remaining_deductible": 50.0,
+            "deductible_total": null,
+            "deductible_met": null,
+            "coinsurance_percent": 10.0,
+            "copay_amount": null,
+            "annual_max_remaining": 1356.0,
+            "annual_max_total": 1500.0,
+            "coverage_levels": [
+              "IND"
+            ],
+            "time_periods": [
+              "unknown",
+              "contract",
+              "remaining"
+            ],
+            "prior_auth_required": null,
+            "source_benefit_indexes": [
+              6,
+              7,
+              34,
+              35,
+              52,
+              53,
+              54,
+              55,
+              60,
+              61,
+              72,
+              73,
+              84
+            ],
+            "limitations_notes": []
+          },
+          "both": {
+            "remaining_deductible": null,
+            "deductible_total": null,
+            "deductible_met": null,
+            "coinsurance_percent": null,
+            "copay_amount": null,
+            "annual_max_remaining": null,
+            "annual_max_total": null,
+            "coverage_levels": [
+              "FAM"
+            ],
+            "time_periods": [
+              "unknown"
+            ],
+            "prior_auth_required": null,
+            "source_benefit_indexes": [
+              5
+            ],
+            "limitations_notes": []
+          },
+          "unknown": {
+            "remaining_deductible": null,
+            "deductible_total": null,
+            "deductible_met": null,
+            "coinsurance_percent": null,
+            "copay_amount": null,
+            "annual_max_remaining": null,
+            "annual_max_total": null,
+            "coverage_levels": [],
+            "time_periods": [
+              "unknown"
+            ],
+            "prior_auth_required": null,
+            "source_benefit_indexes": [
+              1,
+              3,
+              4
+            ],
+            "limitations_notes": []
+          }
+        },
+        "frequency_rules": [],
+        "latest_visit_or_consultation": [],
+        "carve_outs": [],
+        "aaa_actions": [],
+        "free_text_overrides": []
+      },
+      "integrity_warnings": [
+        "in_network status not reported by payer \u2014 confirm via phone if required",
+        "important_field_null:copay"
+      ],
+      "integrity_policy_version": "2.3",
+      "integrity_issues": [
+        {
+          "code": "L4_IN_NETWORK_NOT_REPORTED",
+          "severity": "warning",
+          "message": "in_network status not reported by payer \u2014 confirm via phone if required",
+          "field": "in_network"
+        },
+        {
+          "code": "L4_IMPORTANT_FIELD_NULL",
+          "severity": "warning",
+          "message": "Important field is null: copay",
+          "field": "copay"
+        }
+      ],
+      "eligibility_canonical": {
+        "is_active": true,
+        "is_in_network": null,
+        "is_covered": true,
+        "procedure_covered": true,
+        "deductible_remaining": 50.0,
+        "deductible_total": null,
+        "max_remaining": 1356.0,
+        "max_total": 1500.0,
+        "copay": null,
+        "coinsurance": 0.0,
+        "patient_responsibility": null,
+        "coverage_confidence": null,
+        "missing_fields": [],
+        "response_complete": true,
+        "null_reasons": {
+          "is_in_network": "not_reported_or_ambiguous_in_271_response",
+          "deductible_total": "not_present_in_normalized_271",
+          "copay": "not_present_in_normalized_271",
+          "patient_responsibility": "computed_in_layer_5_fee_schedule_not_run"
+        }
+      },
+      "in_network_from_payer_271": null,
+      "in_network_for_fees": true,
+      "fee_network_source": "provider_directory",
+      "fee_network_contract_label": "Mock Anthem BCBS CA (Stedi)"
+    },
+    "routing": {
+      "status": "CLEARED",
+      "action": "route_coding",
+      "next_agent": "coding",
+      "notify_front_office": false,
+      "detail": {
+        "payer_id": "84103",
+        "cdt_codes": [
+          "D1110"
+        ],
+        "routing_policy_version": "2.3",
+        "reasons": [
+          "routing_state:CLEARED",
+          "routing_policy_version:2.3",
+          "cleared_without_prior_auth_rule"
+        ]
+      }
+    },
+    "procedure_estimates": [
+      {
+        "cdt_code": "D1110",
+        "procedure_covered": true,
+        "waiting_period_end": null,
+        "waiting_period_category": "basic",
+        "non_covered_reason": null,
+        "allowed_amount": 120.0,
+        "insurance_pays": 70.0,
+        "patient_responsibility": 50.0
+      }
+    ],
+    "universal_dental_record": {
+      "record_id": "b6718e9e-90cd-49c5-9477-9417791eee50",
+      "stedi_payer_id": "84103",
+      "payer_name": "ANTHEM BLUE CROSS",
+      "subscriber_id": "AFK987654321",
+      "plan_begin_date": "2024-01-01",
+      "plan_end_date": "2024-12-31",
+      "group_number": "CAA28A0001",
+      "network_status": "unknown",
+      "financial": {
+        "annual_max": {
+          "value": 1500.0,
+          "confidence": "EXPLICIT",
+          "source_field": "canonical/annual_max_total"
+        },
+        "annual_max_used": {
+          "value": null,
+          "confidence": "UNKNOWN",
+          "source_field": "canonical/annual_max_used"
+        },
+        "annual_max_remaining": {
+          "value": 1356.0,
+          "confidence": "EXPLICIT",
+          "source_field": "canonical/annual_max_remaining"
+        },
+        "deductible_total": {
+          "value": null,
+          "confidence": "UNKNOWN",
+          "source_field": "canonical/deductible_total"
+        },
+        "deductible_met": {
+          "value": null,
+          "confidence": "UNKNOWN",
+          "source_field": "canonical/deductible_met"
+        },
+        "deductible_remaining": {
+          "value": 50.0,
+          "confidence": "EXPLICIT",
+          "source_field": "canonical/deductible_remaining"
+        },
+        "ortho_lifetime_max": {
+          "value": 0.0,
+          "confidence": "EXPLICIT",
+          "source_field": "dental_benefit_breakdown/ortho_lifetime_max"
+        },
+        "ortho_lifetime_used": {
+          "value": null,
+          "confidence": "UNKNOWN",
+          "source_field": "not_extracted_v1"
+        }
+      },
+      "categories": [
+        {
+          "category": "DIAGNOSTIC",
+          "covered": {
+            "value": true,
+            "confidence": "EXPLICIT",
+            "source_field": "benefitsInformation/STC/23/A"
+          },
+          "coinsurance_patient_pct": {
+            "value": 0.0,
+            "confidence": "EXPLICIT",
+            "source_field": "dental_benefit_breakdown/coinsurance_patient_pct_by_stc/23"
+          }
+        },
+        {
+          "category": "BASIC",
+          "covered": {
+            "value": true,
+            "confidence": "EXPLICIT",
+            "source_field": "benefitsInformation/STC/25/A"
+          },
+          "coinsurance_patient_pct": {
+            "value": 20.0,
+            "confidence": "EXPLICIT",
+            "source_field": "dental_benefit_breakdown/coinsurance_patient_pct_by_stc/25"
+          }
+        },
+        {
+          "category": "MAJOR",
+          "covered": {
+            "value": true,
+            "confidence": "EXPLICIT",
+            "source_field": "benefitsInformation/STC/36/A"
+          },
+          "coinsurance_patient_pct": {
+            "value": 50.0,
+            "confidence": "EXPLICIT",
+            "source_field": "dental_benefit_breakdown/coinsurance_patient_pct_by_stc/36"
+          }
+        },
+        {
+          "category": "ORTHO",
+          "covered": {
+            "value": true,
+            "confidence": "EXPLICIT",
+            "source_field": "benefitsInformation/STC/38/A"
+          },
+          "coinsurance_patient_pct": {
+            "value": 100.0,
+            "confidence": "EXPLICIT",
+            "source_field": "dental_benefit_breakdown/coinsurance_patient_pct_by_stc/38"
+          }
+        }
+      ],
+      "ortho": {
+        "eligible": {
+          "value": true,
+          "confidence": "EXPLICIT",
+          "source_field": "canonical"
+        },
+        "lifetime_max": {
+          "value": 0.0,
+          "confidence": "EXPLICIT",
+          "source_field": "dental_benefit_breakdown/ortho_lifetime_max"
+        },
+        "age_cutoff": {
+          "value": null,
+          "confidence": "UNKNOWN",
+          "source_field": "not_extracted_v1"
+        },
+        "in_progress_treatment": {
+          "value": null,
+          "confidence": "UNKNOWN",
+          "source_field": "not_extracted_v1"
+        },
+        "months_remaining": {
+          "value": null,
+          "confidence": "UNKNOWN",
+          "source_field": "not_extracted_v1"
+        }
+      },
+      "waiting_periods_present": true,
+      "limitation_notes": [
+        "[Benefit Disclaimer] UNLESS OTHERWISE REQUIRED BY STATE LAW, THIS NOTICE IS NOT A GUARANTEE OF PAYMENT. BENEFITS ARE SUBJECT TO ALL CONTRACT LIMITATIONS AND THE MEMBERS ELIGIBILITY STATUS ON THE DATE OF SERVICE. FOR ANY QUESTIONS PLEASE CALL PHONE NUMBER ON BACK OF MEMBERS CARD",
+        "[Limitations] WAITING PERIOD FROM MEMBER'S WAIT START DATE"
+      ],
+      "normalization_method": "heuristic",
+      "normalization_timestamp": "2026-04-28T09:45:08.633713Z",
+      "raw_payload_hash": "5dc3ce9a1c7f76e2d37f6e62c5db9c69d33f51b472729c4f5c4a591b0c6db1f4",
+      "canonical_version": "1.0"
+    }
+  },
+  "secondary": null
+}

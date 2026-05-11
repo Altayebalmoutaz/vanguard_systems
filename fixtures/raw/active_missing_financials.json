@@ -1,0 +1,74 @@
+{
+  "tradingPartnerServiceId": "47467",
+  "payer": {
+    "entityIdentifier": "Payer",
+    "name": "Anthem Blue Cross Dental",
+    "payorIdentification": "47467"
+  },
+  "subscriber": {
+    "memberId": "ANT1122334455",
+    "firstName": "Sam",
+    "lastName": "Okonkwo",
+    "dateOfBirth": "19951102",
+    "subscriberStatus": "Active",
+    "address": {
+      "address1": "404 Cedar Rd",
+      "city": "Columbus",
+      "state": "OH",
+      "postalCode": "43215"
+    }
+  },
+  "planStatus": [
+    {
+      "status": "Active Coverage",
+      "planDetails": "Anthem dental — calendar year benefits",
+      "serviceTypeCodes": ["35"]
+    }
+  ],
+  "benefitsInformation": [
+    {
+      "code": "1",
+      "name": "Active Coverage",
+      "serviceTypeCodes": ["35"],
+      "procedureCode": "D0274",
+      "benefitsDateInformation": {
+        "planBegin": "20260101",
+        "planEnd": "20261231"
+      }
+    },
+    {
+      "code": "C",
+      "name": "Deductible Remaining",
+      "serviceTypeCodes": ["35"],
+      "benefitAmount": 412.33,
+      "additionalInformation": [
+        {
+          "description": "Remaining deductible — payer did not send total or met amounts"
+        }
+      ]
+    },
+    {
+      "code": "F",
+      "name": "Remaining",
+      "serviceTypeCodes": ["35"],
+      "benefitAmount": 1788.0,
+      "additionalInformation": [
+        {
+          "description": "Annual maximum remaining — no annual maximum total in response"
+        }
+      ]
+    },
+    {
+      "code": "A",
+      "name": "Coinsurance",
+      "serviceTypeCodes": ["35"],
+      "benefitPercent": 0.15
+    },
+    {
+      "code": "B",
+      "name": "Co-Payment",
+      "serviceTypeCodes": ["35"],
+      "benefitAmount": 15.0
+    }
+  ]
+}

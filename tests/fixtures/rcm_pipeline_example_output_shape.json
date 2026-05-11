@@ -1,0 +1,21 @@
+{
+  "coding": {
+    "cdt_codes": ["D1110"],
+    "icd10_codes": ["K02.9"],
+    "confidence": 0.9,
+    "justification": "Adult prophylaxis with history of caries monitoring.",
+    "payer_flags": [],
+    "status": "pending_review"
+  },
+  "prior_auth": {
+    "requires_auth": false,
+    "required_documents": [],
+    "payer_rules": [
+      "D1110 (adult prophylaxis): typically no prior authorization",
+      "Delta Dental: confirm member-specific benefit booklet — auth requirements vary by employer group"
+    ],
+    "risk_level": "low",
+    "risk_reason": "Routine profile: lower administrative risk if claims match documented services | Model note: …",
+    "status": "pending_review"
+  }
+}

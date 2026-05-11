@@ -1,0 +1,32 @@
+# Local dev composition — Vanguard MD backend.
+#
+# Production deployment is via your container platform of choice; this file is for
+# reproducible local runs. The Supabase database is intentionally NOT containerised
+# here because the project targets the hosted Supabase project (use `supabase start`
+# for a local Supabase if you need a fully offline stack).
+#
+# Usage:
+#   cp .env.example .env             # fill in real values
+#   docker compose up --build        # backend on :8000
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: vanguard-md/backend:dev
+    container_name: vanguard-backend
+    env_file:
+      - .env
+    environment:
+      # Override container-internal config here, not in .env, to keep secrets centralised.
+      PORT: "8000"
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped

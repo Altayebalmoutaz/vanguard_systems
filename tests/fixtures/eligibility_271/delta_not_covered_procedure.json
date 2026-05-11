@@ -1,0 +1,27 @@
+{
+  "fixture_name": "delta_not_covered_procedure",
+  "trading_partner_service_id": "77777",
+  "coverage_order": "primary",
+  "request_procedure_codes": ["D2750"],
+  "raw_271": {
+    "subscriber": { "subscriberStatus": "Active" },
+    "planStatus": [{ "status": "Active Coverage", "planDetails": "in network" }],
+    "benefitsInformation": [
+      { "code": "C", "name": "Deductible Remaining", "benefitAmount": 350.0 },
+      { "code": "F", "name": "Remaining", "benefitAmount": 900.0 },
+      { "code": "A", "name": "Coinsurance", "benefitPercent": 0.4 },
+      { "code": "N", "name": "Not covered", "procedureCode": "D2750" }
+    ]
+  },
+  "expected": {
+    "is_active": true,
+    "in_network": true,
+    "coverage_percent": 60.0,
+    "procedure_expectations": {
+      "D2750": {
+        "procedure_covered": false,
+        "waiting_period_category": "major"
+      }
+    }
+  }
+}

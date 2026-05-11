@@ -1,0 +1,172 @@
+{
+  "tradingPartnerServiceId": "62308",
+  "payer": {
+    "entityIdentifier": "Payer",
+    "name": "Cigna Dental",
+    "payorIdentification": "62308"
+  },
+  "subscriber": {
+    "memberId": "CGN44556677",
+    "firstName": "Alex",
+    "lastName": "Nguyen",
+    "dateOfBirth": "19880722",
+    "subscriberStatus": "Active",
+    "address": {
+      "address1": "22 Oak Lane",
+      "city": "Denver",
+      "state": "CO",
+      "postalCode": "80202"
+    }
+  },
+  "planStatus": [
+    {
+      "status": "Active Coverage",
+      "planDetails": "Cigna Dental — member accessing out-of-network provider",
+      "serviceTypeCodes": ["35"]
+    }
+  ],
+  "benefitsInformation": [
+    {
+      "code": "1",
+      "name": "Active Coverage",
+      "serviceTypeCodes": ["35"],
+      "procedureCode": "D1110",
+      "planNetworkDescription": "In Network",
+      "additionalInformation": [
+        {
+          "description": "In network — preventive coverage"
+        }
+      ],
+      "benefitsDateInformation": {
+        "eligibilityBegin": "20260101"
+      }
+    },
+    {
+      "code": "C",
+      "name": "Deductible",
+      "serviceTypeCodes": ["35"],
+      "benefitAmount": 50.0,
+      "planNetworkDescription": "In Network",
+      "additionalInformation": [
+        {
+          "description": "in network deductible — calendar year"
+        }
+      ]
+    },
+    {
+      "code": "C",
+      "name": "Deductible Remaining",
+      "serviceTypeCodes": ["35"],
+      "benefitAmount": 50.0,
+      "planNetworkDescription": "In Network",
+      "additionalInformation": [
+        {
+          "description": "in network remaining balance"
+        }
+      ]
+    },
+    {
+      "code": "F",
+      "name": "Annual Maximum",
+      "serviceTypeCodes": ["35"],
+      "benefitAmount": 1500.0,
+      "planNetworkDescription": "In Network"
+    },
+    {
+      "code": "F",
+      "name": "Remaining",
+      "serviceTypeCodes": ["35"],
+      "benefitAmount": 1100.0,
+      "planNetworkDescription": "In Network"
+    },
+    {
+      "code": "A",
+      "name": "Coinsurance",
+      "serviceTypeCodes": ["35"],
+      "benefitPercent": 0.1,
+      "planNetworkDescription": "In Network"
+    },
+    {
+      "code": "1",
+      "name": "Active Coverage",
+      "serviceTypeCodes": ["35"],
+      "procedureCode": "D1110",
+      "planNetworkDescription": "Out of Network",
+      "additionalInformation": [
+        {
+          "description": "Out of network — same procedure, different cost share"
+        }
+      ],
+      "benefitsDateInformation": {
+        "eligibilityBegin": "20260101"
+      }
+    },
+    {
+      "code": "C",
+      "name": "Deductible",
+      "serviceTypeCodes": ["35"],
+      "benefitAmount": 150.0,
+      "planNetworkDescription": "Out of Network",
+      "additionalInformation": [
+        {
+          "description": "out of network deductible"
+        }
+      ]
+    },
+    {
+      "code": "C",
+      "name": "Deductible Remaining",
+      "serviceTypeCodes": ["35"],
+      "benefitAmount": 150.0,
+      "planNetworkDescription": "Out of Network",
+      "additionalInformation": [
+        {
+          "description": "out of network remaining"
+        }
+      ]
+    },
+    {
+      "code": "F",
+      "name": "Annual Maximum",
+      "serviceTypeCodes": ["35"],
+      "benefitAmount": 1500.0,
+      "planNetworkDescription": "Out of Network"
+    },
+    {
+      "code": "F",
+      "name": "Remaining",
+      "serviceTypeCodes": ["35"],
+      "benefitAmount": 900.0,
+      "planNetworkDescription": "Out of Network",
+      "additionalInformation": [
+        {
+          "description": "out of network annual max remaining"
+        }
+      ]
+    },
+    {
+      "code": "B",
+      "name": "Co-Payment",
+      "serviceTypeCodes": ["35"],
+      "benefitAmount": 45.0,
+      "planNetworkDescription": "Out of Network",
+      "additionalInformation": [
+        {
+          "description": "out of network office visit copay"
+        }
+      ]
+    },
+    {
+      "code": "A",
+      "name": "Coinsurance",
+      "serviceTypeCodes": ["35"],
+      "benefitPercent": 0.45,
+      "planNetworkDescription": "Out of Network",
+      "additionalInformation": [
+        {
+          "description": "out of network coinsurance"
+        }
+      ]
+    }
+  ]
+}

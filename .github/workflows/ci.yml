@@ -1,0 +1,188 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (lint + type + test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            requirements.txt
+
+      - name: Install backend (runtime + dev extras)
+        run: |
+          python -m pip install --upgrade pip wheel
+          pip install -e ".[dev,scripts]"
+
+      - name: Download spaCy model (cached)
+        run: python -m spacy download en_core_web_sm
+        # CI uses the small model to keep wheel sizes small; production should use en_core_web_lg.
+
+      - name: Ruff (lint)
+        run: ruff check .
+
+      - name: Ruff (format check)
+        run: ruff format --check .
+
+      - name: Mypy (type check, non-blocking)
+        # Type errors are surfaced but do not yet fail the build.
+        # Flip `continue-on-error: false` once the codebase reaches strict-mypy clean.
+        continue-on-error: true
+        run: mypy app
+
+      - name: Pytest
+        env:
+          PYTHONHASHSEED: "0"
+          # Test stubs / mocks expect *empty* secrets so tests don't accidentally call real APIs.
+          SUPABASE_URL: ""
+          SUPABASE_SERVICE_ROLE_KEY: ""
+          SUPABASE_ANON_KEY: ""
+          OPENROUTER_API_KEY: ""
+          STEDI_API_KEY: ""
+          JINA_API_KEY: ""
+        run: pytest --cov=app --cov-report=xml --cov-report=term
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
+
+  eligibility-dashboard:
+    name: Eligibility dashboard (Next.js build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: eligibility_dashboard
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: eligibility_dashboard/package-lock.json
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+
+  supply-chain:
+    # HIPAA / vendor-risk gate: every build produces a CycloneDX SBOM for the
+    # whole repo (Python + npm) and runs two complementary CVE scanners:
+    #   * pip-audit  — PyPA-maintained, reads pyproject.toml directly.
+    #   * osv-scanner — Google OSV.dev, covers both pip lockdata and the
+    #     eligibility_dashboard/package-lock.json in one pass.
+    # The SBOM is attached as a build artifact so security can hand it to
+    # auditors / customers asking "what's in this build?".
+    name: SBOM + dependency CVE scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      # Required by anchore/sbom-action when uploading SBOMs as release artifacts.
+      actions: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install runtime dependencies (resolve full closure for audit)
+        # We install the *runtime* extras only (skip [dev]) so the audit reflects
+        # what actually ships in the Docker image — dev tools live in their own
+        # quarantined extra and aren't part of the production attack surface.
+        run: |
+          python -m pip install --upgrade pip wheel
+          pip install -e ".[scripts]"
+
+      - name: pip-audit (Python CVEs)
+        # `--vulnerability-service osv` queries OSV.dev which aggregates PyPA,
+        # GHSA, and OSV-native advisories. pip-audit exits non-zero on any
+        # finding by default; this is the policy we want for a HIPAA build.
+        #
+        # If a finding has *no fix available upstream* and security has signed
+        # it off, add it with `--ignore-vuln <ADVISORY_ID> # owner: <name>,
+        # reviewed: <YYYY-MM-DD>` and revisit at the next quarterly checkpoint.
+        # Do not add ignores to silence findings that *do* have a fix — bump
+        # the dependency instead.
+        run: |
+          python -m pip install --upgrade pip wheel
+          python -m pip install "pip-audit>=2.7,<3"
+          pip-audit --vulnerability-service osv
+
+      - name: Generate CycloneDX SBOM (Python + npm)
+        # anchore/sbom-action wraps Syft and detects pyproject.toml + every
+        # package.json under the repo, producing one merged SBOM.
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: cyclonedx-json
+          artifact-name: vanguard-md-sbom.cdx.json
+          output-file: vanguard-md-sbom.cdx.json
+
+      - name: Install OSV-Scanner binary
+        # Pinned to a known release; bumping is a one-line PR. Installing the
+        # binary directly avoids drift from third-party action wrappers.
+        env:
+          OSV_VERSION: "1.9.2"
+        run: |
+          curl -sSL -o osv-scanner.tar.gz \
+            "https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_linux_amd64.tar.gz" || \
+          curl -sSL -o osv-scanner \
+            "https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_linux_amd64"
+          if [ -f osv-scanner.tar.gz ]; then tar -xzf osv-scanner.tar.gz; fi
+          chmod +x osv-scanner
+          sudo mv osv-scanner /usr/local/bin/osv-scanner
+          osv-scanner --version
+
+      - name: OSV-Scanner (cross-language CVE scan against SBOM)
+        # OSV-Scanner ingests the CycloneDX SBOM and matches every listed
+        # package (Python + npm) against the OSV.dev advisory feed. The
+        # `--recursive` lockfile sweep gives us belt-and-braces coverage of
+        # eligibility_dashboard/package-lock.json in case it isn't picked up
+        # via the SBOM. Build fails on any non-LOW finding.
+        run: |
+          osv-scanner \
+            --sbom=vanguard-md-sbom.cdx.json \
+            --recursive \
+            --skip-git \
+            ./
+
+      - name: Upload SBOM artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-cyclonedx
+          path: vanguard-md-sbom.cdx.json
+          retention-days: 90

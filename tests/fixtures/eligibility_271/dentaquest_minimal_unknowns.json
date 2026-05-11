@@ -1,0 +1,18 @@
+{
+  "fixture_name": "dentaquest_minimal_unknowns",
+  "trading_partner_service_id": "CX014",
+  "coverage_order": "primary",
+  "request_procedure_codes": ["D0120"],
+  "raw_271": {
+    "subscriber": {},
+    "planStatus": [],
+    "benefitsInformation": [
+      { "code": "C", "name": "Deductible", "benefitAmount": 200.0 }
+    ]
+  },
+  "expected": {
+    "is_active": null,
+    "in_network": null,
+    "deductible_remaining": null
+  }
+}

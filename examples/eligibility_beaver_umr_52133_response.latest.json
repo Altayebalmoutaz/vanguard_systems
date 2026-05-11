@@ -1,0 +1,2143 @@
+{
+  "cached": false,
+  "layer0_warnings": [],
+  "primary": {
+    "check_id": "436cc554-033b-4f21-9dda-567b8c569a56",
+    "canonical": {
+      "payer_id": "52133",
+      "checked_at": "2026-04-28 09:42:52.578591+00:00",
+      "coverage_order": "primary",
+      "is_active": true,
+      "inactive_reason": null,
+      "is_covered": true,
+      "in_network": null,
+      "coverage_percent": 100.0,
+      "copay": 0.0,
+      "coinsurance": 0.0,
+      "deductible_total": 0.0,
+      "deductible_met": null,
+      "deductible_remaining": 0.0,
+      "annual_max_total": 0.0,
+      "annual_max_used": null,
+      "annual_max_remaining": 0.0,
+      "procedure_details": [
+        {
+          "cdt_code": "D1110",
+          "procedure_covered": true,
+          "waiting_period_end": null,
+          "waiting_period_category": "basic",
+          "non_covered_reason": null
+        }
+      ],
+      "has_secondary": false,
+      "secondary_payer_id": null,
+      "raw_response": {
+        "meta": {
+          "senderId": "STEDI",
+          "submitterId": "117151744",
+          "applicationMode": "test",
+          "traceId": "1",
+          "outboundTraceId": "01KQ9QGNATWM0MST023T5KD8HZ"
+        },
+        "controlNumber": "425476254",
+        "reassociationKey": "425476254",
+        "tradingPartnerServiceId": "52133",
+        "provider": {
+          "providerName": "ONE",
+          "entityIdentifier": "Provider",
+          "entityType": "Non-Person Entity",
+          "npi": "1999999984"
+        },
+        "subscriber": {
+          "memberId": "404404404",
+          "firstName": "BEAVER",
+          "lastName": "DENT",
+          "middleName": "C",
+          "gender": "M",
+          "entityIdentifier": "Insured or Subscriber",
+          "entityType": "Person",
+          "dateOfBirth": "19690628",
+          "groupNumber": "007007",
+          "address": {
+            "address1": "456 RIVERBANK ROAD",
+            "city": "DAMVILLE",
+            "state": "CA",
+            "postalCode": "11111"
+          }
+        },
+        "payer": {
+          "entityIdentifier": "Payer",
+          "entityType": "Non-Person Entity",
+          "name": "UNITEDHEALTHCARE DENTAL",
+          "payorIdentification": "52133"
+        },
+        "planInformation": {
+          "groupNumber": "007007"
+        },
+        "planDateInformation": {
+          "plan": "20240101-20241231"
+        },
+        "planStatus": [
+          {
+            "statusCode": "1",
+            "status": "Active Coverage",
+            "planDetails": "BSCA 65 - EMBEDDED D&P PPO PLAN - DBPEMB03",
+            "serviceTypeCodes": [
+              "30"
+            ]
+          },
+          {
+            "statusCode": "1",
+            "status": "Active Coverage"
+          },
+          {
+            "statusCode": "1",
+            "status": "Active Coverage"
+          },
+          {
+            "statusCode": "1",
+            "status": "Active Coverage"
+          },
+          {
+            "statusCode": "1",
+            "status": "Active Coverage"
+          },
+          {
+            "statusCode": "1",
+            "status": "Active Coverage"
+          },
+          {
+            "statusCode": "1",
+            "status": "Active Coverage"
+          },
+          {
+            "statusCode": "1",
+            "status": "Active Coverage"
+          },
+          {
+            "statusCode": "1",
+            "status": "Active Coverage"
+          },
+          {
+            "statusCode": "1",
+            "status": "Active Coverage",
+            "serviceTypeCodes": [
+              "23",
+              "41"
+            ]
+          }
+        ],
+        "benefitsInformation": [
+          {
+            "code": "1",
+            "name": "Active Coverage",
+            "serviceTypeCodes": [
+              "30"
+            ],
+            "serviceTypes": [
+              "Health Benefit Plan Coverage"
+            ],
+            "insuranceTypeCode": "PR",
+            "insuranceType": "Preferred Provider Organization (PPO)",
+            "planCoverage": "BSCA 65 - EMBEDDED D&P PPO PLAN - DBPEMB03",
+            "benefitsRelatedEntity": {
+              "entityIdentifier": "Payer",
+              "entityType": "Non-Person Entity",
+              "entityName": "UNITEDHEALTHCARE SPECIALTY BENEFITS DENTAL",
+              "entityIdentification": "PI",
+              "entityIdentificationValue": "412014834",
+              "contactInformation": {
+                "contacts": [
+                  {
+                    "communicationMode": "Uniform Resource Locator (URL)",
+                    "communicationNumber": "WWW.OPTUMHEALTHDENTAL.COM"
+                  }
+                ]
+              }
+            },
+            "benefitsRelatedEntities": [
+              {
+                "entityIdentifier": "Payer",
+                "entityType": "Non-Person Entity",
+                "entityName": "UNITEDHEALTHCARE SPECIALTY BENEFITS DENTAL",
+                "entityIdentification": "PI",
+                "entityIdentificationValue": "412014834",
+                "contactInformation": {
+                  "contacts": [
+                    {
+                      "communicationMode": "Uniform Resource Locator (URL)",
+                      "communicationNumber": "WWW.OPTUMHEALTHDENTAL.COM"
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "code": "C",
+            "name": "Deductible",
+            "coverageLevelCode": "FAM",
+            "coverageLevel": "Family",
+            "serviceTypeCodes": [
+              "30"
+            ],
+            "serviceTypes": [
+              "Health Benefit Plan Coverage"
+            ],
+            "timeQualifierCode": "23",
+            "timeQualifier": "Calendar Year",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable"
+          },
+          {
+            "code": "C",
+            "name": "Deductible",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "serviceTypeCodes": [
+              "30"
+            ],
+            "serviceTypes": [
+              "Health Benefit Plan Coverage"
+            ],
+            "timeQualifierCode": "23",
+            "timeQualifier": "Calendar Year",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable"
+          },
+          {
+            "code": "G",
+            "name": "Out of Pocket (Stop Loss)",
+            "coverageLevelCode": "FAM",
+            "coverageLevel": "Family",
+            "serviceTypeCodes": [
+              "30"
+            ],
+            "serviceTypes": [
+              "Health Benefit Plan Coverage"
+            ],
+            "insuranceTypeCode": "PR",
+            "insuranceType": "Preferred Provider Organization (PPO)",
+            "timeQualifierCode": "23",
+            "timeQualifier": "Calendar Year",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable"
+          },
+          {
+            "code": "G",
+            "name": "Out of Pocket (Stop Loss)",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "serviceTypeCodes": [
+              "30"
+            ],
+            "serviceTypes": [
+              "Health Benefit Plan Coverage"
+            ],
+            "insuranceTypeCode": "PR",
+            "insuranceType": "Preferred Provider Organization (PPO)",
+            "timeQualifierCode": "23",
+            "timeQualifier": "Calendar Year",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable"
+          },
+          {
+            "code": "C",
+            "name": "Deductible",
+            "coverageLevelCode": "FAM",
+            "coverageLevel": "Family",
+            "serviceTypeCodes": [
+              "30"
+            ],
+            "serviceTypes": [
+              "Health Benefit Plan Coverage"
+            ],
+            "timeQualifierCode": "24",
+            "timeQualifier": "Year to Date",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable"
+          },
+          {
+            "code": "C",
+            "name": "Deductible",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "serviceTypeCodes": [
+              "30"
+            ],
+            "serviceTypes": [
+              "Health Benefit Plan Coverage"
+            ],
+            "timeQualifierCode": "24",
+            "timeQualifier": "Year to Date",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable"
+          },
+          {
+            "code": "C",
+            "name": "Deductible",
+            "coverageLevelCode": "FAM",
+            "coverageLevel": "Family",
+            "serviceTypeCodes": [
+              "30"
+            ],
+            "serviceTypes": [
+              "Health Benefit Plan Coverage"
+            ],
+            "timeQualifierCode": "29",
+            "timeQualifier": "Remaining",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable"
+          },
+          {
+            "code": "C",
+            "name": "Deductible",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "serviceTypeCodes": [
+              "30"
+            ],
+            "serviceTypes": [
+              "Health Benefit Plan Coverage"
+            ],
+            "timeQualifierCode": "29",
+            "timeQualifier": "Remaining",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable"
+          },
+          {
+            "code": "G",
+            "name": "Out of Pocket (Stop Loss)",
+            "coverageLevelCode": "FAM",
+            "coverageLevel": "Family",
+            "serviceTypeCodes": [
+              "30"
+            ],
+            "serviceTypes": [
+              "Health Benefit Plan Coverage"
+            ],
+            "insuranceTypeCode": "PR",
+            "insuranceType": "Preferred Provider Organization (PPO)",
+            "timeQualifierCode": "24",
+            "timeQualifier": "Year to Date",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable"
+          },
+          {
+            "code": "G",
+            "name": "Out of Pocket (Stop Loss)",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "serviceTypeCodes": [
+              "30"
+            ],
+            "serviceTypes": [
+              "Health Benefit Plan Coverage"
+            ],
+            "insuranceTypeCode": "PR",
+            "insuranceType": "Preferred Provider Organization (PPO)",
+            "timeQualifierCode": "24",
+            "timeQualifier": "Year to Date",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable"
+          },
+          {
+            "code": "G",
+            "name": "Out of Pocket (Stop Loss)",
+            "coverageLevelCode": "FAM",
+            "coverageLevel": "Family",
+            "serviceTypeCodes": [
+              "30"
+            ],
+            "serviceTypes": [
+              "Health Benefit Plan Coverage"
+            ],
+            "insuranceTypeCode": "PR",
+            "insuranceType": "Preferred Provider Organization (PPO)",
+            "timeQualifierCode": "29",
+            "timeQualifier": "Remaining",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable"
+          },
+          {
+            "code": "G",
+            "name": "Out of Pocket (Stop Loss)",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "serviceTypeCodes": [
+              "30"
+            ],
+            "serviceTypes": [
+              "Health Benefit Plan Coverage"
+            ],
+            "insuranceTypeCode": "PR",
+            "insuranceType": "Preferred Provider Organization (PPO)",
+            "timeQualifierCode": "29",
+            "timeQualifier": "Remaining",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable"
+          },
+          {
+            "code": "1",
+            "name": "Active Coverage",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D0120"
+            }
+          },
+          {
+            "code": "1",
+            "name": "Active Coverage",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D0150"
+            }
+          },
+          {
+            "code": "1",
+            "name": "Active Coverage",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D0210"
+            }
+          },
+          {
+            "code": "1",
+            "name": "Active Coverage",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D0274"
+            }
+          },
+          {
+            "code": "1",
+            "name": "Active Coverage",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D1110"
+            }
+          },
+          {
+            "code": "1",
+            "name": "Active Coverage",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D1208"
+            }
+          },
+          {
+            "code": "1",
+            "name": "Active Coverage",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D1351"
+            },
+            "additionalInformation": [
+              {
+                "description": "SEALANTS ARE COVERED FOR BOTH PERMANENT MOLARS"
+              }
+            ]
+          },
+          {
+            "code": "I",
+            "name": "Non-Covered",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D2393"
+            }
+          },
+          {
+            "code": "I",
+            "name": "Non-Covered",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D2630"
+            }
+          },
+          {
+            "code": "I",
+            "name": "Non-Covered",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D2643"
+            }
+          },
+          {
+            "code": "I",
+            "name": "Non-Covered",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D2750"
+            }
+          },
+          {
+            "code": "I",
+            "name": "Non-Covered",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D2950"
+            }
+          },
+          {
+            "code": "I",
+            "name": "Non-Covered",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D2954"
+            }
+          },
+          {
+            "code": "I",
+            "name": "Non-Covered",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D4341"
+            }
+          },
+          {
+            "code": "I",
+            "name": "Non-Covered",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D4381"
+            }
+          },
+          {
+            "code": "1",
+            "name": "Active Coverage",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D4910"
+            }
+          },
+          {
+            "code": "I",
+            "name": "Non-Covered",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D5110"
+            },
+            "additionalInformation": [
+              {
+                "description": "PRIOR EXTRACTIONS NOT COVERED"
+              }
+            ]
+          },
+          {
+            "code": "I",
+            "name": "Non-Covered",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D5225"
+            }
+          },
+          {
+            "code": "I",
+            "name": "Non-Covered",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D5670"
+            }
+          },
+          {
+            "code": "I",
+            "name": "Non-Covered",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D5751"
+            }
+          },
+          {
+            "code": "I",
+            "name": "Non-Covered",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D6010"
+            },
+            "additionalInformation": [
+              {
+                "description": "PRIOR EXTRACTIONS NOT COVERED"
+              }
+            ]
+          },
+          {
+            "code": "I",
+            "name": "Non-Covered",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D6750"
+            },
+            "additionalInformation": [
+              {
+                "description": "PRIOR EXTRACTIONS NOT COVERED"
+              }
+            ]
+          },
+          {
+            "code": "I",
+            "name": "Non-Covered",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D9910"
+            }
+          },
+          {
+            "code": "I",
+            "name": "Non-Covered",
+            "serviceTypeCodes": [
+              "25"
+            ],
+            "serviceTypes": [
+              "Restorative"
+            ],
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "additionalInformation": [
+              {
+                "description": "BENEFIT CLASS = MAJOR"
+              }
+            ]
+          },
+          {
+            "code": "I",
+            "name": "Non-Covered",
+            "serviceTypeCodes": [
+              "24",
+              "26",
+              "28",
+              "36",
+              "38",
+              "39",
+              "40"
+            ],
+            "serviceTypes": [
+              "Periodontics",
+              "Endodontics",
+              "Adjunctive Dental Services",
+              "Dental Crowns",
+              "Orthodontics",
+              "Prosthodontics",
+              "Oral Surgery"
+            ],
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable"
+          },
+          {
+            "code": "1",
+            "name": "Active Coverage",
+            "serviceTypeCodes": [
+              "23",
+              "41"
+            ],
+            "serviceTypes": [
+              "Diagnostic Dental",
+              "Routine (Preventive) Dental"
+            ],
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable"
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "timeQualifierCode": "27",
+            "timeQualifier": "Visit",
+            "benefitPercent": "0",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D0210"
+            }
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "timeQualifierCode": "27",
+            "timeQualifier": "Visit",
+            "benefitPercent": "0.2",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D0150"
+            }
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "timeQualifierCode": "27",
+            "timeQualifier": "Visit",
+            "benefitPercent": "0",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D1351"
+            },
+            "additionalInformation": [
+              {
+                "description": "SEALANTS ARE COVERED FOR BOTH PERMANENT MOLARS"
+              }
+            ]
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "timeQualifierCode": "27",
+            "timeQualifier": "Visit",
+            "benefitPercent": "0.2",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D0120"
+            }
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "timeQualifierCode": "27",
+            "timeQualifier": "Visit",
+            "benefitPercent": "0.2",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D4910"
+            }
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "timeQualifierCode": "27",
+            "timeQualifier": "Visit",
+            "benefitPercent": "0",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D1208"
+            }
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "timeQualifierCode": "27",
+            "timeQualifier": "Visit",
+            "benefitPercent": "0",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D0274"
+            }
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "timeQualifierCode": "27",
+            "timeQualifier": "Visit",
+            "benefitPercent": "0",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D1110"
+            }
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "timeQualifierCode": "27",
+            "timeQualifier": "Visit",
+            "benefitPercent": "0.2",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D0210"
+            }
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "timeQualifierCode": "27",
+            "timeQualifier": "Visit",
+            "benefitPercent": "0",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D4910"
+            }
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "timeQualifierCode": "27",
+            "timeQualifier": "Visit",
+            "benefitPercent": "0.2",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D1208"
+            }
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "timeQualifierCode": "27",
+            "timeQualifier": "Visit",
+            "benefitPercent": "0.2",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D1351"
+            },
+            "additionalInformation": [
+              {
+                "description": "SEALANTS ARE COVERED FOR BOTH PERMANENT MOLARS"
+              }
+            ]
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "timeQualifierCode": "27",
+            "timeQualifier": "Visit",
+            "benefitPercent": "0.2",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D0274"
+            }
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "timeQualifierCode": "27",
+            "timeQualifier": "Visit",
+            "benefitPercent": "0.2",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D1110"
+            }
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "timeQualifierCode": "27",
+            "timeQualifier": "Visit",
+            "benefitPercent": "0",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D0150"
+            }
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "timeQualifierCode": "27",
+            "timeQualifier": "Visit",
+            "benefitPercent": "0",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D0120"
+            }
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "serviceTypeCodes": [
+              "41",
+              "23"
+            ],
+            "serviceTypes": [
+              "Routine (Preventive) Dental",
+              "Diagnostic Dental"
+            ],
+            "timeQualifierCode": "27",
+            "timeQualifier": "Visit",
+            "benefitPercent": "0.2",
+            "inPlanNetworkIndicatorCode": "N",
+            "inPlanNetworkIndicator": "No"
+          },
+          {
+            "code": "A",
+            "name": "Co-Insurance",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "serviceTypeCodes": [
+              "41",
+              "23"
+            ],
+            "serviceTypes": [
+              "Routine (Preventive) Dental",
+              "Diagnostic Dental"
+            ],
+            "timeQualifierCode": "27",
+            "timeQualifier": "Visit",
+            "benefitPercent": "0",
+            "inPlanNetworkIndicatorCode": "Y",
+            "inPlanNetworkIndicator": "Yes"
+          },
+          {
+            "code": "B",
+            "name": "Co-Payment",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "timeQualifierCode": "27",
+            "timeQualifier": "Visit",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D0120"
+            }
+          },
+          {
+            "code": "B",
+            "name": "Co-Payment",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "timeQualifierCode": "27",
+            "timeQualifier": "Visit",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D0150"
+            }
+          },
+          {
+            "code": "B",
+            "name": "Co-Payment",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "timeQualifierCode": "27",
+            "timeQualifier": "Visit",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D0210"
+            }
+          },
+          {
+            "code": "B",
+            "name": "Co-Payment",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "timeQualifierCode": "27",
+            "timeQualifier": "Visit",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D0274"
+            }
+          },
+          {
+            "code": "B",
+            "name": "Co-Payment",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "timeQualifierCode": "27",
+            "timeQualifier": "Visit",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D1110"
+            }
+          },
+          {
+            "code": "B",
+            "name": "Co-Payment",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "timeQualifierCode": "27",
+            "timeQualifier": "Visit",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D1208"
+            }
+          },
+          {
+            "code": "B",
+            "name": "Co-Payment",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "timeQualifierCode": "27",
+            "timeQualifier": "Visit",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D1351"
+            },
+            "additionalInformation": [
+              {
+                "description": "SEALANTS ARE COVERED FOR BOTH PERMANENT MOLARS"
+              }
+            ]
+          },
+          {
+            "code": "B",
+            "name": "Co-Payment",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "timeQualifierCode": "27",
+            "timeQualifier": "Visit",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D4910"
+            }
+          },
+          {
+            "code": "B",
+            "name": "Co-Payment",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "serviceTypeCodes": [
+              "23",
+              "41"
+            ],
+            "serviceTypes": [
+              "Diagnostic Dental",
+              "Routine (Preventive) Dental"
+            ],
+            "timeQualifierCode": "27",
+            "timeQualifier": "Visit",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable"
+          },
+          {
+            "code": "C",
+            "name": "Deductible",
+            "coverageLevelCode": "FAM",
+            "coverageLevel": "Family",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D0120"
+            },
+            "additionalInformation": [
+              {
+                "description": "PLAN LEVEL DEDUCTIBLE DOES NOT APPLY"
+              }
+            ]
+          },
+          {
+            "code": "C",
+            "name": "Deductible",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D0120"
+            },
+            "additionalInformation": [
+              {
+                "description": "PLAN LEVEL DEDUCTIBLE DOES NOT APPLY"
+              }
+            ]
+          },
+          {
+            "code": "C",
+            "name": "Deductible",
+            "coverageLevelCode": "FAM",
+            "coverageLevel": "Family",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D0150"
+            },
+            "additionalInformation": [
+              {
+                "description": "PLAN LEVEL DEDUCTIBLE DOES NOT APPLY"
+              }
+            ]
+          },
+          {
+            "code": "C",
+            "name": "Deductible",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D0150"
+            },
+            "additionalInformation": [
+              {
+                "description": "PLAN LEVEL DEDUCTIBLE DOES NOT APPLY"
+              }
+            ]
+          },
+          {
+            "code": "C",
+            "name": "Deductible",
+            "coverageLevelCode": "FAM",
+            "coverageLevel": "Family",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D0210"
+            },
+            "additionalInformation": [
+              {
+                "description": "PLAN LEVEL DEDUCTIBLE DOES NOT APPLY"
+              }
+            ]
+          },
+          {
+            "code": "C",
+            "name": "Deductible",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D0210"
+            },
+            "additionalInformation": [
+              {
+                "description": "PLAN LEVEL DEDUCTIBLE DOES NOT APPLY"
+              }
+            ]
+          },
+          {
+            "code": "C",
+            "name": "Deductible",
+            "coverageLevelCode": "FAM",
+            "coverageLevel": "Family",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D0274"
+            },
+            "additionalInformation": [
+              {
+                "description": "PLAN LEVEL DEDUCTIBLE DOES NOT APPLY"
+              }
+            ]
+          },
+          {
+            "code": "C",
+            "name": "Deductible",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D0274"
+            },
+            "additionalInformation": [
+              {
+                "description": "PLAN LEVEL DEDUCTIBLE DOES NOT APPLY"
+              }
+            ]
+          },
+          {
+            "code": "C",
+            "name": "Deductible",
+            "coverageLevelCode": "FAM",
+            "coverageLevel": "Family",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D1110"
+            },
+            "additionalInformation": [
+              {
+                "description": "PLAN LEVEL DEDUCTIBLE DOES NOT APPLY"
+              }
+            ]
+          },
+          {
+            "code": "C",
+            "name": "Deductible",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D1110"
+            },
+            "additionalInformation": [
+              {
+                "description": "PLAN LEVEL DEDUCTIBLE DOES NOT APPLY"
+              }
+            ]
+          },
+          {
+            "code": "C",
+            "name": "Deductible",
+            "coverageLevelCode": "FAM",
+            "coverageLevel": "Family",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D1208"
+            },
+            "additionalInformation": [
+              {
+                "description": "PLAN LEVEL DEDUCTIBLE DOES NOT APPLY"
+              }
+            ]
+          },
+          {
+            "code": "C",
+            "name": "Deductible",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D1208"
+            },
+            "additionalInformation": [
+              {
+                "description": "PLAN LEVEL DEDUCTIBLE DOES NOT APPLY"
+              }
+            ]
+          },
+          {
+            "code": "C",
+            "name": "Deductible",
+            "coverageLevelCode": "FAM",
+            "coverageLevel": "Family",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D1351"
+            },
+            "additionalInformation": [
+              {
+                "description": "PLAN LEVEL DEDUCTIBLE DOES NOT APPLY"
+              },
+              {
+                "description": "SEALANTS ARE COVERED FOR BOTH PERMANENT MOLARS"
+              }
+            ]
+          },
+          {
+            "code": "C",
+            "name": "Deductible",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D1351"
+            },
+            "additionalInformation": [
+              {
+                "description": "PLAN LEVEL DEDUCTIBLE DOES NOT APPLY"
+              },
+              {
+                "description": "SEALANTS ARE COVERED FOR BOTH PERMANENT MOLARS"
+              }
+            ]
+          },
+          {
+            "code": "C",
+            "name": "Deductible",
+            "coverageLevelCode": "FAM",
+            "coverageLevel": "Family",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D4910"
+            },
+            "additionalInformation": [
+              {
+                "description": "PLAN LEVEL DEDUCTIBLE DOES NOT APPLY"
+              }
+            ]
+          },
+          {
+            "code": "C",
+            "name": "Deductible",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D4910"
+            },
+            "additionalInformation": [
+              {
+                "description": "PLAN LEVEL DEDUCTIBLE DOES NOT APPLY"
+              }
+            ]
+          },
+          {
+            "code": "C",
+            "name": "Deductible",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "serviceTypeCodes": [
+              "23",
+              "41"
+            ],
+            "serviceTypes": [
+              "Diagnostic Dental",
+              "Routine (Preventive) Dental"
+            ],
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "additionalInformation": [
+              {
+                "description": "PLAN LEVEL DEDUCTIBLE DOES NOT APPLY"
+              }
+            ]
+          },
+          {
+            "code": "C",
+            "name": "Deductible",
+            "coverageLevelCode": "FAM",
+            "coverageLevel": "Family",
+            "serviceTypeCodes": [
+              "23",
+              "41"
+            ],
+            "serviceTypes": [
+              "Diagnostic Dental",
+              "Routine (Preventive) Dental"
+            ],
+            "benefitAmount": "0",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "additionalInformation": [
+              {
+                "description": "PLAN LEVEL DEDUCTIBLE DOES NOT APPLY"
+              }
+            ]
+          },
+          {
+            "code": "F",
+            "name": "Limitations",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D0120"
+            },
+            "benefitsServiceDelivery": [
+              {
+                "quantityQualifierCode": "VS",
+                "quantityQualifier": "Visits",
+                "quantity": "1",
+                "timePeriodQualifierCode": "34",
+                "timePeriodQualifier": "Month",
+                "numOfPeriods": "6"
+              }
+            ]
+          },
+          {
+            "code": "F",
+            "name": "Limitations",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D0150"
+            },
+            "benefitsServiceDelivery": [
+              {
+                "quantityQualifierCode": "VS",
+                "quantityQualifier": "Visits",
+                "quantity": "1",
+                "timePeriodQualifierCode": "34",
+                "timePeriodQualifier": "Month",
+                "numOfPeriods": "6"
+              }
+            ]
+          },
+          {
+            "code": "F",
+            "name": "Limitations",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D0210"
+            },
+            "benefitsServiceDelivery": [
+              {
+                "quantityQualifierCode": "VS",
+                "quantityQualifier": "Visits",
+                "quantity": "1",
+                "timePeriodQualifierCode": "34",
+                "timePeriodQualifier": "Month",
+                "numOfPeriods": "24"
+              }
+            ]
+          },
+          {
+            "code": "F",
+            "name": "Limitations",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D0274"
+            },
+            "benefitsServiceDelivery": [
+              {
+                "quantityQualifierCode": "VS",
+                "quantityQualifier": "Visits",
+                "quantity": "1",
+                "timePeriodQualifierCode": "34",
+                "timePeriodQualifier": "Month",
+                "numOfPeriods": "6"
+              }
+            ]
+          },
+          {
+            "code": "F",
+            "name": "Limitations",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D1110"
+            },
+            "benefitsServiceDelivery": [
+              {
+                "quantityQualifierCode": "VS",
+                "quantityQualifier": "Visits",
+                "quantity": "1",
+                "timePeriodQualifierCode": "34",
+                "timePeriodQualifier": "Month",
+                "numOfPeriods": "6"
+              }
+            ]
+          },
+          {
+            "code": "F",
+            "name": "Limitations",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D1208"
+            },
+            "benefitsServiceDelivery": [
+              {
+                "quantityQualifierCode": "VS",
+                "quantityQualifier": "Visits",
+                "quantity": "2",
+                "timePeriodQualifierCode": "34",
+                "timePeriodQualifier": "Month",
+                "numOfPeriods": "6"
+              }
+            ]
+          },
+          {
+            "code": "F",
+            "name": "Limitations",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D1351"
+            },
+            "benefitsServiceDelivery": [
+              {
+                "quantityQualifierCode": "VS",
+                "quantityQualifier": "Visits",
+                "quantity": "1",
+                "timePeriodQualifierCode": "34",
+                "timePeriodQualifier": "Month",
+                "numOfPeriods": "36"
+              }
+            ],
+            "additionalInformation": [
+              {
+                "description": "SEALANTS ARE COVERED FOR BOTH PERMANENT MOLARS"
+              }
+            ]
+          },
+          {
+            "code": "F",
+            "name": "Limitations",
+            "coverageLevelCode": "IND",
+            "coverageLevel": "Individual",
+            "quantityQualifierCode": "S7",
+            "quantityQualifier": "Age, High Value",
+            "benefitQuantity": "15",
+            "inPlanNetworkIndicatorCode": "W",
+            "inPlanNetworkIndicator": "Not Applicable",
+            "compositeMedicalProcedureIdentifier": {
+              "productOrServiceIDQualifierCode": "AD",
+              "productOrServiceIDQualifier": "American Dental Association Codes",
+              "procedureCode": "D1351"
+            },
+            "additionalInformation": [
+              {
+                "description": "SEALANTS ARE COVERED FOR BOTH PERMANENT MOLARS"
+              }
+            ]
+          },
+          {
+            "code": "R",
+            "name": "Other or Additional Payor",
+            "serviceTypeCodes": [
+              "30"
+            ],
+            "serviceTypes": [
+              "Health Benefit Plan Coverage"
+            ],
+            "benefitsRelatedEntity": {
+              "entityIdentifier": "Payer",
+              "entityType": "Non-Person Entity",
+              "entityName": "MEDICARE"
+            },
+            "benefitsRelatedEntities": [
+              {
+                "entityIdentifier": "Payer",
+                "entityType": "Non-Person Entity",
+                "entityName": "MEDICARE"
+              }
+            ]
+          },
+          {
+            "code": "X",
+            "name": "Health Care Facility",
+            "benefitsRelatedEntity": {
+              "entityIdentifier": "Provider",
+              "entityType": "Non-Person Entity",
+              "entityName": "ONE",
+              "entityIdentification": "XX",
+              "entityIdentificationValue": "1487885067"
+            },
+            "benefitsRelatedEntities": [
+              {
+                "entityIdentifier": "Provider",
+                "entityType": "Non-Person Entity",
+                "entityName": "ONE",
+                "entityIdentification": "XX",
+                "entityIdentificationValue": "1487885067"
+              }
+            ]
+          }
+        ],
+        "errors": [],
+        "x12": "ISA*00*          *00*          *ZZ*STEDI          *01*117151744      *260428*0942*^*00501*425476254*0*T*`~GS*HB*STEDI*117151744*20260428*094252*1*X*005010X279A1~ST*271*0001*005010X279A1~BHT*0022*11*1*20260325*0901~HL*1**20*1~NM1*PR*2*UNITEDHEALTHCARE DENTAL*****PI*52133~HL*2*1*21*1~NM1*1P*2*ONE*****XX*1999999984~HL*3*2*22*0~NM1*IL*1*DENT*BEAVER*C***MI*404404404~REF*6P*007007~REF*6P*007007~N3*456 RIVERBANK ROAD~N4*DAMVILLE*CA*11111~DMG*D8*19690628*M~DTP*291*RD8*20240101-20241231~EB*1**30*PR*BSCA 65 - EMBEDDED D&P PPO PLAN - DBPEMB03~LS*2120~NM1*PR*2*UNITEDHEALTHCARE SPECIALTY BENEFITS DENTAL*****PI*412014834~PER*IC**UR*WWW.OPTUMHEALTHDENTAL.COM~LE*2120~EB*C*FAM*30***23*0*****W~EB*C*IND*30***23*0*****W~EB*G*FAM*30*PR**23*0*****W~EB*G*IND*30*PR**23*0*****W~EB*C*FAM*30***24*0*****W~EB*C*IND*30***24*0*****W~EB*C*FAM*30***29*0*****W~EB*C*IND*30***29*0*****W~EB*G*FAM*30*PR**24*0*****W~EB*G*IND*30*PR**24*0*****W~EB*G*FAM*30*PR**29*0*****W~EB*G*IND*30*PR**29*0*****W~EB*1***********W*AD`D0120~EB*1***********W*AD`D0150~EB*1***********W*AD`D0210~EB*1***********W*AD`D0274~EB*1***********W*AD`D1110~EB*1***********W*AD`D1208~EB*1***********W*AD`D1351~MSG*SEALANTS ARE COVERED FOR BOTH PERMANENT MOLARS~EB*I***********W*AD`D2393~EB*I***********W*AD`D2630~EB*I***********W*AD`D2643~EB*I***********W*AD`D2750~EB*I***********W*AD`D2950~EB*I***********W*AD`D2954~EB*I***********W*AD`D4341~EB*I***********W*AD`D4381~EB*1***********W*AD`D4910~EB*I***********W*AD`D5110~MSG*PRIOR EXTRACTIONS NOT COVERED~EB*I***********W*AD`D5225~EB*I***********W*AD`D5670~EB*I***********W*AD`D5751~EB*I***********W*AD`D6010~MSG*PRIOR EXTRACTIONS NOT COVERED~EB*I***********W*AD`D6750~MSG*PRIOR EXTRACTIONS NOT COVERED~EB*I***********W*AD`D9910~EB*I**25*********W~MSG*BENEFIT CLASS = MAJOR~EB*I**24^26^28^36^38^39^40*********W~EB*1**23^41*********W~EB*A*IND****27**0****Y*AD`D0210~EB*A*IND****27**.2****N*AD`D0150~EB*A*IND****27**0****Y*AD`D1351~MSG*SEALANTS ARE COVERED FOR BOTH PERMANENT MOLARS~EB*A*IND****27**.2****N*AD`D0120~EB*A*IND****27**.2****N*AD`D4910~EB*A*IND****27**0****Y*AD`D1208~EB*A*IND****27**0****Y*AD`D0274~EB*A*IND****27**0****Y*AD`D1110~EB*A*IND****27**.2****N*AD`D0210~EB*A*IND****27**0****Y*AD`D4910~EB*A*IND****27**.2****N*AD`D1208~EB*A*IND****27**.2****N*AD`D1351~MSG*SEALANTS ARE COVERED FOR BOTH PERMANENT MOLARS~EB*A*IND****27**.2****N*AD`D0274~EB*A*IND****27**.2****N*AD`D1110~EB*A*IND****27**0****Y*AD`D0150~EB*A*IND****27**0****Y*AD`D0120~EB*A*IND*41^23***27**.2****N~EB*A*IND*41^23***27**0****Y~EB*B*IND****27*0*****W*AD`D0120~EB*B*IND****27*0*****W*AD`D0150~EB*B*IND****27*0*****W*AD`D0210~EB*B*IND****27*0*****W*AD`D0274~EB*B*IND****27*0*****W*AD`D1110~EB*B*IND****27*0*****W*AD`D1208~EB*B*IND****27*0*****W*AD`D1351~MSG*SEALANTS ARE COVERED FOR BOTH PERMANENT MOLARS~EB*B*IND****27*0*****W*AD`D4910~EB*B*IND*23^41***27*0*****W~EB*C*FAM*****0*****W*AD`D0120~MSG*PLAN LEVEL DEDUCTIBLE DOES NOT APPLY~EB*C*IND*****0*****W*AD`D0120~MSG*PLAN LEVEL DEDUCTIBLE DOES NOT APPLY~EB*C*FAM*****0*****W*AD`D0150~MSG*PLAN LEVEL DEDUCTIBLE DOES NOT APPLY~EB*C*IND*****0*****W*AD`D0150~MSG*PLAN LEVEL DEDUCTIBLE DOES NOT APPLY~EB*C*FAM*****0*****W*AD`D0210~MSG*PLAN LEVEL DEDUCTIBLE DOES NOT APPLY~EB*C*IND*****0*****W*AD`D0210~MSG*PLAN LEVEL DEDUCTIBLE DOES NOT APPLY~EB*C*FAM*****0*****W*AD`D0274~MSG*PLAN LEVEL DEDUCTIBLE DOES NOT APPLY~EB*C*IND*****0*****W*AD`D0274~MSG*PLAN LEVEL DEDUCTIBLE DOES NOT APPLY~EB*C*FAM*****0*****W*AD`D1110~MSG*PLAN LEVEL DEDUCTIBLE DOES NOT APPLY~EB*C*IND*****0*****W*AD`D1110~MSG*PLAN LEVEL DEDUCTIBLE DOES NOT APPLY~EB*C*FAM*****0*****W*AD`D1208~MSG*PLAN LEVEL DEDUCTIBLE DOES NOT APPLY~EB*C*IND*****0*****W*AD`D1208~MSG*PLAN LEVEL DEDUCTIBLE DOES NOT APPLY~EB*C*FAM*****0*****W*AD`D1351~MSG*PLAN LEVEL DEDUCTIBLE DOES NOT APPLY~MSG*SEALANTS ARE COVERED FOR BOTH PERMANENT MOLARS~EB*C*IND*****0*****W*AD`D1351~MSG*PLAN LEVEL DEDUCTIBLE DOES NOT APPLY~MSG*SEALANTS ARE COVERED FOR BOTH PERMANENT MOLARS~EB*C*FAM*****0*****W*AD`D4910~MSG*PLAN LEVEL DEDUCTIBLE DOES NOT APPLY~EB*C*IND*****0*****W*AD`D4910~MSG*PLAN LEVEL DEDUCTIBLE DOES NOT APPLY~EB*C*IND*23^41****0*****W~MSG*PLAN LEVEL DEDUCTIBLE DOES NOT APPLY~EB*C*FAM*23^41****0*****W~MSG*PLAN LEVEL DEDUCTIBLE DOES NOT APPLY~EB*F*IND**********W*AD`D0120~HSD*VS*1***34*6~EB*F*IND**********W*AD`D0150~HSD*VS*1***34*6~EB*F*IND**********W*AD`D0210~HSD*VS*1***34*24~EB*F*IND**********W*AD`D0274~HSD*VS*1***34*6~EB*F*IND**********W*AD`D1110~HSD*VS*1***34*6~EB*F*IND**********W*AD`D1208~HSD*VS*2***34*6~EB*F*IND**********W*AD`D1351~HSD*VS*1***34*36~MSG*SEALANTS ARE COVERED FOR BOTH PERMANENT MOLARS~EB*F*IND*******S7*15**W*AD`D1351~MSG*SEALANTS ARE COVERED FOR BOTH PERMANENT MOLARS~EB*R**30~LS*2120~NM1*PR*2*MEDICARE~LE*2120~EB*X~LS*2120~NM1*1P*2*ONE*****XX*1487885067~LE*2120~SE*156*0001~GE*1*1~IEA*1*425476254~",
+        "eligibilitySearchId": "019dd378-555a-70c1-b879-ed4b57466f0e",
+        "id": "ec_019dd378-5559-71f3-a52e-f6f9cd4daecb"
+      },
+      "payer_aaa_errors": [],
+      "stedi_aaa_actions": [],
+      "stedi_warnings": [],
+      "response_complete": true,
+      "missing_fields": [],
+      "normalization_version": "1.0",
+      "normalization_warnings": [],
+      "dental_benefit_breakdown": {
+        "coinsurance_patient_pct_by_stc": {
+          "23": 0.0
+        },
+        "ortho_lifetime_max": null,
+        "limitation_notes": []
+      },
+      "dental_calculator_ready": {
+        "network_status": {
+          "in_network": {
+            "remaining_deductible": null,
+            "deductible_total": null,
+            "deductible_met": null,
+            "coinsurance_percent": 0.0,
+            "copay_amount": null,
+            "annual_max_remaining": null,
+            "annual_max_total": null,
+            "coverage_levels": [
+              "IND"
+            ],
+            "time_periods": [
+              "unknown"
+            ],
+            "prior_auth_required": null,
+            "source_benefit_indexes": [
+              39,
+              41,
+              44,
+              45,
+              46,
+              48,
+              53,
+              54,
+              56
+            ],
+            "limitations_notes": []
+          },
+          "out_of_network": {
+            "remaining_deductible": null,
+            "deductible_total": null,
+            "deductible_met": null,
+            "coinsurance_percent": 20.0,
+            "copay_amount": null,
+            "annual_max_remaining": null,
+            "annual_max_total": null,
+            "coverage_levels": [
+              "IND"
+            ],
+            "time_periods": [
+              "unknown"
+            ],
+            "prior_auth_required": null,
+            "source_benefit_indexes": [
+              40,
+              42,
+              43,
+              47,
+              49,
+              50,
+              51,
+              52,
+              55
+            ],
+            "limitations_notes": []
+          },
+          "both": {
+            "remaining_deductible": null,
+            "deductible_total": 0.0,
+            "deductible_met": null,
+            "coinsurance_percent": null,
+            "copay_amount": 0.0,
+            "annual_max_remaining": null,
+            "annual_max_total": null,
+            "coverage_levels": [
+              "IND",
+              "FAM"
+            ],
+            "time_periods": [
+              "unknown"
+            ],
+            "prior_auth_required": null,
+            "source_benefit_indexes": [
+              37,
+              38,
+              57,
+              58,
+              59,
+              60,
+              61,
+              62,
+              63,
+              64,
+              65,
+              66,
+              67,
+              68,
+              69,
+              70,
+              71,
+              72,
+              73,
+              74,
+              75,
+              76,
+              77,
+              78,
+              79,
+              80,
+              81,
+              82,
+              83,
+              84,
+              85,
+              86,
+              87,
+              88,
+              89,
+              90,
+              91
+            ],
+            "limitations_notes": []
+          },
+          "unknown": {
+            "remaining_deductible": null,
+            "deductible_total": null,
+            "deductible_met": null,
+            "coinsurance_percent": null,
+            "copay_amount": null,
+            "annual_max_remaining": null,
+            "annual_max_total": null,
+            "coverage_levels": [],
+            "time_periods": [],
+            "prior_auth_required": null,
+            "source_benefit_indexes": [],
+            "limitations_notes": []
+          }
+        },
+        "frequency_rules": [
+          {
+            "source_benefit_index": 84,
+            "description": "VS Visits 1 34 Month 6",
+            "raw": {
+              "quantityQualifierCode": "VS",
+              "quantityQualifier": "Visits",
+              "quantity": "1",
+              "timePeriodQualifierCode": "34",
+              "timePeriodQualifier": "Month",
+              "numOfPeriods": "6"
+            }
+          },
+          {
+            "source_benefit_index": 85,
+            "description": "VS Visits 1 34 Month 6",
+            "raw": {
+              "quantityQualifierCode": "VS",
+              "quantityQualifier": "Visits",
+              "quantity": "1",
+              "timePeriodQualifierCode": "34",
+              "timePeriodQualifier": "Month",
+              "numOfPeriods": "6"
+            }
+          },
+          {
+            "source_benefit_index": 86,
+            "description": "VS Visits 1 34 Month 24",
+            "raw": {
+              "quantityQualifierCode": "VS",
+              "quantityQualifier": "Visits",
+              "quantity": "1",
+              "timePeriodQualifierCode": "34",
+              "timePeriodQualifier": "Month",
+              "numOfPeriods": "24"
+            }
+          },
+          {
+            "source_benefit_index": 87,
+            "description": "VS Visits 1 34 Month 6",
+            "raw": {
+              "quantityQualifierCode": "VS",
+              "quantityQualifier": "Visits",
+              "quantity": "1",
+              "timePeriodQualifierCode": "34",
+              "timePeriodQualifier": "Month",
+              "numOfPeriods": "6"
+            }
+          },
+          {
+            "source_benefit_index": 88,
+            "description": "VS Visits 1 34 Month 6",
+            "raw": {
+              "quantityQualifierCode": "VS",
+              "quantityQualifier": "Visits",
+              "quantity": "1",
+              "timePeriodQualifierCode": "34",
+              "timePeriodQualifier": "Month",
+              "numOfPeriods": "6"
+            }
+          },
+          {
+            "source_benefit_index": 89,
+            "description": "VS Visits 2 34 Month 6",
+            "raw": {
+              "quantityQualifierCode": "VS",
+              "quantityQualifier": "Visits",
+              "quantity": "2",
+              "timePeriodQualifierCode": "34",
+              "timePeriodQualifier": "Month",
+              "numOfPeriods": "6"
+            }
+          },
+          {
+            "source_benefit_index": 90,
+            "description": "VS Visits 1 34 Month 36",
+            "raw": {
+              "quantityQualifierCode": "VS",
+              "quantityQualifier": "Visits",
+              "quantity": "1",
+              "timePeriodQualifierCode": "34",
+              "timePeriodQualifier": "Month",
+              "numOfPeriods": "36"
+            }
+          }
+        ],
+        "latest_visit_or_consultation": [],
+        "carve_outs": [],
+        "aaa_actions": [],
+        "free_text_overrides": []
+      },
+      "integrity_warnings": [
+        "in_network status not reported by payer \u2014 confirm via phone if required"
+      ],
+      "integrity_policy_version": "2.3",
+      "integrity_issues": [
+        {
+          "code": "L4_IN_NETWORK_NOT_REPORTED",
+          "severity": "warning",
+          "message": "in_network status not reported by payer \u2014 confirm via phone if required",
+          "field": "in_network"
+        }
+      ],
+      "eligibility_canonical": {
+        "is_active": true,
+        "is_in_network": null,
+        "is_covered": true,
+        "procedure_covered": true,
+        "deductible_remaining": 0.0,
+        "deductible_total": 0.0,
+        "max_remaining": 0.0,
+        "max_total": 0.0,
+        "copay": 0.0,
+        "coinsurance": 0.0,
+        "patient_responsibility": null,
+        "coverage_confidence": null,
+        "missing_fields": [],
+        "response_complete": true,
+        "null_reasons": {
+          "is_in_network": "not_reported_or_ambiguous_in_271_response",
+          "patient_responsibility": "computed_in_layer_5_fee_schedule_not_run"
+        }
+      },
+      "in_network_from_payer_271": null,
+      "in_network_for_fees": true,
+      "fee_network_source": "provider_directory",
+      "fee_network_contract_label": "UnitedHealthcare Dental"
+    },
+    "routing": {
+      "status": "CLEARED",
+      "action": "route_coding",
+      "next_agent": "coding",
+      "notify_front_office": false,
+      "detail": {
+        "payer_id": "52133",
+        "cdt_codes": [
+          "D1110"
+        ],
+        "routing_policy_version": "2.3",
+        "reasons": [
+          "routing_state:CLEARED",
+          "routing_policy_version:2.3",
+          "cleared_without_prior_auth_rule"
+        ]
+      }
+    },
+    "procedure_estimates": [
+      {
+        "cdt_code": "D1110",
+        "procedure_covered": true,
+        "waiting_period_end": null,
+        "waiting_period_category": "basic",
+        "non_covered_reason": null,
+        "allowed_amount": 120.0,
+        "insurance_pays": 0.0,
+        "patient_responsibility": 120.0
+      }
+    ],
+    "universal_dental_record": {
+      "record_id": "ca9eb8f6-c5b4-4b18-9efe-37a84460e309",
+      "stedi_payer_id": "52133",
+      "payer_name": "UNITEDHEALTHCARE DENTAL",
+      "subscriber_id": "404404404",
+      "plan_begin_date": "2024-01-01",
+      "plan_end_date": "2024-12-31",
+      "group_number": "007007",
+      "network_status": "unknown",
+      "financial": {
+        "annual_max": {
+          "value": 0.0,
+          "confidence": "EXPLICIT",
+          "source_field": "canonical/annual_max_total"
+        },
+        "annual_max_used": {
+          "value": null,
+          "confidence": "UNKNOWN",
+          "source_field": "canonical/annual_max_used"
+        },
+        "annual_max_remaining": {
+          "value": 0.0,
+          "confidence": "EXPLICIT",
+          "source_field": "canonical/annual_max_remaining"
+        },
+        "deductible_total": {
+          "value": 0.0,
+          "confidence": "EXPLICIT",
+          "source_field": "canonical/deductible_total"
+        },
+        "deductible_met": {
+          "value": null,
+          "confidence": "UNKNOWN",
+          "source_field": "canonical/deductible_met"
+        },
+        "deductible_remaining": {
+          "value": 0.0,
+          "confidence": "EXPLICIT",
+          "source_field": "canonical/deductible_remaining"
+        },
+        "ortho_lifetime_max": {
+          "value": null,
+          "confidence": "UNKNOWN",
+          "source_field": "dental_benefit_breakdown/ortho_lifetime_max"
+        },
+        "ortho_lifetime_used": {
+          "value": null,
+          "confidence": "UNKNOWN",
+          "source_field": "not_extracted_v1"
+        }
+      },
+      "categories": [
+        {
+          "category": "DIAGNOSTIC",
+          "covered": {
+            "value": true,
+            "confidence": "EXPLICIT",
+            "source_field": "benefitsInformation/STC/23/A"
+          },
+          "coinsurance_patient_pct": {
+            "value": 0.0,
+            "confidence": "EXPLICIT",
+            "source_field": "dental_benefit_breakdown/coinsurance_patient_pct_by_stc/23"
+          }
+        }
+      ],
+      "ortho": null,
+      "waiting_periods_present": false,
+      "limitation_notes": [],
+      "normalization_method": "heuristic",
+      "normalization_timestamp": "2026-04-28T09:42:55.091001Z",
+      "raw_payload_hash": "13b2206e82b100abd613c6166d9da9e777cf2857456f22e471e76ec2fa0822cb",
+      "canonical_version": "1.0"
+    }
+  },
+  "secondary": null
+}

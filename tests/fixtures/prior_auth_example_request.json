@@ -1,0 +1,13 @@
+{
+  "coding": {
+    "cdt_codes": ["D2740", "D0120"],
+    "icd10_codes": ["K02.9"],
+    "confidence": 0.82,
+    "justification": "Crown on #14 for extensive caries; periodic evaluation same visit.",
+    "payer_flags": ["Delta Dental: review periodic oral evaluation (D0120) vs comprehensive oral evaluation (D0150) on the same date of service"],
+    "status": "pending_review"
+  },
+  "insurance": "Delta Dental PPO",
+  "clinical_note": "Tooth #14 full coverage crown planned after caries removal.",
+  "patient_age": 52
+}

@@ -1,0 +1,314 @@
+@import "tailwindcss";
+
+:root {
+  --bg-canvas: #f6f7fb;
+  --bg-surface: #ffffff;
+  --border: #e2e8f0;
+  --border-soft: #eef1f6;
+  --text-heading: #0b1220;
+  --text-body: #475569;
+  --text-muted: #94a3b8;
+  --text-label: #64748b;
+  --accent-primary: #4f46e5;
+  --accent-primary-hover: #4338ca;
+  --accent-primary-soft: #eef2ff;
+  --accent-primary-soft-strong: #e0e7ff;
+  --accent-graphite: #0f172a;
+  --accent-graphite-hover: #1e293b;
+  --success: #10b981;
+  --success-bg: #ecfdf5;
+  --success-border: #a7f3d0;
+  --info: #3b82f6;
+  --info-bg: #eff6ff;
+  --info-border: #bfdbfe;
+  --warn: #f59e0b;
+  --warn-bg: #fffbeb;
+  --warn-border: #fde68a;
+  --danger: #ef4444;
+  --danger-bg: #fef2f2;
+  --danger-border: #fecaca;
+  --card-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.04);
+  --card-shadow-lg: 0 10px 30px -12px rgba(15, 23, 42, 0.18), 0 4px 10px -4px rgba(15, 23, 42, 0.06);
+  --focus-ring: 0 0 0 2px #fff, 0 0 0 4px rgba(99, 102, 241, 0.45);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(1200px 600px at -10% -10%, rgba(99, 102, 241, 0.08), transparent 60%),
+    radial-gradient(900px 500px at 110% 0%, rgba(56, 189, 248, 0.05), transparent 55%),
+    var(--bg-canvas);
+  background-attachment: fixed;
+  color: var(--text-heading);
+  font-family: var(--font-dm-sans), "DM Sans", Arial, sans-serif;
+  font-feature-settings: "ss01", "cv11";
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.005em;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  font-feature-settings: "ss01", "cv11";
+}
+
+button {
+  cursor: pointer;
+}
+
+.mono {
+  font-family: var(--font-source-code-pro), "Source Code Pro", ui-monospace, monospace;
+  font-weight: 500;
+}
+
+/* ────────────────────────────────────────────────────────────────
+   Focus rings — consistent across the whole UI
+   ──────────────────────────────────────────────────────────────── */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: 6px;
+}
+
+/* ────────────────────────────────────────────────────────────────
+   Numerics — tabular alignment for ledger-style columns
+   ──────────────────────────────────────────────────────────────── */
+.num,
+.tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum", "ss01";
+}
+
+/* ────────────────────────────────────────────────────────────────
+   Card surface — hairline highlight on top edge for "lit from above"
+   ──────────────────────────────────────────────────────────────── */
+.card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  box-shadow: var(--card-shadow);
+  position: relative;
+}
+.card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.9), transparent);
+  border-radius: 14px 14px 0 0;
+  pointer-events: none;
+}
+
+/* ────────────────────────────────────────────────────────────────
+   Motion
+   ──────────────────────────────────────────────────────────────── */
+@keyframes fade-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes status-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.35);
+    opacity: 0.55;
+  }
+}
+
+@keyframes status-ring {
+  0% {
+    transform: scale(0.7);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+@keyframes sheen {
+  0%   { transform: translateX(-120%) skewX(-12deg); }
+  100% { transform: translateX(220%)  skewX(-12deg); }
+}
+
+@keyframes spin-soft {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes draw-line {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes check-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+.fade-rise {
+  animation: fade-rise 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.fade-in {
+  animation: fade-in 0.35s ease-out both;
+}
+
+.slide-in-right {
+  animation: slide-in-right 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(226, 232, 240, 0) 0%,
+    rgba(226, 232, 240, 0.65) 50%,
+    rgba(226, 232, 240, 0) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+
+/* Subtle, scoped pulse for active status dots */
+.status-dot-pulse {
+  position: relative;
+}
+.status-dot-pulse::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: currentColor;
+  opacity: 0.5;
+  animation: status-ring 1.8s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+  pointer-events: none;
+}
+
+/* Soft conic spinner — replaces hard icon spin */
+.spinner-soft {
+  width: 12px;
+  height: 12px;
+  border-radius: 9999px;
+  background:
+    conic-gradient(from 0deg, currentColor 0%, transparent 70%);
+  -webkit-mask: radial-gradient(circle 4px at center, transparent 99%, #000 100%);
+          mask: radial-gradient(circle 4px at center, transparent 99%, #000 100%);
+  animation: spin-soft 0.9s linear infinite;
+}
+
+/* Hover lift — universal feel for cards/CTAs */
+.lift-on-hover {
+  transition:
+    transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 0.25s cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 0.2s ease;
+  will-change: transform;
+}
+.lift-on-hover:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--card-shadow-lg);
+}
+
+/* Sheen sweep — used sparingly on primary CTAs */
+.btn-sheen {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.btn-sheen::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 35%;
+  height: 100%;
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.35) 50%,
+    transparent 100%
+  );
+  transform: translateX(-120%) skewX(-12deg);
+  pointer-events: none;
+  z-index: 1;
+}
+.btn-sheen:hover::after {
+  animation: sheen 0.9s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Animated check-draw (sidebar compliance, etc.) */
+.check-draw path {
+  stroke-dasharray: 24;
+  stroke-dashoffset: 24;
+  animation: check-draw 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) 0.2s forwards;
+}
+
+/* Sparkline path-draw */
+.sparkline-path {
+  stroke-dasharray: 1000;
+  stroke-dashoffset: 1000;
+  animation: draw-line 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) 0.05s forwards;
+}
+
+/* Table row stagger — caller sets --i */
+.row-stagger {
+  animation: fade-rise 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: calc(var(--i, 0) * 28ms);
+}
+
+/* ────────────────────────────────────────────────────────────────
+   Reduced motion
+   ──────────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .shimmer {
+    animation: none;
+    background: rgba(226, 232, 240, 0.4);
+  }
+  .status-dot-pulse::after { display: none; }
+}

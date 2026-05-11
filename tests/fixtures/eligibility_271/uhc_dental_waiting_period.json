@@ -1,0 +1,39 @@
+{
+  "fixture_name": "uhc_dental_waiting_period",
+  "trading_partner_service_id": "52133",
+  "coverage_order": "primary",
+  "request_procedure_codes": ["D8080", "D1110"],
+  "raw_271": {
+    "subscriber": { "subscriberStatus": "Active" },
+    "planStatus": [{ "status": "Active Coverage", "planDetails": "preferred in network" }],
+    "benefitsInformation": [
+      { "code": "C", "name": "Deductible", "benefitAmount": 500.0 },
+      { "code": "C", "name": "Deductible Remaining", "benefitAmount": 300.0 },
+      { "code": "F", "name": "Annual Maximum", "benefitAmount": 1500.0 },
+      { "code": "F", "name": "Remaining", "benefitAmount": 1300.0 },
+      { "code": "A", "name": "Coinsurance", "benefitPercent": 0.25 },
+      {
+        "code": "1",
+        "name": "Waiting period applies",
+        "procedureCode": "D8080",
+        "benefitsDateInformation": { "end": "20270101" }
+      },
+      { "code": "1", "name": "Active Coverage", "procedureCode": "D1110" }
+    ]
+  },
+  "expected": {
+    "is_active": true,
+    "in_network": true,
+    "coverage_percent": 75.0,
+    "procedure_expectations": {
+      "D8080": {
+        "procedure_covered": true,
+        "waiting_period_category": "ortho"
+      },
+      "D1110": {
+        "procedure_covered": true,
+        "waiting_period_category": "basic"
+      }
+    }
+  }
+}
