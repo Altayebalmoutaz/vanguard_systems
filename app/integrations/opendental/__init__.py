@@ -10,12 +10,11 @@ from app.integrations.opendental.mapping import MappedEligibility, od_to_eligibi
 from app.integrations.opendental.models import ODInsVerifyCreate
 
 __all__ = [
+    "MappedEligibility",
+    "ODInsVerifyCreate",
     "OpenDentalAPIError",
     "OpenDentalClient",
     "OpenDentalConfigError",
     "OpenDentalMappingError",
-    "MappedEligibility",
-    "ODInsVerifyCreate",
     "od_to_eligibility_request",
 ]
-

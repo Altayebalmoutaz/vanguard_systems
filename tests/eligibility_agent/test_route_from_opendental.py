@@ -152,4 +152,3 @@ def test_from_opendental_route(monkeypatch) -> None:  # type: ignore[no-untyped-
     notes = payload["opendental"]["write_back_notes"]
     assert notes["benefit_notes"]["ins_sub_num"] == 201
     assert notes["commlog"]["pat_num"] == 1
-

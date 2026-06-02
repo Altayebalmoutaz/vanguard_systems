@@ -15,7 +15,10 @@ def main() -> None:
     idx = 0
     while idx < len(lines):
         header.append(lines[idx])
-        if lines[idx].strip().lower() == "insert into public.icd10_codes (code, description) values":
+        if (
+            lines[idx].strip().lower()
+            == "insert into public.icd10_codes (code, description) values"
+        ):
             break
         idx += 1
 

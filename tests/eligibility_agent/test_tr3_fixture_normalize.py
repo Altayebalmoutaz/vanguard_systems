@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 
 from app.eligibility.normalizer import normalize
-
 from tests.eligibility_agent.fixture_bridge import (
     FIXTURE_JSON_PATH,
     fixture_doc_hint,
@@ -44,7 +43,9 @@ def test_tr3_fixture_through_normalize(fixture: dict) -> None:
             assert len(canonical["payer_aaa_errors"]) >= 1, hint
         extracted = [str(e.get("code") or "") for e in (canonical["payer_aaa_errors"] or [])]
         for code in aaa_codes:
-            assert code in extracted, f"{hint} expected AAA code {code!r} in payer_aaa_errors={extracted!r}"
+            assert code in extracted, (
+                f"{hint} expected AAA code {code!r} in payer_aaa_errors={extracted!r}"
+            )
         return
 
     if "is_active" in exp:
@@ -57,7 +58,9 @@ def test_tr3_fixture_through_normalize(fixture: dict) -> None:
         assert canonical["in_network"] == exp["in_network"], hint
 
     if "deductible_total" in exp:
-        assert canonical["deductible_total"] == pytest.approx(exp["deductible_total"], rel=1e-4, abs=0.01), hint
+        assert canonical["deductible_total"] == pytest.approx(
+            exp["deductible_total"], rel=1e-4, abs=0.01
+        ), hint
 
     if "deductible_remaining" in exp:
         assert canonical["deductible_remaining"] == pytest.approx(
@@ -65,7 +68,9 @@ def test_tr3_fixture_through_normalize(fixture: dict) -> None:
         ), hint
 
     if "annual_max_total" in exp:
-        assert canonical["annual_max_total"] == pytest.approx(exp["annual_max_total"], rel=1e-4, abs=0.01), hint
+        assert canonical["annual_max_total"] == pytest.approx(
+            exp["annual_max_total"], rel=1e-4, abs=0.01
+        ), hint
 
     if "annual_max_remaining" in exp:
         assert canonical["annual_max_remaining"] == pytest.approx(
@@ -86,7 +91,9 @@ def test_tr3_fixture_through_normalize(fixture: dict) -> None:
         db = canonical.get("dental_benefit_breakdown") or {}
         by_stc = db.get("coinsurance_patient_pct_by_stc") or {}
         assert isinstance(by_stc, dict), hint
-        assert by_stc.get("35") == pytest.approx(exp["coinsurance_patient_pct_stc35_inn"], rel=1e-4, abs=0.01), hint
+        assert by_stc.get("35") == pytest.approx(
+            exp["coinsurance_patient_pct_stc35_inn"], rel=1e-4, abs=0.01
+        ), hint
 
 
 def test_fixture_bundle_path_exists() -> None:

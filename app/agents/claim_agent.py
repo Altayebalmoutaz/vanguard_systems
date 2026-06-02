@@ -69,7 +69,9 @@ def run_claim_draft_agent(request: ClaimAgentRequest) -> ClaimDraftResponse:
         return ClaimDraftResponse(
             status="pending_auth",
             claim_payload={},
-            blockers=["Prior authorization and required documentation must be cleared before submit."],
+            blockers=[
+                "Prior authorization and required documentation must be cleared before submit."
+            ],
             available_actions=["edit"],
             details=details,
         )

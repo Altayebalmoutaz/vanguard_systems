@@ -161,4 +161,3 @@ class ODBenefitUpdate(BaseModel):
     BenefitType: ODBenefitType | None = None
     CoverageLevel: ODCoverageLevel | None = None
     TimePeriod: str | None = None
-

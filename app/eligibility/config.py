@@ -27,11 +27,17 @@ class EligibilitySettings(BaseSettings):
         validation_alias="STEDI_BATCH_ELIGIBILITY_PATH",
     )
     stedi_timeout_seconds: float = Field(default=60.0, validation_alias="STEDI_TIMEOUT_SECONDS")
-    stedi_batch_timeout_seconds: float = Field(default=120.0, validation_alias="STEDI_BATCH_TIMEOUT_SECONDS")
+    stedi_batch_timeout_seconds: float = Field(
+        default=120.0, validation_alias="STEDI_BATCH_TIMEOUT_SECONDS"
+    )
     stedi_max_retries: int = Field(default=3, validation_alias="STEDI_MAX_RETRIES")
-    stedi_retry_base_seconds: float = Field(default=0.5, validation_alias="STEDI_RETRY_BASE_SECONDS")
+    stedi_retry_base_seconds: float = Field(
+        default=0.5, validation_alias="STEDI_RETRY_BASE_SECONDS"
+    )
     stedi_retry_max_seconds: float = Field(default=4.0, validation_alias="STEDI_RETRY_MAX_SECONDS")
-    stedi_retry_jitter_seconds: float = Field(default=0.1, validation_alias="STEDI_RETRY_JITTER_SECONDS")
+    stedi_retry_jitter_seconds: float = Field(
+        default=0.1, validation_alias="STEDI_RETRY_JITTER_SECONDS"
+    )
     # Dental mock requests with a test API key need `stedi-test: true` (see Stedi mock eligibility docs).
     stedi_test_header: bool = Field(default=False, validation_alias="STEDI_TEST_HEADER")
 
@@ -53,7 +59,9 @@ class EligibilitySettings(BaseSettings):
     )
     eligibility_layer3_llm_openrouter_api_key: str = Field(
         default="",
-        validation_alias=AliasChoices("ELIGIBILITY_LAYER3_OPENROUTER_API_KEY", "OPENROUTER_API_KEY"),
+        validation_alias=AliasChoices(
+            "ELIGIBILITY_LAYER3_OPENROUTER_API_KEY", "OPENROUTER_API_KEY"
+        ),
     )
     eligibility_layer3_llm_model: str = Field(
         default="openai/gpt-4o-mini",
@@ -91,7 +99,9 @@ class EligibilitySettings(BaseSettings):
     )
     opendental_developer_key: str = Field(default="", validation_alias="OPENDENTAL_DEVELOPER_KEY")
     opendental_customer_key: str = Field(default="", validation_alias="OPENDENTAL_CUSTOMER_KEY")
-    opendental_timeout_seconds: float = Field(default=15.0, validation_alias="OPENDENTAL_TIMEOUT_SECONDS")
+    opendental_timeout_seconds: float = Field(
+        default=15.0, validation_alias="OPENDENTAL_TIMEOUT_SECONDS"
+    )
     opendental_writeback_enabled: bool = Field(
         default=False,
         validation_alias="OPENDENTAL_WRITEBACK_ENABLED",

@@ -113,7 +113,9 @@ def scrub_detail_for_storage(detail: dict[str, Any]) -> dict[str, Any]:
             redacted[k] = scrub_detail_for_storage(v)
         elif isinstance(v, list):
             redacted[k] = [
-                scrub_detail_for_storage(item) if isinstance(item, dict) else scrub_for_log(item)
+                scrub_detail_for_storage(item)
+                if isinstance(item, dict)
+                else scrub_for_log(item)
                 if isinstance(item, str)
                 else item
                 for item in v

@@ -56,7 +56,9 @@ def attach_eligibility_canonical_record(canonical: dict[str, Any]) -> None:
     co = _float_or_none(canonical.get("coinsurance"))
     pr = _float_or_none(canonical.get("patient_responsibility"))
     cov_conf = canonical.get("coverage_confidence")
-    cov_conf_s: str | None = str(cov_conf).strip() if isinstance(cov_conf, str) and cov_conf.strip() else None
+    cov_conf_s: str | None = (
+        str(cov_conf).strip() if isinstance(cov_conf, str) and cov_conf.strip() else None
+    )
 
     missing = list(canonical.get("missing_fields") or [])
     response_complete = bool(canonical.get("response_complete"))

@@ -155,7 +155,12 @@ def test_normalize_stc35_annual_max_not_poisoned_by_other_service_f_rows() -> No
                 "benefitAmount": "1356",
                 "inPlanNetworkIndicatorCode": "Y",
             },
-            {"code": "A", "name": "Co-Insurance", "serviceTypeCodes": ["41"], "benefitPercent": "0"},
+            {
+                "code": "A",
+                "name": "Co-Insurance",
+                "serviceTypeCodes": ["41"],
+                "benefitPercent": "0",
+            },
         ],
         "_request_procedure_codes": ["D1110"],
         "_trading_partner_service_id": "84103",
@@ -209,7 +214,9 @@ def test_normalize_conflicting_deductible_sets_warning() -> None:
     raw["_trading_partner_service_id"] = "P"
     c = normalize(raw, "primary")
     assert c["deductible_remaining"] == pytest.approx(800.0)
-    assert any("deductible_remaining conflict" in w for w in (c.get("normalization_warnings") or []))
+    assert any(
+        "deductible_remaining conflict" in w for w in (c.get("normalization_warnings") or [])
+    )
 
 
 def test_waiting_period_category_mapping() -> None:
@@ -499,7 +506,9 @@ def test_dental_calculator_ready_frequency_latest_visit_carve_out_and_aaa_action
     c = normalize(raw, "primary")
     calc = c["dental_calculator_ready"]
     assert calc["frequency_rules"][0]["description"] == "1 visit 6 months"
-    assert calc["latest_visit_or_consultation"][0]["latest_visit_or_consultation"] == date(2024, 4, 1)
+    assert calc["latest_visit_or_consultation"][0]["latest_visit_or_consultation"] == date(
+        2024, 4, 1
+    )
     assert calc["carve_outs"][0]["follow_up_required"] is True
     assert calc["carve_outs"][0]["entity_identification_value"] == "TPA-MEMBER-123"
     actions = {a["code"]: a["action"] for a in calc["aaa_actions"]}
@@ -515,7 +524,9 @@ def test_normalize_preserves_stedi_warnings_and_structured_aaa_actions() -> None
             "description": "This payer requires the patient's member ID.",
         }
     ]
-    raw["provider"] = {"aaaErrors": [{"code": "41", "description": "Authorization/Access Restrictions"}]}
+    raw["provider"] = {
+        "aaaErrors": [{"code": "41", "description": "Authorization/Access Restrictions"}]
+    }
     raw["_request_procedure_codes"] = []
     raw["_trading_partner_service_id"] = "P"
     c = normalize(raw, "primary")
@@ -552,17 +563,25 @@ def test_auth_or_cert_indicator_y_n_u_maps_prior_auth() -> None:
         {**base["benefitsInformation"][0], "authOrCertIndicator": "N"},
     ]
     c_n = normalize(base_n, "primary")
-    assert c_n["dental_calculator_ready"]["network_status"]["in_network"]["prior_auth_required"] is False
+    assert (
+        c_n["dental_calculator_ready"]["network_status"]["in_network"]["prior_auth_required"]
+        is False
+    )
 
     base_u = dict(base)
     base_u["benefitsInformation"] = [
         {**base["benefitsInformation"][0], "authOrCertIndicator": "U"},
     ]
     c_u = normalize(base_u, "primary")
-    assert c_u["dental_calculator_ready"]["network_status"]["in_network"]["prior_auth_required"] is None
+    assert (
+        c_u["dental_calculator_ready"]["network_status"]["in_network"]["prior_auth_required"]
+        is None
+    )
 
 
-def test_benefit_quantity_and_qualifier_surfaces_as_frequency_rule_without_service_delivery() -> None:
+def test_benefit_quantity_and_qualifier_surfaces_as_frequency_rule_without_service_delivery() -> (
+    None
+):
     raw = {
         "payer": {"payorIdentification": "P"},
         "subscriber": {"subscriberStatus": "Active"},
@@ -700,10 +719,15 @@ def test_stedi_x12_transaction_kind_271_vs_999() -> None:
     raw["x12"] = "~ST*271*0001*005010X279A1~"
     c271 = normalize(dict(raw), "primary")
     assert c271["stedi_x12_transaction_kind"] == "271"
-    assert not any("implementation_ack_999" in w for w in (c271.get("normalization_warnings") or []))
+    assert not any(
+        "implementation_ack_999" in w for w in (c271.get("normalization_warnings") or [])
+    )
 
     raw999 = dict(raw)
     raw999["x12"] = "~ST*999*0001*005010X231A1~"
     c999 = normalize(raw999, "primary")
     assert c999["stedi_x12_transaction_kind"] == "999"
-    assert any("stedi_x12_payload:implementation_ack_999" in w for w in (c999.get("normalization_warnings") or []))
+    assert any(
+        "stedi_x12_payload:implementation_ack_999" in w
+        for w in (c999.get("normalization_warnings") or [])
+    )

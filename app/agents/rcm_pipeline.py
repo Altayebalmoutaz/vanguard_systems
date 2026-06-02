@@ -112,11 +112,11 @@ def _resolve_claim_context(
 
     snapshot = _fetch_claim_snapshot(supabase, request.encounter_id)
     if not snapshot:
-        raise RuntimeError(f"No claim intake snapshot found for encounter_id={request.encounter_id}")
-    if not snapshot.get("ready_for_claim", False):
         raise RuntimeError(
-            f"Snapshot encounter_id={request.encounter_id} is not ready_for_claim."
+            f"No claim intake snapshot found for encounter_id={request.encounter_id}"
         )
+    if not snapshot.get("ready_for_claim", False):
+        raise RuntimeError(f"Snapshot encounter_id={request.encounter_id} is not ready_for_claim.")
 
     patient_payload = snapshot.get("patient") or {}
     rendering_provider = snapshot.get("rendering_provider") or {}
@@ -160,9 +160,9 @@ def _resolve_claim_context(
 def _fetch_claim_snapshot(supabase: Client, encounter_id: str) -> dict | None:
     """Load claim intake snapshot using RPC first, then direct table lookup fallback."""
     try:
-        rpc_resp = (
-            supabase.rpc("get_claim_intake_snapshot", {"p_encounter_id": encounter_id}).execute()
-        )
+        rpc_resp = supabase.rpc(
+            "get_claim_intake_snapshot", {"p_encounter_id": encounter_id}
+        ).execute()
         if isinstance(rpc_resp.data, dict):
             return rpc_resp.data
         if isinstance(rpc_resp.data, list) and rpc_resp.data:

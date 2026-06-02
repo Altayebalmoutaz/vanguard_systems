@@ -1,4 +1,5 @@
 """Generate supabase migration SQL from Stedi payer CSV (dental-capable rows only)."""
+
 from __future__ import annotations
 
 import csv

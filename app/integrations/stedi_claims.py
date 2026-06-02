@@ -164,7 +164,9 @@ def build_dental_claim_payload(claim: dict[str, Any]) -> dict[str, Any]:
         "subscriber": {
             "memberId": str(subscriber["member_id"]),
             "paymentResponsibilityLevelCode": "P",  # P = primary
-            "individualRelationshipCode": _relationship_code(subscriber.get("relationship_to_patient")),
+            "individualRelationshipCode": _relationship_code(
+                subscriber.get("relationship_to_patient")
+            ),
             "firstName": _split_first(subscriber["name"]),
             "lastName": _split_last(subscriber["name"]),
             "dateOfBirth": str(subscriber["dob"]).replace("-", ""),
@@ -181,7 +183,10 @@ def build_dental_claim_payload(claim: dict[str, Any]) -> dict[str, Any]:
             "benefitsAssignmentCertificationIndicator": "Y",
             "releaseInformationCode": "Y",
             "healthCareCodeInformation": [
-                {"diagnosisTypeCode": "ABK" if i == 0 else "ABF", "diagnosisCode": str(code).replace(".", "")}
+                {
+                    "diagnosisTypeCode": "ABK" if i == 0 else "ABF",
+                    "diagnosisCode": str(code).replace(".", ""),
+                }
                 for i, code in enumerate(diagnosis_codes)
             ],
             "serviceLines": [_service_line_payload(line) for line in service_lines],
@@ -245,9 +250,7 @@ def submit_dental_claim(
         is operator-facing; do **not** echo it back to API clients verbatim.
     """
     if not settings.stedi_claims_api_key:
-        raise StediClaimsError(
-            "STEDI_CLAIMS_API_KEY not configured", status_code=None, body=None
-        )
+        raise StediClaimsError("STEDI_CLAIMS_API_KEY not configured", status_code=None, body=None)
 
     payload = build_dental_claim_payload(claim)
     url = settings.stedi_claims_base_url.rstrip("/") + (

@@ -86,7 +86,9 @@ def llm_prior_auth_decision(settings: Settings, data: dict[str, Any]) -> dict[st
             raise RuntimeError(f"Prior auth LLM JSON missing key: {key}")
 
     parsed["requires_auth"] = bool(parsed["requires_auth"])
-    parsed["required_documents"] = [str(x).strip() for x in parsed["required_documents"] if str(x).strip()]
+    parsed["required_documents"] = [
+        str(x).strip() for x in parsed["required_documents"] if str(x).strip()
+    ]
     parsed["payer_rules"] = [str(x).strip() for x in parsed["payer_rules"] if str(x).strip()]
     parsed["risk_level"] = _normalize_risk(parsed["risk_level"])
     parsed["risk_reason"] = str(parsed["risk_reason"]).strip()

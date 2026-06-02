@@ -41,7 +41,9 @@ def calculate_cob(primary: dict[str, Any], secondary: dict[str, Any]) -> dict[st
     if not primary.get("response_complete"):
         raise ValueError("primary eligibility must be response_complete for COB")
     if not secondary.get("response_complete"):
-        raise ValueError("secondary eligibility must be response_complete for COB — route to human review")
+        raise ValueError(
+            "secondary eligibility must be response_complete for COB — route to human review"
+        )
 
     primary_rows = list(primary.get("procedure_estimates") or [])
     secondary_rows = list(secondary.get("procedure_estimates") or [])

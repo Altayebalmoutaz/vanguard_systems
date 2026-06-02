@@ -50,9 +50,7 @@ class ApiKeyAuth(unittest.TestCase):
         self.assertEqual(resp.json()["kind"], "api_key")
 
     def test_invalid_api_key_rejected_with_401(self) -> None:
-        client = _build_app(
-            Settings(require_auth=True, internal_api_keys="ops-key-1")
-        )
+        client = _build_app(Settings(require_auth=True, internal_api_keys="ops-key-1"))
         resp = client.get("/whoami", headers={"X-API-Key": "wrong"})
         self.assertEqual(resp.status_code, 401)
         self.assertEqual(resp.json()["detail"], "invalid_api_key")
@@ -84,9 +82,7 @@ class JwtAuth(unittest.TestCase):
 
     def test_valid_jwt_returns_principal(self) -> None:
         token = jwt.encode({"sub": "user-42"}, self.secret, algorithm="HS256")
-        client = _build_app(
-            Settings(require_auth=True, supabase_jwt_secret=self.secret)
-        )
+        client = _build_app(Settings(require_auth=True, supabase_jwt_secret=self.secret))
         resp = client.get("/whoami", headers={"Authorization": f"Bearer {token}"})
         self.assertEqual(resp.status_code, 200)
         body = resp.json()
@@ -95,9 +91,7 @@ class JwtAuth(unittest.TestCase):
 
     def test_jwt_with_user_id_claim_when_no_sub(self) -> None:
         token = jwt.encode({"user_id": "uid-9"}, self.secret, algorithm="HS256")
-        client = _build_app(
-            Settings(require_auth=True, supabase_jwt_secret=self.secret)
-        )
+        client = _build_app(Settings(require_auth=True, supabase_jwt_secret=self.secret))
         resp = client.get("/whoami", headers={"Authorization": f"Bearer {token}"})
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()["subject"], "uid-9")
@@ -108,20 +102,14 @@ class JwtAuth(unittest.TestCase):
             "different-secret-aaaaaaaaaaaaaaaaaaaaaaa",
             algorithm="HS256",
         )
-        client = _build_app(
-            Settings(require_auth=True, supabase_jwt_secret=self.secret)
-        )
+        client = _build_app(Settings(require_auth=True, supabase_jwt_secret=self.secret))
         resp = client.get("/whoami", headers={"Authorization": f"Bearer {token}"})
         self.assertEqual(resp.status_code, 401)
         self.assertEqual(resp.json()["detail"], "invalid_token")
 
     def test_malformed_bearer_rejected(self) -> None:
-        client = _build_app(
-            Settings(require_auth=True, supabase_jwt_secret=self.secret)
-        )
-        resp = client.get(
-            "/whoami", headers={"Authorization": "Bearer not.a.real.jwt"}
-        )
+        client = _build_app(Settings(require_auth=True, supabase_jwt_secret=self.secret))
+        resp = client.get("/whoami", headers={"Authorization": "Bearer not.a.real.jwt"})
         self.assertEqual(resp.status_code, 401)
 
     def test_missing_jwt_secret_returns_503(self) -> None:
@@ -130,9 +118,7 @@ class JwtAuth(unittest.TestCase):
             "any-secret-padded-out-to-32-bytes-aaaa",
             algorithm="HS256",
         )
-        client = _build_app(
-            Settings(require_auth=True, supabase_jwt_secret=None)
-        )
+        client = _build_app(Settings(require_auth=True, supabase_jwt_secret=None))
         resp = client.get("/whoami", headers={"Authorization": f"Bearer {token}"})
         self.assertEqual(resp.status_code, 503)
         self.assertEqual(resp.json()["detail"], "auth_not_configured")
@@ -148,9 +134,7 @@ class NoCredentials(unittest.TestCase):
 
     def test_non_bearer_authorization_returns_401(self) -> None:
         client = _build_app(Settings(require_auth=True))
-        resp = client.get(
-            "/whoami", headers={"Authorization": "Basic dXNlcjpwYXNz"}
-        )
+        resp = client.get("/whoami", headers={"Authorization": "Basic dXNlcjpwYXNz"})
         self.assertEqual(resp.status_code, 401)
         self.assertEqual(resp.json()["detail"], "auth_required")
 

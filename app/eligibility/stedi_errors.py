@@ -57,7 +57,11 @@ def iter_aaa_errors(payload: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def aaa_codes(payload: dict[str, Any]) -> set[str]:
-    return {str(e.get("code") or "").strip() for e in iter_aaa_errors(payload) if e.get("code") is not None}
+    return {
+        str(e.get("code") or "").strip()
+        for e in iter_aaa_errors(payload)
+        if e.get("code") is not None
+    }
 
 
 def classify_aaa_code(code: str, *, http_status: int | None) -> StediAaaAction:
@@ -73,7 +77,9 @@ def classify_aaa_code(code: str, *, http_status: int | None) -> StediAaaAction:
     return "human_review"
 
 
-def classify_aaa_response(payload: dict[str, Any], *, http_status: int | None) -> list[dict[str, Any]]:
+def classify_aaa_response(
+    payload: dict[str, Any], *, http_status: int | None
+) -> list[dict[str, Any]]:
     actions: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
     for err in iter_aaa_errors(payload):
@@ -100,5 +106,7 @@ def classify_aaa_response(payload: dict[str, Any], *, http_status: int | None) -
 def should_retry_for_aaa(payload: dict[str, Any], *, http_status: int | None) -> bool:
     if http_status is not None and http_status >= 400:
         return False
-    return any(a["action"] == "retry_connectivity" for a in classify_aaa_response(payload, http_status=http_status))
-
+    return any(
+        a["action"] == "retry_connectivity"
+        for a in classify_aaa_response(payload, http_status=http_status)
+    )

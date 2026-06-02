@@ -88,7 +88,9 @@ def get_latest_eligibility_check(
 
 
 def get_eligibility_check_by_id(supabase: Client, check_id: UUID) -> dict[str, Any] | None:
-    res = supabase.table("eligibility_checks").select("*").eq("id", str(check_id)).limit(1).execute()
+    res = (
+        supabase.table("eligibility_checks").select("*").eq("id", str(check_id)).limit(1).execute()
+    )
     rows = res.data or []
     return rows[0] if rows else None
 
@@ -187,9 +189,7 @@ def _provider_network_row_active_on(r: dict[str, Any], as_of: date) -> bool:
     if start is not None and as_of < start:
         return False
     end = _parse_pg_date(r.get("effective_to"))
-    if end is not None and as_of > end:
-        return False
-    return True
+    return not (end is not None and as_of > end)
 
 
 def fetch_active_provider_payer_network(
@@ -223,7 +223,11 @@ def fetch_active_provider_payer_network(
         .execute()
     )
 
-    rows = [r for r in (res.data or []) if isinstance(r, dict) and _provider_network_row_active_on(r, as_of_d)]
+    rows = [
+        r
+        for r in (res.data or [])
+        if isinstance(r, dict) and _provider_network_row_active_on(r, as_of_d)
+    ]
     if not rows:
         return None
 

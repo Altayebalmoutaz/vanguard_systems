@@ -142,17 +142,18 @@ def validate_cdt_tool(supabase: Client | None, cdt_codes: list[str]) -> dict[str
 
     if supabase is None:
         cdt_flags.append("CDT codes not verified: Supabase not configured.")
-        return {"invalid": [], "verified": list(cdt_codes), "cdt_flags": cdt_flags, "reference_size": 0}
+        return {
+            "invalid": [],
+            "verified": list(cdt_codes),
+            "cdt_flags": cdt_flags,
+            "reference_size": 0,
+        }
 
     normalized = [c.upper().strip() for c in cdt_codes]
-    count_res = (
-        supabase.table(CDT_CODES).select("code", count="exact").limit(0).execute()
-    )
+    count_res = supabase.table(CDT_CODES).select("code", count="exact").limit(0).execute()
     reference_size = int(getattr(count_res, "count", None) or 0)
 
-    result = (
-        supabase.table(CDT_CODES).select("code").in_("code", normalized).execute()
-    )
+    result = supabase.table(CDT_CODES).select("code").in_("code", normalized).execute()
     rows = getattr(result, "data", None) or []
     found = {str(r["code"]).upper().strip() for r in rows}
 
@@ -213,7 +214,12 @@ def _row_applies_to_codes(
     Row applies if primary code is blank or on the claim, or related_codes overlaps the claim.
     """
     on_claim = False
-    if code_cell is None or not str(code_cell).strip() or str(code_cell).upper().strip() in codes_upper or _related_overlaps_claim(related_codes, codes_upper):
+    if (
+        code_cell is None
+        or not str(code_cell).strip()
+        or str(code_cell).upper().strip() in codes_upper
+        or _related_overlaps_claim(related_codes, codes_upper)
+    ):
         on_claim = True
     if not on_claim:
         return False
@@ -340,9 +346,7 @@ def apply_payer_rules_tool(
         cond = row.get("conditions") or {}
         if not _row_passes_age(cond, patient_age):
             continue
-        if not _row_applies_to_codes(
-            row.get("code"), row.get("related_codes"), codes_upper, cond
-        ):
+        if not _row_applies_to_codes(row.get("code"), row.get("related_codes"), codes_upper, cond):
             continue
 
         enriched = dict(row)

@@ -59,7 +59,11 @@ def test_route_coverage_ambiguous() -> None:
             "copay": 40.0,
             "coinsurance": 20.0,
             # At least one EB row so routing is not INCOMPLETE (no benefit data at all).
-            "raw_response": {"benefitsInformation": [{"code": "1", "name": "Active Coverage", "serviceTypeCodes": ["35"]}]},
+            "raw_response": {
+                "benefitsInformation": [
+                    {"code": "1", "name": "Active Coverage", "serviceTypeCodes": ["35"]}
+                ]
+            },
         }
     )
     out = route(canonical, supabase=object())  # type: ignore[arg-type]
@@ -106,7 +110,13 @@ def test_route_incomplete_surfaces_structured_stedi_actions_and_warnings() -> No
         {
             "response_complete": False,
             "missing_fields": ["is_active"],
-            "payer_aaa_errors": [{"source": "provider", "code": "41", "description": "Authorization/Access Restrictions"}],
+            "payer_aaa_errors": [
+                {
+                    "source": "provider",
+                    "code": "41",
+                    "description": "Authorization/Access Restrictions",
+                }
+            ],
             "stedi_aaa_actions": [
                 {
                     "source": "provider",
@@ -115,7 +125,9 @@ def test_route_incomplete_surfaces_structured_stedi_actions_and_warnings() -> No
                     "description": "Authorization/Access Restrictions",
                 }
             ],
-            "stedi_warnings": [{"code": "request::270::member_id_required", "description": "Member ID required"}],
+            "stedi_warnings": [
+                {"code": "request::270::member_id_required", "description": "Member ID required"}
+            ],
         }
     )
     out = route(canonical, supabase=object())  # type: ignore[arg-type]
@@ -128,7 +140,12 @@ def test_route_incomplete_surfaces_structured_stedi_actions_and_warnings() -> No
 
 def test_route_not_covered() -> None:
     canonical = _base_canonical()
-    canonical.update({"is_covered": False, "procedure_details": [{"cdt_code": "D2740", "procedure_covered": False}]})
+    canonical.update(
+        {
+            "is_covered": False,
+            "procedure_details": [{"cdt_code": "D2740", "procedure_covered": False}],
+        }
+    )
     out = route(canonical, supabase=object())  # type: ignore[arg-type]
     assert out["status"] == "NOT_COVERED"
     assert out["action"] == "patient_financial_agreement_required"

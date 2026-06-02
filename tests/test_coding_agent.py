@@ -61,8 +61,8 @@ class TestCodingAgent(unittest.TestCase):
             insurance="Other Payer",
         )
         mock_sb = MagicMock()
-        mock_sb.table.return_value.select.return_value.in_.return_value.execute.return_value = MagicMock(
-            data=[]
+        mock_sb.table.return_value.select.return_value.in_.return_value.execute.return_value = (
+            MagicMock(data=[])
         )
         out = run_coding_agent(settings, mock_sb, req)
         self.assertEqual(out.status, "pending_review")
@@ -72,7 +72,9 @@ class TestCodingAgent(unittest.TestCase):
     @patch("app.agents.coding_agent.validate_cdt_tool")
     @patch("app.agents.coding_agent.validate_icd_tool")
     @patch("app.tools.coding_tools.llm_generate_codes")
-    def test_payer_rules_from_coding_agent_table(self, mock_llm: MagicMock, mock_icd: MagicMock, mock_cdt: MagicMock) -> None:
+    def test_payer_rules_from_coding_agent_table(
+        self, mock_llm: MagicMock, mock_icd: MagicMock, mock_cdt: MagicMock
+    ) -> None:
         mock_llm.return_value = {
             "cdt_codes": ["D0120", "D0150"],
             "icd10_codes": ["K02.9"],

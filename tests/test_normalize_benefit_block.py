@@ -118,12 +118,14 @@ def test_variant_5_duplicate_inn_oon_do_not_overwrite_active_outofnetwork() -> N
     inn_row = next(
         b
         for b in data["benefitsInformation"]
-        if b.get("procedureCode") == "D1110" and "in network" in str(b.get("planNetworkDescription", "")).lower()
+        if b.get("procedureCode") == "D1110"
+        and "in network" in str(b.get("planNetworkDescription", "")).lower()
     )
     oon_row = next(
         b
         for b in data["benefitsInformation"]
-        if b.get("procedureCode") == "D1110" and "out of network" in str(b.get("planNetworkDescription", "")).lower()
+        if b.get("procedureCode") == "D1110"
+        and "out of network" in str(b.get("planNetworkDescription", "")).lower()
     )
     a = normalize_benefit_block(inn_row, payer_id)
     b = normalize_benefit_block(oon_row, payer_id)

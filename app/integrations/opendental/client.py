@@ -54,7 +54,7 @@ class OpenDentalClient:
             raise OpenDentalConfigError("OpenDental base URL must start with http:// or https://")
 
     @classmethod
-    def from_settings(cls, settings: EligibilitySettings) -> "OpenDentalClient":
+    def from_settings(cls, settings: EligibilitySettings) -> OpenDentalClient:
         return cls(
             base_url=settings.opendental_base_url,
             developer_key=settings.opendental_developer_key,
@@ -93,7 +93,9 @@ class OpenDentalClient:
         try:
             return resp.json()
         except Exception as exc:  # pragma: no cover - defensive
-            raise OpenDentalAPIError("OpenDental response was not valid JSON", body=resp.text) from exc
+            raise OpenDentalAPIError(
+                "OpenDental response was not valid JSON", body=resp.text
+            ) from exc
 
     def _put_json(self, path: str, payload: dict[str, object]) -> object:
         url = urljoin(self.base_url, path.lstrip("/"))
@@ -108,7 +110,9 @@ class OpenDentalClient:
         try:
             return resp.json()
         except Exception as exc:  # pragma: no cover - defensive
-            raise OpenDentalAPIError("OpenDental response was not valid JSON", body=resp.text) from exc
+            raise OpenDentalAPIError(
+                "OpenDental response was not valid JSON", body=resp.text
+            ) from exc
 
     def _send_json(self, method: str, path: str, payload: dict[str, object]) -> object:
         """Send a JSON request tolerating empty/non-JSON bodies (OD often returns bare '200 OK')."""
@@ -177,9 +181,9 @@ class OpenDentalClient:
                 "BenefitNotes": benefit_notes,
                 "_replay": True,
             }
-        payload = ODInsSubBenefitNotesUpdate(PlanNum=plan_num, BenefitNotes=benefit_notes).model_dump(
-            mode="json"
-        )
+        payload = ODInsSubBenefitNotesUpdate(
+            PlanNum=plan_num, BenefitNotes=benefit_notes
+        ).model_dump(mode="json")
         out = self._send_json("PUT", f"/inssubs/{ins_sub_num}", payload)
         return out if isinstance(out, dict) else {"response": out}
 
@@ -188,7 +192,9 @@ class OpenDentalClient:
     ) -> dict[str, object]:
         """PUT /inssubs/{InsSubNum} - SubscNote (renders bold-red on the insurance grid)."""
         if self.replay_dir:
-            logger.warning("OpenDental replay mode active: skipping PUT /inssubs/%s SubscNote", ins_sub_num)
+            logger.warning(
+                "OpenDental replay mode active: skipping PUT /inssubs/%s SubscNote", ins_sub_num
+            )
             return {
                 "InsSubNum": ins_sub_num,
                 "PlanNum": plan_num,
@@ -259,10 +265,7 @@ class OpenDentalClient:
 
     def get_covcats(self) -> list[ODCovCat]:
         """GET /covcats - coverage categories (used to map EbenefitCat -> CovCatNum)."""
-        if self.replay_dir:
-            payload = self._read_fixture("covcats")
-        else:
-            payload = self._get_json("/covcats")
+        payload = self._read_fixture("covcats") if self.replay_dir else self._get_json("/covcats")
         if not isinstance(payload, list):
             raise OpenDentalAPIError("OpenDental covcats payload was not a list")
         return [ODCovCat.model_validate(row) for row in payload]
@@ -282,7 +285,9 @@ class OpenDentalClient:
         if self.replay_dir:
             logger.warning("OpenDental replay mode active: skipping POST /benefits")
             return ODBenefit(BenefitNum=0, **payload.model_dump(exclude_none=True))
-        out = self._send_json("POST", "/benefits", payload.model_dump(mode="json", exclude_none=True))
+        out = self._send_json(
+            "POST", "/benefits", payload.model_dump(mode="json", exclude_none=True)
+        )
         if isinstance(out, dict) and "_raw" not in out:
             try:
                 return ODBenefit.model_validate(out)
@@ -304,4 +309,3 @@ class OpenDentalClient:
             except Exception:  # pragma: no cover - defensive
                 pass
         return ODBenefit(BenefitNum=benefit_num, **payload.model_dump(exclude_none=True))
-

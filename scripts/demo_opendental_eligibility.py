@@ -20,9 +20,13 @@ def _row(result: dict) -> tuple[str, str, str, str]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Demo OpenDental eligibility route")
-    parser.add_argument("--base-url", default="http://127.0.0.1:8000", help="Eligibility API base URL")
+    parser.add_argument(
+        "--base-url", default="http://127.0.0.1:8000", help="Eligibility API base URL"
+    )
     parser.add_argument("--pat-nums", nargs="+", type=int, required=True, help="OpenDental PatNums")
-    parser.add_argument("--write-back", action="store_true", help="Request write-back to OpenDental")
+    parser.add_argument(
+        "--write-back", action="store_true", help="Request write-back to OpenDental"
+    )
     args = parser.parse_args()
 
     print("pat_num | routing | check_id | insverify_num")
@@ -35,7 +39,10 @@ def main() -> None:
                 "cdt_codes": ["D1110"],
                 "write_back": args.write_back,
             }
-            resp = client.post(f"{args.base_url.rstrip('/')}/eligibility-agent/eligibility/from-opendental", json=payload)
+            resp = client.post(
+                f"{args.base_url.rstrip('/')}/eligibility-agent/eligibility/from-opendental",
+                json=payload,
+            )
             if resp.status_code >= 400:
                 print(f"{pat_num} | ERROR {resp.status_code} | - | -")
                 print(resp.text)
@@ -47,4 +54,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

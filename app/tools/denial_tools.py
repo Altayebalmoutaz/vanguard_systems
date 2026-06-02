@@ -108,7 +108,9 @@ def generate_appeal_letter_tool(data: dict[str, Any]) -> str:
     Expected keys: insurance_company_name, claim_id, patient_name, reason_token,
     cdt_codes, icd10_codes, provider_name
     """
-    insurance = str(data.get("insurance_company_name") or "the patient's dental benefit plan").strip()
+    insurance = str(
+        data.get("insurance_company_name") or "the patient's dental benefit plan"
+    ).strip()
     claim_id = str(data.get("claim_id") or "").strip()
     patient = str(data.get("patient_name") or "the patient").strip()
     reason_token = str(data.get("reason_token") or "").strip()
@@ -184,7 +186,11 @@ def auto_resubmit_tool(claim_id: str, next_action: str) -> list[str]:
             "Submit original claim only after payer confirms eligibility for services",
         ],
     }
-    return list(steps_by_action.get(next_action, [f"Review ERA for claim {cid} and execute payer-specific workflow"]))
+    return list(
+        steps_by_action.get(
+            next_action, [f"Review ERA for claim {cid} and execute payer-specific workflow"]
+        )
+    )
 
 
 def denial_llm_intelligence_tool(

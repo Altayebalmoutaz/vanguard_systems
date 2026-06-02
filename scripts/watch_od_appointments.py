@@ -34,9 +34,9 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from app.eligibility.config import get_settings  # noqa: E402
-from app.integrations.opendental.poller import fetch_appointments  # noqa: E402
-from app.integrations.opendental.poller import od_headers as _od_headers  # noqa: E402
+from app.eligibility.config import get_settings
+from app.integrations.opendental.poller import fetch_appointments
+from app.integrations.opendental.poller import od_headers as _od_headers
 
 
 def run_eligibility(
@@ -74,13 +74,21 @@ def run_eligibility(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Watch OpenDental appointments and run eligibility")
-    parser.add_argument("--agent-base-url", default="http://127.0.0.1:8000", help="Eligibility agent base URL")
-    parser.add_argument("--date", default=date.today().isoformat(), help="Appointment date to watch (YYYY-MM-DD)")
+    parser = argparse.ArgumentParser(
+        description="Watch OpenDental appointments and run eligibility"
+    )
+    parser.add_argument(
+        "--agent-base-url", default="http://127.0.0.1:8000", help="Eligibility agent base URL"
+    )
+    parser.add_argument(
+        "--date", default=date.today().isoformat(), help="Appointment date to watch (YYYY-MM-DD)"
+    )
     parser.add_argument("--interval", type=float, default=15.0, help="Polling interval in seconds")
     parser.add_argument("--cdt", nargs="+", default=["D1110"], help="CDT codes to send")
     parser.add_argument("--trigger-event", default="PRE_APPOINTMENT", help="Trigger event label")
-    parser.add_argument("--write-back", action="store_true", help="Request write-back to OpenDental")
+    parser.add_argument(
+        "--write-back", action="store_true", help="Request write-back to OpenDental"
+    )
     parser.add_argument("--once", action="store_true", help="Run a single poll pass and exit")
     args = parser.parse_args()
 
@@ -117,7 +125,9 @@ def main() -> int:
             # On the very first pass, just baseline existing appointments unless --once.
             if first_pass and not args.once:
                 continue
-            print(f"[apt {apt_num}] PatNum={pat_num} {apt.get('AptStatus', '')} {apt.get('AptDateTime', '')}")
+            print(
+                f"[apt {apt_num}] PatNum={pat_num} {apt.get('AptStatus', '')} {apt.get('AptDateTime', '')}"
+            )
             run_eligibility(
                 agent_base_url=args.agent_base_url,
                 pat_num=int(pat_num),
@@ -128,7 +138,9 @@ def main() -> int:
             )
 
         if first_pass and not args.once:
-            print(f"Baselined {len(seen_apt)} existing appointment(s); now watching for new ones...")
+            print(
+                f"Baselined {len(seen_apt)} existing appointment(s); now watching for new ones..."
+            )
         first_pass = False
 
         if args.once:

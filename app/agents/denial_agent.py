@@ -71,9 +71,7 @@ def run_denial_agent(request: DenialAgentRequest) -> DenialAgentResponse:
     reason_token = detect_denial_reason_tool(parsed, claim_snapshot)
     next_action = map_denial_reason_tool(parsed["status"], reason_token)
     requires_human_review = bool(
-        llm_reason_token
-        and llm_reason_token != reason_token
-        and llm_confidence >= 0.7
+        llm_reason_token and llm_reason_token != reason_token and llm_confidence >= 0.7
     )
 
     display_reason = reason_token if parsed["status"] != "paid" else ""

@@ -53,7 +53,9 @@ def test_benefits_note_includes_financial_snapshot() -> None:
             "annual_max_remaining": 1356,
             "annual_max_total": 1500,
         },
-        procedure_estimates=[{"cdt_code": "D1110", "patient_responsibility": 50, "insurance_pays": 70}],
+        procedure_estimates=[
+            {"cdt_code": "D1110", "patient_responsibility": 50, "insurance_pays": 70}
+        ],
     )
     assert "Vanguard MD - benefits snapshot" in note
     assert "Deductible remaining" in note
@@ -73,8 +75,18 @@ _CANONICAL = {
     "annual_max_remaining": 1356,
 }
 _ESTIMATES = [
-    {"cdt_code": "D1110", "patient_responsibility": 50, "insurance_pays": 70, "allowed_amount": 120},
-    {"cdt_code": "D2740", "patient_responsibility": 400, "insurance_pays": 400, "allowed_amount": 800},
+    {
+        "cdt_code": "D1110",
+        "patient_responsibility": 50,
+        "insurance_pays": 70,
+        "allowed_amount": 120,
+    },
+    {
+        "cdt_code": "D2740",
+        "patient_responsibility": 400,
+        "insurance_pays": 400,
+        "allowed_amount": 800,
+    },
 ]
 
 
@@ -190,7 +202,11 @@ def test_run_writeback_isolates_benefit_notes_failure() -> None:
         primary_pat_plan_num=101,
         primary_plan_num=301,
         primary_ins_sub_num=201,
-        primary_result={"routing": {"status": "CLEARED"}, "canonical": _CANONICAL, "procedure_estimates": []},
+        primary_result={
+            "routing": {"status": "CLEARED"},
+            "canonical": _CANONICAL,
+            "procedure_estimates": [],
+        },
     )
     # BenefitNotes failed but SubscNote + InsVerifies + Commlog still ran.
     assert "error" in result["benefit_notes"]
@@ -207,9 +223,21 @@ _COVCATS = [
 ]
 _UNIVERSAL_RECORD = {
     "categories": [
-        {"category": "DIAGNOSTIC", "covered": {"value": True}, "coinsurance_patient_pct": {"value": 0.0}},
-        {"category": "BASIC", "covered": {"value": True}, "coinsurance_patient_pct": {"value": 20.0}},
-        {"category": "MAJOR", "covered": {"value": True}, "coinsurance_patient_pct": {"value": 50.0}},
+        {
+            "category": "DIAGNOSTIC",
+            "covered": {"value": True},
+            "coinsurance_patient_pct": {"value": 0.0},
+        },
+        {
+            "category": "BASIC",
+            "covered": {"value": True},
+            "coinsurance_patient_pct": {"value": 20.0},
+        },
+        {
+            "category": "MAJOR",
+            "covered": {"value": True},
+            "coinsurance_patient_pct": {"value": 50.0},
+        },
     ]
 }
 
@@ -275,7 +303,9 @@ def test_benefits_grid_isolates_row_failure() -> None:
         def update_benefit(self, benefit_num, payload):  # type: ignore[no-untyped-def]
             raise RuntimeError("benefits put down")
 
-    existing = [ODBenefit(BenefitNum=192, PlanNum=19, CovCatNum=4, BenefitType="CoInsurance", Percent=50)]
+    existing = [
+        ODBenefit(BenefitNum=192, PlanNum=19, CovCatNum=4, BenefitType="CoInsurance", Percent=50)
+    ]
     stub = _Boom(existing)
     result = run_opendental_benefits_grid_writeback(
         stub,  # type: ignore[arg-type]

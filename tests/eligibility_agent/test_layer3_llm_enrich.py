@@ -29,7 +29,10 @@ def test_apply_layer3_numeric_consistency_clamps_deductible() -> None:
     }
     apply_layer3_numeric_consistency(canonical)
     assert canonical["deductible_remaining"] == 100.0
-    assert "layer3_clamp:deductible_remaining_capped_to_deductible_total" in canonical["normalization_warnings"]
+    assert (
+        "layer3_clamp:deductible_remaining_capped_to_deductible_total"
+        in canonical["normalization_warnings"]
+    )
 
 
 def test_apply_layer3_numeric_consistency_clamps_out_of_pocket_max() -> None:
@@ -40,9 +43,10 @@ def test_apply_layer3_numeric_consistency_clamps_out_of_pocket_max() -> None:
     }
     apply_layer3_numeric_consistency(canonical)
     assert canonical["out_of_pocket_max_remaining"] == 5000.0
-    assert "layer3_clamp:out_of_pocket_max_remaining_capped_to_out_of_pocket_max_total" in canonical[
-        "normalization_warnings"
-    ]
+    assert (
+        "layer3_clamp:out_of_pocket_max_remaining_capped_to_out_of_pocket_max_total"
+        in canonical["normalization_warnings"]
+    )
 
 
 def test_apply_layer3_numeric_consistency_clamps_annual_max() -> None:
@@ -55,7 +59,10 @@ def test_apply_layer3_numeric_consistency_clamps_annual_max() -> None:
     }
     apply_layer3_numeric_consistency(canonical)
     assert canonical["annual_max_remaining"] == 7000.0
-    assert "layer3_clamp:annual_max_remaining_capped_to_annual_max_total" in canonical["normalization_warnings"]
+    assert (
+        "layer3_clamp:annual_max_remaining_capped_to_annual_max_total"
+        in canonical["normalization_warnings"]
+    )
 
 
 def test_enrich_with_llm_noop_when_disabled() -> None:
@@ -117,7 +124,11 @@ def test_enrich_with_llm_ignores_invalid_coverage_confidence() -> None:
             return None
 
         def json(self) -> dict:
-            return {"choices": [{"message": {"content": json.dumps({"coverage_confidence": "invalid"})}}]}
+            return {
+                "choices": [
+                    {"message": {"content": json.dumps({"coverage_confidence": "invalid"})}}
+                ]
+            }
 
     with patch("app.eligibility.layer3_llm_enrich.httpx.Client") as m_client:
         client_inst = MagicMock()

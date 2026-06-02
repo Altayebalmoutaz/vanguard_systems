@@ -1,4 +1,5 @@
 """Verify Supabase env vars (root .env + dashboard .env.local). No secrets printed."""
+
 from __future__ import annotations
 
 import base64
@@ -115,9 +116,12 @@ def main() -> int:
         None,
     )
 
-    if root.get("SUPABASE_URL") and dash.get("NEXT_PUBLIC_SUPABASE_URL"):
-        if root["SUPABASE_URL"].rstrip("/") != dash["NEXT_PUBLIC_SUPABASE_URL"].rstrip("/"):
-            dash_errors.append("dashboard URL != root SUPABASE_URL")
+    if (
+        root.get("SUPABASE_URL")
+        and dash.get("NEXT_PUBLIC_SUPABASE_URL")
+        and root["SUPABASE_URL"].rstrip("/") != dash["NEXT_PUBLIC_SUPABASE_URL"].rstrip("/")
+    ):
+        dash_errors.append("dashboard URL != root SUPABASE_URL")
 
     all_errors = root_errors + dash_errors
     print()

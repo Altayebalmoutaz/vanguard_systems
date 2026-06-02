@@ -137,7 +137,9 @@ def review_decision(
     """Apply human review status and optional override feedback."""
     db = supabase
     # Step 1: update decision status.
-    decision_update = db.table("agent_decisions").update({"status": status}).eq("id", decision_id).execute()
+    decision_update = (
+        db.table("agent_decisions").update({"status": status}).eq("id", decision_id).execute()
+    )
     decision_rows = decision_update.data or []
     if not decision_rows:
         raise HTTPException(status_code=404, detail="Decision not found")

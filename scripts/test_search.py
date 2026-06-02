@@ -82,16 +82,14 @@ async def test_search() -> None:
 
         embedding = await embed_query(query)
 
-        results = (
-            supabase.rpc(
-                "match_cdt_codes",
-                {
-                    "query_embedding": embedding,
-                    "match_threshold": 0.3,
-                    "match_count": 3,
-                },
-            ).execute()
-        )
+        results = supabase.rpc(
+            "match_cdt_codes",
+            {
+                "query_embedding": embedding,
+                "match_threshold": 0.3,
+                "match_count": 3,
+            },
+        ).execute()
 
         if not results.data:
             print("No results - try lowering match_threshold")

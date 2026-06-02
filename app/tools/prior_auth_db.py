@@ -34,8 +34,7 @@ def _payer_context_matches(
     if _insurance_matches_payer(insurance, payer_name):
         return True
     return bool(
-        resolved_display_name
-        and _insurance_matches_payer(insurance, str(resolved_display_name))
+        resolved_display_name and _insurance_matches_payer(insurance, str(resolved_display_name))
     )
 
 
@@ -151,9 +150,7 @@ def _fetch_preauth_view_rules(
         cond = row.get("conditions") or {}
         if not _row_passes_age(cond, patient_age):
             continue
-        if not _row_applies_to_codes(
-            row.get("code"), row.get("related_codes"), codes_upper, cond
-        ):
+        if not _row_applies_to_codes(row.get("code"), row.get("related_codes"), codes_upper, cond):
             continue
 
         rt = str(row.get("rule_type") or "").strip().lower()

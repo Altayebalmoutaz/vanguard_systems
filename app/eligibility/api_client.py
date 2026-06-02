@@ -72,7 +72,9 @@ def build_payload(
         subscriber = {
             "firstName": request.subscriber_first_name,
             "lastName": request.subscriber_last_name,
-            "dateOfBirth": request.subscriber_dob.strftime("%Y%m%d") if request.subscriber_dob else None,
+            "dateOfBirth": request.subscriber_dob.strftime("%Y%m%d")
+            if request.subscriber_dob
+            else None,
             "memberId": request.subscriber_member_id or request.subscriber_id,
         }
         dependent: dict[str, Any] = {
@@ -99,7 +101,9 @@ def build_payload(
     return body
 
 
-def build_payload_for_secondary(request: EligibilityRequest, settings: EligibilitySettings | None = None) -> dict[str, Any]:
+def build_payload_for_secondary(
+    request: EligibilityRequest, settings: EligibilitySettings | None = None
+) -> dict[str, Any]:
     """Independent secondary payer payload (never merged with primary)."""
     if not request.secondary_payer_id:
         raise ValueError("secondary_payer_id required for secondary payload")
@@ -108,7 +112,11 @@ def build_payload_for_secondary(request: EligibilityRequest, settings: Eligibili
 
 def _realtime_url(settings: EligibilitySettings) -> str:
     base = settings.stedi_base_url.rstrip("/")
-    path = settings.stedi_eligibility_path if settings.stedi_eligibility_path.startswith("/") else f"/{settings.stedi_eligibility_path}"
+    path = (
+        settings.stedi_eligibility_path
+        if settings.stedi_eligibility_path.startswith("/")
+        else f"/{settings.stedi_eligibility_path}"
+    )
     return f"{base}{path}"
 
 
@@ -147,7 +155,9 @@ def _parse_json_dict_or_error(response: httpx.Response, *, source: str) -> dict[
     return payload
 
 
-def call_stedi(payload: dict[str, Any], settings: EligibilitySettings | None = None) -> dict[str, Any]:
+def call_stedi(
+    payload: dict[str, Any], settings: EligibilitySettings | None = None
+) -> dict[str, Any]:
     """
     POST real-time eligibility. Retries on 429 / 5xx with exponential backoff.
     """

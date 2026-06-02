@@ -122,7 +122,9 @@ def route(canonical: dict[str, Any], supabase: Client) -> dict[str, Any]:
     """
     proc_details = list(canonical.get("procedure_details") or [])
     payer_id = str(canonical.get("payer_id") or "").strip().upper()
-    codes = sorted({str(p.get("cdt_code")).strip().upper() for p in proc_details if p.get("cdt_code")})
+    codes = sorted(
+        {str(p.get("cdt_code")).strip().upper() for p in proc_details if p.get("cdt_code")}
+    )
 
     state = _routing_state(canonical)
     reasons = [f"routing_state:{state}", f"routing_policy_version:{ROUTING_POLICY_VERSION}"]
@@ -162,9 +164,7 @@ def route(canonical: dict[str, Any], supabase: Client) -> dict[str, Any]:
             elif aaa_action == "verify_subscriber":
                 incomplete_msg = "Verify member ID, legal name, date of birth, and payer before retrying eligibility."
             elif canonical.get("payer_aaa_errors"):
-                incomplete_msg = (
-                    "Payer returned AAA error(s). Verify member ID, patient name, date of birth, and payer id, then retry."
-                )
+                incomplete_msg = "Payer returned AAA error(s). Verify member ID, patient name, date of birth, and payer id, then retry."
             return {
                 "status": "INCOMPLETE",
                 "action": "notify_front_office_missing_fields",
@@ -233,7 +233,11 @@ def route(canonical: dict[str, Any], supabase: Client) -> dict[str, Any]:
                 ),
             }
         case "CLEARED":
-            needs_auth = payer_requires_prior_auth(supabase, payer_id, codes) if payer_id and codes else False
+            needs_auth = (
+                payer_requires_prior_auth(supabase, payer_id, codes)
+                if payer_id and codes
+                else False
+            )
             if needs_auth:
                 reasons.append("prior_auth_required_by_rule")
                 return {
@@ -276,7 +280,10 @@ def route(canonical: dict[str, Any], supabase: Client) -> dict[str, Any]:
                 "detail": _attach_payer_aaa_errors(
                     {
                         "routing_policy_version": ROUTING_POLICY_VERSION,
-                        "reasons": ["routing_state:UNCLASSIFIED", f"routing_policy_version:{ROUTING_POLICY_VERSION}"],
+                        "reasons": [
+                            "routing_state:UNCLASSIFIED",
+                            f"routing_policy_version:{ROUTING_POLICY_VERSION}",
+                        ],
                     },
                     canonical,
                 ),

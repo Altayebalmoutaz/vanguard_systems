@@ -111,11 +111,7 @@ def validate_completeness(canonical: dict[str, Any]) -> dict[str, Any]:
             )
         )
 
-    if (
-        deductible_total is not None
-        and deductible_met is not None
-        and deductible_remaining is None
-    ):
+    if deductible_total is not None and deductible_met is not None and deductible_remaining is None:
         warnings.append("deductible_remaining_null_despite_total_and_met")
         issues.append(
             _issue(
@@ -233,7 +229,11 @@ def validate_completeness(canonical: dict[str, Any]) -> dict[str, Any]:
             )
         )
 
-    if annual_max_total is not None and annual_max_remaining is not None and annual_max_remaining > annual_max_total:
+    if (
+        annual_max_total is not None
+        and annual_max_remaining is not None
+        and annual_max_remaining > annual_max_total
+    ):
         warnings.append("annual_max_remaining_gt_total")
         issues.append(
             _issue(

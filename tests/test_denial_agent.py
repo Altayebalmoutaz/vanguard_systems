@@ -25,14 +25,20 @@ class TestDenialTools(unittest.TestCase):
         self.assertEqual(p["reason"], "missing_xray")
 
     def test_parse_era_nested_mock_era(self) -> None:
-        p = parse_era_tool({"claim_id": "X", "mock_era": {"status": "partial", "reason": "frequency_limit"}})
+        p = parse_era_tool(
+            {"claim_id": "X", "mock_era": {"status": "partial", "reason": "frequency_limit"}}
+        )
         self.assertEqual(p["status"], "partial")
         self.assertEqual(p["reason"], "frequency_limit")
 
     def test_map_denial_reason_spec(self) -> None:
         self.assertEqual(map_denial_reason_tool("paid", ""), "none")
-        self.assertEqual(map_denial_reason_tool("denied", "missing_xray"), "upload_xray_and_resubmit")
-        self.assertEqual(map_denial_reason_tool("denied", "invalid_code"), "correct_code_and_resubmit")
+        self.assertEqual(
+            map_denial_reason_tool("denied", "missing_xray"), "upload_xray_and_resubmit"
+        )
+        self.assertEqual(
+            map_denial_reason_tool("denied", "invalid_code"), "correct_code_and_resubmit"
+        )
         self.assertEqual(map_denial_reason_tool("denied", "not_covered"), "notify_patient")
         self.assertEqual(
             map_denial_reason_tool("partial", "frequency_limit"),

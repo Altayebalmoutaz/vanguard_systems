@@ -58,9 +58,9 @@ def _upsert_document(
     }
     if existing.data:
         doc_id = existing.data[0]["id"]
-        tbl.update(
-            {"title": title, "source_type": source_type, "file_name": file_name}
-        ).eq("id", doc_id).execute()
+        tbl.update({"title": title, "source_type": source_type, "file_name": file_name}).eq(
+            "id", doc_id
+        ).execute()
         return str(doc_id)
     ins = tbl.insert(row).execute()
     if not ins.data:
@@ -87,7 +87,9 @@ def main() -> int:
         action="store_true",
         help="Store chunks without embeddings (faster; run again without this to embed)",
     )
-    parser.add_argument("--embed-batch-size", type=int, default=16, help="Texts per embedding API call")
+    parser.add_argument(
+        "--embed-batch-size", type=int, default=16, help="Texts per embedding API call"
+    )
     args = parser.parse_args()
 
     pdf_path = args.pdf.resolve()
@@ -102,7 +104,9 @@ def main() -> int:
     pages = extract_pdf_pages(pdf_path)
     nonempty = sum(1 for _, t in pages if t.strip())
     if nonempty == 0:
-        print("Warning: no text extracted (scanned PDF?). OCR pipeline not included.", file=sys.stderr)
+        print(
+            "Warning: no text extracted (scanned PDF?). OCR pipeline not included.", file=sys.stderr
+        )
 
     # Step 2: chunk
     chunks = build_chunks_from_pages(pages, args.chunk_size, args.overlap)
@@ -151,8 +155,7 @@ def main() -> int:
         ch_tbl.insert(rows).execute()
 
     print(
-        f"OK: document_id={doc_id} schema=public chunks={len(chunks)} "
-        f"embedded={not args.no_embed}"
+        f"OK: document_id={doc_id} schema=public chunks={len(chunks)} embedded={not args.no_embed}"
     )
     return 0
 

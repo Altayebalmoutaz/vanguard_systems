@@ -88,7 +88,22 @@ def parse_pdf(pdf_path: Path) -> dict[str, CodeEntry]:
             if page_match:
                 continue
 
-            if line.startswith(("I. ", "II. ", "III. ", "IV. ", "V. ", "VI. ", "VII. ", "VIII. ", "IX. ", "X. ", "XI. ", "XII. ")):
+            if line.startswith(
+                (
+                    "I. ",
+                    "II. ",
+                    "III. ",
+                    "IV. ",
+                    "V. ",
+                    "VI. ",
+                    "VII. ",
+                    "VIII. ",
+                    "IX. ",
+                    "X. ",
+                    "XI. ",
+                    "XII. ",
+                )
+            ):
                 current_section = line
                 continue
 
@@ -206,8 +221,12 @@ def build_sql(entries: dict[str, CodeEntry], pdf_name: str) -> str:
         ");"
     )
     sql_lines.append("")
-    sql_lines.append("create index if not exists cdt_payer_rules_code_idx on public.cdt_payer_rules(code);")
-    sql_lines.append("create index if not exists cdt_payer_rules_type_idx on public.cdt_payer_rules(rule_type);")
+    sql_lines.append(
+        "create index if not exists cdt_payer_rules_code_idx on public.cdt_payer_rules(code);"
+    )
+    sql_lines.append(
+        "create index if not exists cdt_payer_rules_type_idx on public.cdt_payer_rules(rule_type);"
+    )
     sql_lines.append("")
     sql_lines.append(
         f"insert into public.rule_sources (source_slug, title, payer_name, source_file, effective_date) values "
@@ -219,7 +238,9 @@ def build_sql(entries: dict[str, CodeEntry], pdf_name: str) -> str:
     sql_lines.append("with src as (")
     sql_lines.append(f"  select id from public.rule_sources where source_slug = '{source_slug}'")
     sql_lines.append(")")
-    sql_lines.append("insert into public.cdt_code_master (code, short_description, section_label, source_id, source_page, raw_text)")
+    sql_lines.append(
+        "insert into public.cdt_code_master (code, short_description, section_label, source_id, source_page, raw_text)"
+    )
     sql_lines.append("values")
 
     code_value_lines = []
@@ -247,7 +268,9 @@ def build_sql(entries: dict[str, CodeEntry], pdf_name: str) -> str:
     sql_lines.append("with src as (")
     sql_lines.append(f"  select id from public.rule_sources where source_slug = '{source_slug}'")
     sql_lines.append(")")
-    sql_lines.append("insert into public.cdt_payer_rules (code, payer_name, rule_type, rule_text, conditions, source_id, source_page)")
+    sql_lines.append(
+        "insert into public.cdt_payer_rules (code, payer_name, rule_type, rule_text, conditions, source_id, source_page)"
+    )
 
     rule_values = []
     for r in rows:
@@ -269,7 +292,9 @@ def build_sql(entries: dict[str, CodeEntry], pdf_name: str) -> str:
         sql_lines.append("\nunion all\n".join(rule_values))
         sql_lines.append(";")
     else:
-        sql_lines.append("select null::text, null::text, null::text, null::text, '{}'::jsonb, (select id from src), null::int where false;")
+        sql_lines.append(
+            "select null::text, null::text, null::text, null::text, '{}'::jsonb, (select id from src), null::int where false;"
+        )
 
     return "\n".join(sql_lines) + "\n"
 

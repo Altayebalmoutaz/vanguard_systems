@@ -46,7 +46,9 @@ class DataPoint(BaseModel, Generic[T]):
 
     value: T | None = None
     confidence: ConfidenceLevel
-    source_field: str = Field(default="canonical", description="Origin hint; v1 is mostly canonical")
+    source_field: str = Field(
+        default="canonical", description="Origin hint; v1 is mostly canonical"
+    )
 
 
 class FinancialSummary(BaseModel):
@@ -98,7 +100,9 @@ class UniversalDentalRecord(BaseModel):
     normalization_method: NormalizationMethod = NormalizationMethod.HEURISTIC
     normalization_timestamp: datetime
     raw_payload_hash: str
-    canonical_version: str = Field(default="1.0", description="Matches canonical normalization_version when present")
+    canonical_version: str = Field(
+        default="1.0", description="Matches canonical normalization_version when present"
+    )
 
     model_config = {"extra": "ignore"}
 

@@ -53,7 +53,9 @@ class EligibilityCanonicalRecord(BaseModel):
             if self.is_covered is not False:
                 raise ValueError("when is_active is False, is_covered must be False, not None")
             if self.procedure_covered is not False:
-                raise ValueError("when is_active is False, procedure_covered must be False, not None")
+                raise ValueError(
+                    "when is_active is False, procedure_covered must be False, not None"
+                )
 
         expected_keys: set[str] = set()
         for name in _NULLABLE_FIELD_NAMES:

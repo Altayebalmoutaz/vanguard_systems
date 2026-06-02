@@ -102,7 +102,9 @@ def _reconcile_line_benefit_caps(
     return ins, pat, _dedupe_flags(flags)
 
 
-def calculate_responsibility(canonical: dict[str, Any], fee_schedule: dict[str, Any]) -> list[dict[str, Any]]:
+def calculate_responsibility(
+    canonical: dict[str, Any], fee_schedule: dict[str, Any]
+) -> list[dict[str, Any]]:
     """
     Only invoke when response_complete and is_active are True (enforced by caller).
 
@@ -233,9 +235,11 @@ def calculate_responsibility(canonical: dict[str, Any], fee_schedule: dict[str, 
         max_left = _money(max(0.0, max_left - insurance_pays))
         ded_left = _money(max(0.0, ded_left - deductible_applied))
 
-        if insurance_raw > insurance_pays + _CAP_EPS:
-            if "annual_max_cap_applied" not in estimate_flags:
-                estimate_flags.append("annual_max_cap_applied")
+        if (
+            insurance_raw > insurance_pays + _CAP_EPS
+            and "annual_max_cap_applied" not in estimate_flags
+        ):
+            estimate_flags.append("annual_max_cap_applied")
 
         rows.append(
             {

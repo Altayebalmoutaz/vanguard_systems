@@ -87,9 +87,7 @@ def sanitized_http_exception(
         # We instead serialise + scrub the traceback ourselves and pass it as a
         # plain string field, so PHI in `str(exc)` is never written to any log
         # sink in clear text.
-        tb_text = "".join(
-            traceback.format_exception(type(exc), exc, exc.__traceback__)
-        )
+        tb_text = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
         _LOGGER.error(
             "%s [error_id=%s status=%s] exc=%s\n%s",
             scrub_for_log(logged_text),

@@ -173,9 +173,7 @@ def _benefit_row_implies_remaining(benefit: dict[str, Any], full_text: str) -> b
         )
     ):
         return True
-    if "deductible" in full_text and "unmet" in full_text:
-        return True
-    return False
+    return bool("deductible" in full_text and "unmet" in full_text)
 
 
 def _benefit_row_implies_met_amount(full_text: str) -> bool:
@@ -189,9 +187,7 @@ def _benefit_row_implies_met_amount(full_text: str) -> bool:
     # "met" as a whole word in running text (not substring of "unmet"/"unlimited")
     tokens = re.findall(r"[a-z']+", full_text.lower())
     if any(t == "met" for t in tokens):
-        if "unmet" in full_text:
-            return False
-        return True
+        return "unmet" not in full_text
     return False
 
 
@@ -241,7 +237,9 @@ def _infer_in_network_from_plan_status(plan_status: list[dict[str, Any]]) -> boo
     return None
 
 
-def _merge_in_network(benefits: list[dict[str, Any]], plan_status: list[dict[str, Any]]) -> bool | None:
+def _merge_in_network(
+    benefits: list[dict[str, Any]], plan_status: list[dict[str, Any]]
+) -> bool | None:
     a = _infer_in_network_from_benefits(benefits)
     b = _infer_in_network_from_plan_status(plan_status)
     if a is not None:
@@ -370,9 +368,7 @@ def _collect_oop_stop_loss_stc35(benefits: list[dict[str, Any]]) -> dict[str, fl
     }
 
 
-def _merge_financials_with_stc35_max(
-    fin: dict[str, Any], stc35: dict[str, float | None]
-) -> None:
+def _merge_financials_with_stc35_max(fin: dict[str, Any], stc35: dict[str, float | None]) -> None:
     """Override annual max fields when STC 35 dental rows provide clearer values."""
     for key in ("annual_max_total", "annual_max_used", "annual_max_remaining_direct"):
         v = stc35.get(key)
@@ -521,10 +517,7 @@ def _benefit_text_blob(benefit: dict[str, Any]) -> str:
     if isinstance(stypes, list):
         svc_blob = " ".join(str(x).lower() for x in stypes if x)
     pcs = str(benefit.get("planCoverage") or "")
-    if pcs.strip().upper() == "MET":
-        pcs = ""
-    else:
-        pcs = pcs.lower()
+    pcs = "" if pcs.strip().upper() == "MET" else pcs.lower()
     parts = [name, pnd, extra, svc_blob, pcs]
     return " ".join(x for x in parts if x).strip()
 
@@ -551,7 +544,10 @@ def _network_bucket_for_benefit(benefit: dict[str, Any]) -> tuple[str, str | Non
     }.get(structured_code, "unknown")
     text_override = _text_network_override(benefit)
     if text_override and text_override != structured:
-        return text_override, f"free_text_network_override:{structured or 'unknown'}->{text_override}"
+        return (
+            text_override,
+            f"free_text_network_override:{structured or 'unknown'}->{text_override}",
+        )
     return structured, None
 
 
@@ -763,7 +759,9 @@ def _collect_carve_outs(benefit: dict[str, Any], idx: int) -> list[dict[str, Any
     for entity in entities:
         if not isinstance(entity, dict):
             continue
-        identifier = str(entity.get("entityIdentifier") or entity.get("entityIdentifierCode") or "").strip()
+        identifier = str(
+            entity.get("entityIdentifier") or entity.get("entityIdentifierCode") or ""
+        ).strip()
         if identifier.lower() != "third-party administrator":
             continue
         out.append(
@@ -779,7 +777,11 @@ def _collect_carve_outs(benefit: dict[str, Any], idx: int) -> list[dict[str, Any
 
 
 def _classify_aaa_actions(payer_aaa_errors: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    raw = {"errors": [{**err, "followupAction": err.get("followup_action")} for err in payer_aaa_errors]}
+    raw = {
+        "errors": [
+            {**err, "followupAction": err.get("followup_action")} for err in payer_aaa_errors
+        ]
+    }
     return classify_aaa_response(raw, http_status=200)
 
 
@@ -806,7 +808,13 @@ def _collect_dental_calculator_ready(
         bucket = buckets[bucket_name]
         _append_unique(bucket["source_benefit_indexes"], idx)
         if network_override:
-            free_text_overrides.append({"source_benefit_index": idx, "field": "network_status", "override": network_override})
+            free_text_overrides.append(
+                {
+                    "source_benefit_index": idx,
+                    "field": "network_status",
+                    "override": network_override,
+                }
+            )
             warnings.append(network_override)
 
         coverage_level = _coverage_level_for_benefit(benefit)
@@ -867,20 +875,30 @@ def _collect_dental_calculator_ready(
             bucket["prior_auth_required"] = prior_final
         if prior_text is not None and prior_text != prior_structured:
             marker = f"free_text_prior_auth_override:{prior_structured}->{prior_text}"
-            free_text_overrides.append({"source_benefit_index": idx, "field": "prior_auth_required", "override": marker})
+            free_text_overrides.append(
+                {"source_benefit_index": idx, "field": "prior_auth_required", "override": marker}
+            )
             warnings.append(marker)
 
         for note in _additional_info_strings(benefit):
-            if any(k in note for k in _LIMITATION_NOTE_KEYWORDS) or "prior auth" in note or "preauth" in note:
+            if (
+                any(k in note for k in _LIMITATION_NOTE_KEYWORDS)
+                or "prior auth" in note
+                or "preauth" in note
+            ):
                 _append_unique(bucket["limitations_notes"], note)
 
         delivery_freq = _service_delivery_frequency_rules(benefit, idx)
         frequency_rules.extend(delivery_freq)
         if not delivery_freq:
             frequency_rules.extend(_quantity_based_frequency_rules(benefit, idx))
-        visit_date = _benefit_date_value(benefit, "latestVisitOrConsultation", "lastVisit", "lastService")
+        visit_date = _benefit_date_value(
+            benefit, "latestVisitOrConsultation", "lastVisit", "lastService"
+        )
         if visit_date is not None:
-            latest_visits.append({"source_benefit_index": idx, "latest_visit_or_consultation": visit_date})
+            latest_visits.append(
+                {"source_benefit_index": idx, "latest_visit_or_consultation": visit_date}
+            )
         carve_outs.extend(_collect_carve_outs(benefit, idx))
 
     return (
@@ -1074,7 +1092,10 @@ def _derive_max_remaining(
     if total is not None and used is not None:
         derived = max(0.0, total - used)
         if direct is not None and abs(derived - direct) > 0.02:
-            return derived, f"annual_max_remaining conflict: derived={derived:.2f} payer={direct:.2f}"
+            return (
+                derived,
+                f"annual_max_remaining conflict: derived={derived:.2f} payer={direct:.2f}",
+            )
         return derived, None
     if direct is not None:
         return direct, None
@@ -1311,7 +1332,9 @@ def normalize(raw_271: dict[str, Any], coverage_order: str) -> dict[str, Any]:
     payer_aaa_errors = extract_payer_aaa_errors(raw_271)
     stedi_warnings = extract_stedi_warnings(raw_271)
     stedi_aaa_actions = classify_aaa_response(raw_271, http_status=200)
-    dental_calculator_ready, calculator_warnings = _collect_dental_calculator_ready(benefits, payer_aaa_errors)
+    dental_calculator_ready, calculator_warnings = _collect_dental_calculator_ready(
+        benefits, payer_aaa_errors
+    )
     warnings.extend(calculator_warnings)
 
     canonical: dict[str, Any] = {

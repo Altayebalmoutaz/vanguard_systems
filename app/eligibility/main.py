@@ -87,8 +87,7 @@ def _opendental_http_exception(exc: OpenDentalAPIError) -> HTTPException:
         except json.JSONDecodeError:
             body_preview = exc.body
     log_msg = (
-        "OpenDental API failure "
-        f"status={exc.status_code} body={scrub_for_log(repr(body_preview))}"
+        f"OpenDental API failure status={exc.status_code} body={scrub_for_log(repr(body_preview))}"
     )
     return sanitized_http_exception(
         502,
@@ -106,7 +105,10 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     poller_task = None
     if settings.opendental_auto_poll_enabled:
         poller_task = start_appointment_poller(run_from_opendental, settings)
-        logger.info("OpenDental auto-poll enabled (interval=%ss)", settings.opendental_auto_poll_interval_seconds)
+        logger.info(
+            "OpenDental auto-poll enabled (interval=%ss)",
+            settings.opendental_auto_poll_interval_seconds,
+        )
     try:
         yield
     finally:
@@ -321,7 +323,9 @@ def post_eligibility_from_opendental(body: FromOpenDentalRequest) -> FromOpenDen
 
 
 @app.post("/eligibility/two-pass", response_model=TwoPassEligibilityCodingResponse)
-def post_eligibility_two_pass(body: TwoPassEligibilityCodingRequest) -> TwoPassEligibilityCodingResponse:
+def post_eligibility_two_pass(
+    body: TwoPassEligibilityCodingRequest,
+) -> TwoPassEligibilityCodingResponse:
     """
     Two-pass workflow:
       1) pass-1 eligibility without procedure codes (coverage gate)
@@ -387,7 +391,10 @@ def post_eligibility_two_pass(body: TwoPassEligibilityCodingRequest) -> TwoPassE
 
     # Pass 2: force real-time re-check with generated CDT codes.
     pass2_req = body.eligibility.model_copy(
-        update={"cdt_codes": list(coding_out.cdt_codes), "trigger_event": TriggerEvent.PRE_APPOINTMENT}
+        update={
+            "cdt_codes": list(coding_out.cdt_codes),
+            "trigger_event": TriggerEvent.PRE_APPOINTMENT,
+        }
     )
     try:
         pass2 = run_eligibility_check_endpoint(pass2_req, settings=settings)
@@ -413,7 +420,9 @@ def post_eligibility_two_pass(body: TwoPassEligibilityCodingRequest) -> TwoPassE
 def post_eligibility_batch(body: EligibilityBatchRequest) -> dict[str, Any]:
     """Batch sweep — Stedi batch endpoint only (never real-time per-item loop)."""
     if body.trigger_event is not TriggerEvent.BATCH_SWEEP:
-        raise HTTPException(status_code=400, detail="trigger_event must be BATCH_SWEEP for this route")
+        raise HTTPException(
+            status_code=400, detail="trigger_event must be BATCH_SWEEP for this route"
+        )
     s = get_settings()
     items_payload: list[dict[str, Any]] = []
     for item in body.items:
@@ -432,7 +441,12 @@ def post_eligibility_batch(body: EligibilityBatchRequest) -> dict[str, Any]:
         except Layer1ValidationError as e:
             raise HTTPException(
                 status_code=400,
-                detail={"code": e.code.value, "message": str(e), "layer": "layer1", "detail": e.detail},
+                detail={
+                    "code": e.code.value,
+                    "message": str(e),
+                    "layer": "layer1",
+                    "detail": e.detail,
+                },
             ) from e
         payload = build_payload(er, s, trading_partner_service_id=item.primary_payer_id)
         payload["_patientId"] = str(item.patient_id)

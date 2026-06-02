@@ -34,9 +34,7 @@ class SanitizedExceptionShape(unittest.TestCase):
         int(exc.detail["error_id"], 16)
 
     def test_uses_public_message_when_provided(self) -> None:
-        exc = sanitized_http_exception(
-            502, public_message="Upstream Stedi failure"
-        )
+        exc = sanitized_http_exception(502, public_message="Upstream Stedi failure")
         self.assertEqual(exc.detail["message"], "Upstream Stedi failure")
 
     def test_unknown_status_code_falls_back_to_generic_message(self) -> None:

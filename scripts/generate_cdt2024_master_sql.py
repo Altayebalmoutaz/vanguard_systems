@@ -39,7 +39,9 @@ def sql_date(value: date | datetime | None) -> str:
     return f"'{value.isoformat()}'"
 
 
-def parse_row(row: tuple[object, ...]) -> tuple[str, str, str | None, str | None, date | datetime | None, str | None, str | None]:
+def parse_row(
+    row: tuple[object, ...],
+) -> tuple[str, str, str | None, str | None, date | datetime | None, str | None, str | None]:
     cells = [clean_text(c) for c in row if c is not None and clean_text(c)]
     code = cells[0] if cells else ""
 
@@ -90,7 +92,9 @@ def main() -> None:
     wb = load_workbook(source, read_only=True, data_only=True)
     ws = wb[wb.sheetnames[0]]
 
-    rows: list[tuple[str, str, str | None, str | None, date | datetime | None, str | None, str | None]] = []
+    rows: list[
+        tuple[str, str, str | None, str | None, date | datetime | None, str | None, str | None]
+    ] = []
     for r in ws.iter_rows(min_row=2, values_only=True):
         code = clean_text(r[0] if r else None).upper()
         if not re.fullmatch(r"D\d{4}", code):

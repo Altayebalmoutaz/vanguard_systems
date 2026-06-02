@@ -56,7 +56,9 @@ class PayerInfo(BaseModel):
 
 class ServiceLineInput(BaseModel):
     line_number: int = Field(..., ge=1)
-    service_date: str = Field(..., min_length=1, description="Date of service as string, e.g. YYYY-MM-DD")
+    service_date: str = Field(
+        ..., min_length=1, description="Date of service as string, e.g. YYYY-MM-DD"
+    )
     cdt_code: str = Field(..., min_length=1)
     units: Decimal = Field(default=Decimal("1"), gt=0)
     charge_amount: Decimal = Field(..., gt=0)
@@ -220,4 +222,3 @@ class FullRcmPipelineResponse(BaseModel):
     claim_draft: ClaimDraftResponse
     claim: ClaimSubmissionResponse | None = None
     denial: DenialAgentResponse | None = None
-

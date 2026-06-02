@@ -95,10 +95,7 @@ def embed_batch(
         timeout=120.0,
     )
     if r.status_code == 401:
-        raise SystemExit(
-            "Jina 401 Unauthorized — check JINA_API_KEY. "
-            + (r.text or "")[:400]
-        )
+        raise SystemExit("Jina 401 Unauthorized — check JINA_API_KEY. " + (r.text or "")[:400])
     r.raise_for_status()
     data = r.json()
     return [item["embedding"] for item in data["data"]]
@@ -170,7 +167,9 @@ def main() -> int:
                     if not code:
                         continue
                     try:
-                        supabase.table("cdt_codes").update({"embedding": vec}).eq("code", code).execute()
+                        supabase.table("cdt_codes").update({"embedding": vec}).eq(
+                            "code", code
+                        ).execute()
                         embedded += 1
                     except Exception as e:
                         print(f"[ERROR] Supabase update {code!r}: {e}", file=sys.stderr)

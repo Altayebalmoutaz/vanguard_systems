@@ -58,7 +58,9 @@ def _strip_json_fence(text: str) -> str:
     return text
 
 
-def _compact_snapshot(canonical: dict[str, Any], payer_id: str, cdt_codes: list[str]) -> dict[str, Any]:
+def _compact_snapshot(
+    canonical: dict[str, Any], payer_id: str, cdt_codes: list[str]
+) -> dict[str, Any]:
     """Minimal facts for the model; omit raw_response to reduce PHI payload size."""
     proc = canonical.get("procedure_details") or []
     proc_brief = [
@@ -158,9 +160,8 @@ def enrich_with_llm(
         return
 
     snapshot = _compact_snapshot(canonical, payer_id, cdt_codes)
-    user_content = (
-        "Eligibility snapshot (JSON). Annotate per instructions.\n\n"
-        + json.dumps(snapshot, indent=2, default=str)
+    user_content = "Eligibility snapshot (JSON). Annotate per instructions.\n\n" + json.dumps(
+        snapshot, indent=2, default=str
     )
 
     payload = {
@@ -181,7 +182,9 @@ def enrich_with_llm(
     }
 
     try:
-        with httpx.Client(timeout=float(getattr(s, "eligibility_layer3_llm_timeout_seconds", 45.0))) as client:
+        with httpx.Client(
+            timeout=float(getattr(s, "eligibility_layer3_llm_timeout_seconds", 45.0))
+        ) as client:
             response = client.post(OPENROUTER_URL, headers=headers, json=payload)
             response.raise_for_status()
             data = response.json()

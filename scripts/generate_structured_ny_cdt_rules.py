@@ -106,7 +106,9 @@ def extract_pos_codes(text: str) -> list[str]:
         found.append(n)
     for n in re.findall(r"\b(?:use|codes added:)\s+\d{2},\s*(\d{2})\b", text, flags=re.IGNORECASE):
         found.append(n)
-    for n in re.findall(r"\b(?:use|codes added:)\s+\d{2},\s*\d{2},\s*(\d{2})\b", text, flags=re.IGNORECASE):
+    for n in re.findall(
+        r"\b(?:use|codes added:)\s+\d{2},\s*\d{2},\s*(\d{2})\b", text, flags=re.IGNORECASE
+    ):
         found.append(n)
     dedup = sorted(set(found))
     return dedup
@@ -124,7 +126,15 @@ def extract_not_billable_with(text: str, code: str) -> list[str]:
     return [c for c in codes if c != code]
 
 
-def infer_rule_type_from_features(text: str, has_pa: bool, has_report: bool, age: tuple[int | None, int | None], freq_count: int | None, pos_codes: list[str], excludes: list[str]) -> str:
+def infer_rule_type_from_features(
+    text: str,
+    has_pa: bool,
+    has_report: bool,
+    age: tuple[int | None, int | None],
+    freq_count: int | None,
+    pos_codes: list[str],
+    excludes: list[str],
+) -> str:
     low = text.lower()
     if has_pa:
         return "prior_auth"
@@ -173,7 +183,13 @@ def build_sql(entries: dict[str, CodeEntry], pdf_name: str) -> str:
             age_min = None
             age_max = None
         freq_count, freq_period_months, freq_rule = extract_frequency(raw_text)
-        requires_pa = bool(re.search(r"(PA REQUIRED|prior approval.*required|prior authorization.*required)", raw_text, flags=re.IGNORECASE))
+        requires_pa = bool(
+            re.search(
+                r"(PA REQUIRED|prior approval.*required|prior authorization.*required)",
+                raw_text,
+                flags=re.IGNORECASE,
+            )
+        )
         requires_report = bool(re.search(r"REPORT NEEDED", raw_text, flags=re.IGNORECASE))
         pos_codes = extract_pos_codes(raw_text)
         re_codes = extract_re_codes(raw_text)
@@ -205,7 +221,9 @@ def build_sql(entries: dict[str, CodeEntry], pdf_name: str) -> str:
         page_sql = "null" if page is None else str(page)
         pos_sql = "null" if not pos_codes else "'{" + ",".join(pos_codes) + "}'::text[]"
         re_sql = "null" if not re_codes else "'{" + ",".join(re_codes) + "}'::text[]"
-        excl_sql = "null" if not not_billable_with else "'{" + ",".join(not_billable_with) + "}'::text[]"
+        excl_sql = (
+            "null" if not not_billable_with else "'{" + ",".join(not_billable_with) + "}'::text[]"
+        )
         cond_sql = esc(json.dumps(conditions))
 
         values.append(
@@ -259,9 +277,15 @@ def build_sql(entries: dict[str, CodeEntry], pdf_name: str) -> str:
         ");"
     )
     sql.append("")
-    sql.append("create index if not exists cdt_rules_structured_code_idx on public.cdt_payer_rules_structured(code);")
-    sql.append("create index if not exists cdt_rules_structured_type_idx on public.cdt_payer_rules_structured(rule_type);")
-    sql.append("create index if not exists cdt_rules_structured_pa_idx on public.cdt_payer_rules_structured(requires_prior_auth);")
+    sql.append(
+        "create index if not exists cdt_rules_structured_code_idx on public.cdt_payer_rules_structured(code);"
+    )
+    sql.append(
+        "create index if not exists cdt_rules_structured_type_idx on public.cdt_payer_rules_structured(rule_type);"
+    )
+    sql.append(
+        "create index if not exists cdt_rules_structured_pa_idx on public.cdt_payer_rules_structured(requires_prior_auth);"
+    )
     sql.append("")
     sql.append("with src as (")
     sql.append(f"  select id from public.rule_sources where source_slug = '{source_slug}'")
@@ -331,8 +355,12 @@ def build_sql(entries: dict[str, CodeEntry], pdf_name: str) -> str:
         "$$;"
     )
     sql.append("")
-    sql.append("grant select on public.cdt_payer_rules_structured to service_role, authenticated, anon;")
-    sql.append("grant execute on function public.match_cdt_rule(text, text, int, text, boolean) to service_role, authenticated, anon;")
+    sql.append(
+        "grant select on public.cdt_payer_rules_structured to service_role, authenticated, anon;"
+    )
+    sql.append(
+        "grant execute on function public.match_cdt_rule(text, text, int, text, boolean) to service_role, authenticated, anon;"
+    )
 
     return "\n".join(sql) + "\n"
 

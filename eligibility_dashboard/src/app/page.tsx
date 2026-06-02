@@ -985,9 +985,20 @@ export default function EligibilityDashboard() {
   const [showRaw, setShowRaw] = useState(false);
   const refreshTimerRef = useRef<number | null>(null);
   /** Set after mount so server and first client paint match (avoids hydration mismatch on time/locale). */
-  const [clientGreeting, setClientGreeting] = useState("Hello");
-  const [clientDateLabel, setClientDateLabel] = useState("Today");
-  const [clientAsOfTime, setClientAsOfTime] = useState<string | null>(null);
+  const [clientGreeting] = useState(() => {
+    const h = new Date().getHours();
+    return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+  });
+  const [clientDateLabel] = useState(() =>
+    new Date().toLocaleDateString(undefined, {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    }),
+  );
+  const [clientAsOfTime] = useState(() =>
+    new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
+  );
 
   const selectedRow = useMemo(() => rows.find((row) => row.request.id === selectedId) ?? null, [rows, selectedId]);
   const selectedReadRow = useMemo(
@@ -1001,20 +1012,6 @@ export default function EligibilityDashboard() {
   useEffect(() => {
     activityCapRef.current = activityExpanded ? 100 : 25;
   }, [activityExpanded]);
-
-  useEffect(() => {
-    const now = new Date();
-    const h = now.getHours();
-    setClientGreeting(h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening");
-    setClientDateLabel(
-      now.toLocaleDateString(undefined, {
-        month: "long",
-        day: "numeric",
-        year: "numeric",
-      }),
-    );
-    setClientAsOfTime(now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }));
-  }, []);
 
   const loadRows = useCallback(async () => {
     const client = getSupabaseBrowserClient();

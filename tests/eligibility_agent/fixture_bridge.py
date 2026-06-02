@@ -12,7 +12,9 @@ from pathlib import Path
 from typing import Any
 
 # tests/eligibility_agent/fixture_bridge.py → parents[1] is ``tests/``
-FIXTURE_JSON_PATH = Path(__file__).resolve().parents[1] / "fixtures" / "eligibility" / "271_fixtures.json"
+FIXTURE_JSON_PATH = (
+    Path(__file__).resolve().parents[1] / "fixtures" / "eligibility" / "271_fixtures.json"
+)
 
 
 def load_all_fixtures() -> list[dict[str, Any]]:
@@ -154,8 +156,16 @@ def _plan_status_rows(fixture: dict[str, Any]) -> list[dict[str, Any]]:
         # Neutral copy: phrases containing both "in network" and "out of network" skew plan inference.
         net_details = "PPO tiered network benefits"
 
-    health_row: dict[str, Any] = {"status": "Active Coverage", "serviceTypeCodes": ["30"], "statusCode": "1"}
-    dental_row: dict[str, Any] = {"status": "Active Coverage", "serviceTypeCodes": ["35"], "statusCode": "1"}
+    health_row: dict[str, Any] = {
+        "status": "Active Coverage",
+        "serviceTypeCodes": ["30"],
+        "statusCode": "1",
+    }
+    dental_row: dict[str, Any] = {
+        "status": "Active Coverage",
+        "serviceTypeCodes": ["35"],
+        "statusCode": "1",
+    }
     if net_details:
         health_row["planDetails"] = net_details
         dental_row["planDetails"] = net_details
@@ -208,7 +218,13 @@ def _attach_aaa_from_fixture(raw: dict[str, Any], fixture: dict[str, Any]) -> No
             continue
         code = str(seg.get("reject_reason_code") or "").strip()
         desc = str(seg.get("reject_reason_label") or "").strip()
-        errs.append({"field": "AAA", "code": code or "UNKNOWN", "description": desc or "Unknown AAA rejection"})
+        errs.append(
+            {
+                "field": "AAA",
+                "code": code or "UNKNOWN",
+                "description": desc or "Unknown AAA rejection",
+            }
+        )
     if errs:
         raw["errors"] = errs
 
@@ -224,7 +240,9 @@ def fixture_to_stedi_raw(fixture: dict[str, Any]) -> dict[str, Any]:
         "payer": {"payorIdentification": payer_id or None, "name": payer_name or None},
         "subscriber": _subscriber_to_stedi(fixture),
         "planStatus": _plan_status_rows(fixture),
-        "benefitsInformation": [_benefit_row_to_stedi(b) for b in (fixture.get("benefits") or []) if isinstance(b, dict)],
+        "benefitsInformation": [
+            _benefit_row_to_stedi(b) for b in (fixture.get("benefits") or []) if isinstance(b, dict)
+        ],
     }
 
     dep = fixture.get("dependent")
@@ -289,10 +307,9 @@ def semantic_expectations(fixture: dict[str, Any]) -> dict[str, Any]:
     stc35_net = _stc35_network_flags()
     if ns == "INN":
         out["in_network"] = True
-    elif ns == "OON":
+    elif ns == "OON" and True not in stc35_net:
         # Fixture aggregate can say OON while EB rows still carry INN indicators (non-PPO quirks).
-        if True not in stc35_net:
-            out["in_network"] = False
+        out["in_network"] = False
 
     dep = fixture.get("dependent")
     wanted_cov = "DEP" if isinstance(dep, dict) and dep.get("first_name") else "IND"
@@ -301,7 +318,8 @@ def semantic_expectations(fixture: dict[str, Any]) -> dict[str, Any]:
     stc35 = [
         b
         for b in benefits
-        if "35" in (b.get("service_type_codes") or []) and str(b.get("coverage_level_code") or "").upper() == wanted_cov
+        if "35" in (b.get("service_type_codes") or [])
+        and str(b.get("coverage_level_code") or "").upper() == wanted_cov
     ]
     if not stc35:
         stc35 = [b for b in benefits if "35" in (b.get("service_type_codes") or [])]
@@ -369,7 +387,9 @@ def semantic_expectations(fixture: dict[str, Any]) -> dict[str, Any]:
     stc35_a_inn = [
         b
         for b in stc35
-        if str(b.get("benefit_type_code") or "").strip().upper() == "A" and b.get("percent") is not None and b.get("in_network") is True
+        if str(b.get("benefit_type_code") or "").strip().upper() == "A"
+        and b.get("percent") is not None
+        and b.get("in_network") is True
     ]
     if stc35_a_inn:
         p = float(stc35_a_inn[0]["percent"])  # type: ignore[index]
@@ -379,7 +399,8 @@ def semantic_expectations(fixture: dict[str, Any]) -> dict[str, Any]:
         stc35_a = [
             b
             for b in stc35
-            if str(b.get("benefit_type_code") or "").strip().upper() == "A" and b.get("percent") is not None
+            if str(b.get("benefit_type_code") or "").strip().upper() == "A"
+            and b.get("percent") is not None
         ]
         if len(stc35_a) == 1:
             p = float(stc35_a[0]["percent"])  # type: ignore[index]

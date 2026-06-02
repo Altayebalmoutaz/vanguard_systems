@@ -34,9 +34,7 @@ def _run_once(monkeypatch, *, appointments, checked_today, seen):  # type: ignor
     monkeypatch.setattr(poller, "fetch_appointments", fake_fetch)
     monkeypatch.setattr(poller, "_checked_today", fake_checked)
 
-    asyncio.run(
-        poller._poll_once(fake_runner, _settings(), seen=seen, cdt_codes=["D1110"])
-    )
+    asyncio.run(poller._poll_once(fake_runner, _settings(), seen=seen, cdt_codes=["D1110"]))
     return calls
 
 
@@ -80,8 +78,9 @@ def test_poller_skips_already_seen(monkeypatch) -> None:  # type: ignore[no-unty
 def test_parent_app_lifespan_starts_poller_when_enabled(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     """Regression: mounted sub-app lifespans don't run, so the top-level app.main
     lifespan must start the OpenDental poller itself."""
-    import app.main as main_module
     from fastapi.testclient import TestClient
+
+    import app.main as main_module
 
     async def _sleep_forever() -> None:
         await asyncio.Event().wait()
@@ -110,8 +109,9 @@ def test_parent_app_lifespan_starts_poller_when_enabled(monkeypatch) -> None:  #
 
 
 def test_parent_app_lifespan_skips_poller_when_disabled(monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    import app.main as main_module
     from fastapi.testclient import TestClient
+
+    import app.main as main_module
 
     started: dict[str, bool] = {}
 

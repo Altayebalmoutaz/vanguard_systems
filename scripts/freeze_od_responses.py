@@ -16,7 +16,9 @@ from app.integrations.opendental import OpenDentalClient
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Freeze OpenDental responses into test fixtures.")
-    parser.add_argument("--pat-nums", nargs="+", type=int, required=True, help="OpenDental PatNum list")
+    parser.add_argument(
+        "--pat-nums", nargs="+", type=int, required=True, help="OpenDental PatNum list"
+    )
     parser.add_argument(
         "--output-dir",
         default="tests/fixtures/opendental",
@@ -36,7 +38,9 @@ def main() -> None:
         for row in insurance:
             carrier_nums.add(int(row["CarrierNum"]))
 
-        (out_dir / f"patient_{pat_num}.json").write_text(json.dumps(patient, indent=2), encoding="utf-8")
+        (out_dir / f"patient_{pat_num}.json").write_text(
+            json.dumps(patient, indent=2), encoding="utf-8"
+        )
         (out_dir / f"familymodules_{pat_num}.json").write_text(
             json.dumps(insurance, indent=2),
             encoding="utf-8",
@@ -49,9 +53,10 @@ def main() -> None:
             encoding="utf-8",
         )
 
-    print(f"Wrote fixtures for {len(args.pat_nums)} patients and {len(carrier_nums)} carriers to {out_dir}")
+    print(
+        f"Wrote fixtures for {len(args.pat_nums)} patients and {len(carrier_nums)} carriers to {out_dir}"
+    )
 
 
 if __name__ == "__main__":
     main()
-

@@ -37,6 +37,7 @@ def _float_or_none(v: Any) -> float | None:
     except (TypeError, ValueError):
         return None
 
+
 _STC_TO_CATEGORY: dict[str, BenefitCategory] = {
     "23": BenefitCategory.DIAGNOSTIC,
     "25": BenefitCategory.BASIC,
@@ -137,7 +138,9 @@ def _build_categories(canonical: dict[str, Any]) -> list[CategoryBenefit]:
                 category=cat,
                 covered=data_point_bool(
                     covered_v,
-                    confidence=ConfidenceLevel.INFERRED if is_cov is None else ConfidenceLevel.EXPLICIT,
+                    confidence=ConfidenceLevel.INFERRED
+                    if is_cov is None
+                    else ConfidenceLevel.EXPLICIT,
                     source_field=f"benefitsInformation/STC/{stc}/A",
                 ),
                 coinsurance_patient_pct=data_point_float(
@@ -177,9 +180,15 @@ def _build_ortho(canonical: dict[str, Any], _warnings: list[str]) -> OrthoDetail
             confidence=ConfidenceLevel.EXPLICIT if lt_f is not None else ConfidenceLevel.UNKNOWN,
             source_field="dental_benefit_breakdown/ortho_lifetime_max",
         ),
-        age_cutoff=data_point_int(None, confidence=ConfidenceLevel.UNKNOWN, source_field="not_extracted_v1"),
-        in_progress_treatment=data_point_bool(None, confidence=ConfidenceLevel.UNKNOWN, source_field="not_extracted_v1"),
-        months_remaining=data_point_int(None, confidence=ConfidenceLevel.UNKNOWN, source_field="not_extracted_v1"),
+        age_cutoff=data_point_int(
+            None, confidence=ConfidenceLevel.UNKNOWN, source_field="not_extracted_v1"
+        ),
+        in_progress_treatment=data_point_bool(
+            None, confidence=ConfidenceLevel.UNKNOWN, source_field="not_extracted_v1"
+        ),
+        months_remaining=data_point_int(
+            None, confidence=ConfidenceLevel.UNKNOWN, source_field="not_extracted_v1"
+        ),
     )
 
 
@@ -198,8 +207,16 @@ def build_universal_dental_record(
     ortho_max_raw = dbreak.get("ortho_lifetime_max") if isinstance(dbreak, dict) else None
 
     payer = raw_stored_271.get("payer") if isinstance(raw_stored_271.get("payer"), dict) else {}
-    sub = raw_stored_271.get("subscriber") if isinstance(raw_stored_271.get("subscriber"), dict) else {}
-    plan_info = raw_stored_271.get("planInformation") if isinstance(raw_stored_271.get("planInformation"), dict) else {}
+    sub = (
+        raw_stored_271.get("subscriber")
+        if isinstance(raw_stored_271.get("subscriber"), dict)
+        else {}
+    )
+    plan_info = (
+        raw_stored_271.get("planInformation")
+        if isinstance(raw_stored_271.get("planInformation"), dict)
+        else {}
+    )
 
     plan_begin, plan_end = _parse_plan_dates(raw_stored_271)
 

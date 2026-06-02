@@ -196,9 +196,7 @@ class SubmitDentalClaimTests(unittest.TestCase):
         mock_client.post.return_value = mock_response
         mock_client_cls.return_value.__enter__.return_value = mock_client
 
-        result = submit_dental_claim(
-            _claim_dict(), self._settings(), idempotency_key="enc-1"
-        )
+        result = submit_dental_claim(_claim_dict(), self._settings(), idempotency_key="enc-1")
 
         self.assertEqual(result["claim_id"], "0001")
         self.assertEqual(result["status"], "submitted")
@@ -244,9 +242,7 @@ class SubmitDentalClaimTests(unittest.TestCase):
         self.assertIsNone(cm.exception.status_code)
 
     @patch("app.integrations.stedi_claims.httpx.Client")
-    def test_http_400_raises_with_status_and_body(
-        self, mock_client_cls: MagicMock
-    ) -> None:
+    def test_http_400_raises_with_status_and_body(self, mock_client_cls: MagicMock) -> None:
         mock_response = MagicMock()
         mock_response.status_code = 400
         mock_response.text = '{"error":"missing payer"}'
@@ -296,9 +292,7 @@ class SubmitClaimToolIntegrationTests(unittest.TestCase):
         self.assertTrue(out["claim_id"].startswith("CLM"))
 
     @patch("app.tools.claim_tools.submit_dental_claim")
-    def test_with_api_key_delegates_to_real_adapter(
-        self, mock_submit: MagicMock
-    ) -> None:
+    def test_with_api_key_delegates_to_real_adapter(self, mock_submit: MagicMock) -> None:
         mock_submit.return_value = {
             "claim_id": "0007",
             "status": "submitted",

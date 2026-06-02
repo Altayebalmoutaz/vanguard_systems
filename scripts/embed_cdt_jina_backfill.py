@@ -144,7 +144,9 @@ def fetch_page(supabase, *, offset: int, limit: int, status_filter: str | None):
 def main() -> int:
     load_dotenv(ROOT / ".env")
     parser = argparse.ArgumentParser(description="Backfill Jina v5 embeddings on cdt_codes")
-    parser.add_argument("--dry-run", action="store_true", help="Only print how many rows need embeddings")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Only print how many rows need embeddings"
+    )
     parser.add_argument("--limit", type=int, default=0, help="Max rows to process (0 = no cap)")
     parser.add_argument(
         "--test-jina",
@@ -204,7 +206,10 @@ def main() -> int:
                 break
             n += len(rows)
             off += page_size
-        print(f"Dry run: ~{n} rows with null embedding" + (f" and status={status_filter!r}" if status_filter else ""))
+        print(
+            f"Dry run: ~{n} rows with null embedding"
+            + (f" and status={status_filter!r}" if status_filter else "")
+        )
         return 0
 
     jina_key = _jina_api_key()
@@ -248,7 +253,9 @@ def main() -> int:
                     if not code:
                         continue
                     try:
-                        supabase.table("cdt_codes").update({"embedding": vec}).eq("code", code).execute()
+                        supabase.table("cdt_codes").update({"embedding": vec}).eq(
+                            "code", code
+                        ).execute()
                         embedded += 1
                     except Exception as e:
                         print(f"[ERROR] Supabase update {code!r}: {e}", file=sys.stderr)

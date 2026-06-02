@@ -86,7 +86,9 @@ def llm_denial_intelligence(settings: Settings, data: dict[str, Any]) -> dict[st
 
     parsed["reason_token"] = str(parsed["reason_token"]).strip().lower()
     parsed["suggested_next_action"] = str(parsed["suggested_next_action"]).strip().lower()
-    parsed["required_evidence"] = [str(x).strip() for x in parsed["required_evidence"] if str(x).strip()]
+    parsed["required_evidence"] = [
+        str(x).strip() for x in parsed["required_evidence"] if str(x).strip()
+    ]
     parsed["confidence"] = max(0.0, min(1.0, float(parsed["confidence"])))
     parsed["reasoning_summary"] = str(parsed["reasoning_summary"]).strip()
     return parsed

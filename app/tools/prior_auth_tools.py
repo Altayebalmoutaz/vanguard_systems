@@ -51,13 +51,21 @@ _AUTH_BY_CODE: dict[str, dict[str, Any]] = {
     },
     "D4910": {
         "requires_auth": True,
-        "documents": ["Periodontal charting", "Recent radiographs", "History of periodontal therapy"],
-        "rules": ["D4910 (periodontal maintenance): may require auth or documentation when following active therapy"],
+        "documents": [
+            "Periodontal charting",
+            "Recent radiographs",
+            "History of periodontal therapy",
+        ],
+        "rules": [
+            "D4910 (periodontal maintenance): may require auth or documentation when following active therapy"
+        ],
     },
     "D4341": {
         "requires_auth": True,
         "documents": ["Full periodontal charting", "Radiographs", "Treatment plan"],
-        "rules": ["D4341 (SRP): many payers require authorization or detailed periodontal documentation"],
+        "rules": [
+            "D4341 (SRP): many payers require authorization or detailed periodontal documentation"
+        ],
     },
     "D3330": {
         "requires_auth": True,
@@ -176,7 +184,18 @@ def assess_risk_tool(cdt_codes: list[str], documents: list[str]) -> dict[str, An
     Heuristic denial / admin risk from procedure mix and documentation burden.
     """
     codes_upper = [c.upper().strip() for c in cdt_codes]
-    high_codes = {"D2740", "D2750", "D2751", "D2752", "D3330", "D3346", "D3347", "D3348", "D4341", "D4910"}
+    high_codes = {
+        "D2740",
+        "D2750",
+        "D2751",
+        "D2752",
+        "D3330",
+        "D3346",
+        "D3347",
+        "D3348",
+        "D4341",
+        "D4910",
+    }
     medium_codes = {"D7210", "D7220", "D7230", "D7140", "D2950", "D2954"}
 
     level = "low"
@@ -187,15 +206,21 @@ def assess_risk_tool(cdt_codes: list[str], documents: list[str]) -> dict[str, An
         reasons.append("High-cost or complex services present (crown, endo, perio therapy)")
     elif any(c in medium_codes for c in codes_upper):
         level = "medium"
-        reasons.append("Surgical or major restorative codes may trigger documentation or medical necessity review")
+        reasons.append(
+            "Surgical or major restorative codes may trigger documentation or medical necessity review"
+        )
 
     if len(documents) >= 4:
         if _RISK_ORDER[level] < _RISK_ORDER["medium"]:
             level = "medium"
-        reasons.append("Heavy documentation checklist increases administrative denial risk if any item is missing")
+        reasons.append(
+            "Heavy documentation checklist increases administrative denial risk if any item is missing"
+        )
 
     if not reasons:
-        reasons.append("Routine profile: lower administrative risk if claims match documented services")
+        reasons.append(
+            "Routine profile: lower administrative risk if claims match documented services"
+        )
 
     return {
         "risk_level": level,

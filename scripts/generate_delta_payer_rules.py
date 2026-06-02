@@ -110,7 +110,11 @@ def parse_pdf(pdf_path: Path) -> dict[str, DeltaEntry]:
             if current_code and current_code in entries:
                 if POLICY_HINT_RE.search(line):
                     entries[current_code].policy_lines.append(line[:1800])
-                elif not entries[current_code].descriptor and 5 <= len(line) <= 200 and not CODE_RE.search(line):
+                elif (
+                    not entries[current_code].descriptor
+                    and 5 <= len(line) <= 200
+                    and not CODE_RE.search(line)
+                ):
                     entries[current_code].descriptor = line
 
     return entries
@@ -144,7 +148,9 @@ def build_sql(entries: dict[str, DeltaEntry], pdf_name: str) -> str:
     )
     lines.append("")
     lines.append("create index if not exists payer_rules_code_idx on public.payer_rules(code);")
-    lines.append("create index if not exists payer_rules_payer_type_idx on public.payer_rules(payer_name, rule_type);")
+    lines.append(
+        "create index if not exists payer_rules_payer_type_idx on public.payer_rules(payer_name, rule_type);"
+    )
     lines.append("")
     lines.append(
         "insert into public.rule_sources (source_slug, title, payer_name, source_file, effective_date) values "
@@ -169,7 +175,9 @@ def build_sql(entries: dict[str, DeltaEntry], pdf_name: str) -> str:
 
         for pol in unique_policies[:8]:
             related = sorted(set(c for c in CODE_RE.findall(pol) if c != code))
-            processed = re.search(r"(?:processed as|payable as)\s+(D\d{4})", pol, flags=re.IGNORECASE)
+            processed = re.search(
+                r"(?:processed as|payable as)\s+(D\d{4})", pol, flags=re.IGNORECASE
+            )
             transforms_to = processed.group(1) if processed else None
             cond = {
                 "section": e.section,
@@ -185,7 +193,7 @@ def build_sql(entries: dict[str, DeltaEntry], pdf_name: str) -> str:
                 f"'{rule_type}', "
                 f"'{code}', "
                 f"{'null' if transforms_to is None else f"'{transforms_to}'"}, "
-                f"{'null' if not related else '\'{' + ','.join(related) + '}\'::text[]'}, "
+                f"{'null' if not related else "'{" + ','.join(related) + "}'::text[]"}, "
                 f"'{esc(pol[:2400])}', "
                 f"'{esc(json.dumps(cond))}'::jsonb, "
                 "true, "
@@ -233,18 +241,30 @@ def build_sql(entries: dict[str, DeltaEntry], pdf_name: str) -> str:
     )
     lines.append("")
     lines.append("grant select on public.payer_rules to service_role, authenticated, anon;")
-    lines.append("grant select on public.v_rules_for_coding_agent to service_role, authenticated, anon;")
-    lines.append("grant select on public.v_rules_for_preauth_agent to service_role, authenticated, anon;")
-    lines.append("grant select on public.v_rules_for_scrubber_agent to service_role, authenticated, anon;")
-    lines.append("grant select on public.v_rules_for_estimation_agent to service_role, authenticated, anon;")
-    lines.append("grant select on public.v_rules_for_appeals_agent to service_role, authenticated, anon;")
+    lines.append(
+        "grant select on public.v_rules_for_coding_agent to service_role, authenticated, anon;"
+    )
+    lines.append(
+        "grant select on public.v_rules_for_preauth_agent to service_role, authenticated, anon;"
+    )
+    lines.append(
+        "grant select on public.v_rules_for_scrubber_agent to service_role, authenticated, anon;"
+    )
+    lines.append(
+        "grant select on public.v_rules_for_estimation_agent to service_role, authenticated, anon;"
+    )
+    lines.append(
+        "grant select on public.v_rules_for_appeals_agent to service_role, authenticated, anon;"
+    )
 
     return "\n".join(lines) + "\n"
 
 
 def main() -> None:
     root = Path(__file__).resolve().parents[1]
-    pdf_path = Path(r"c:\Users\ZT\Downloads\Telegram Desktop\Delta Dental Dentist Handbook 2026.pdf")
+    pdf_path = Path(
+        r"c:\Users\ZT\Downloads\Telegram Desktop\Delta Dental Dentist Handbook 2026.pdf"
+    )
     if not pdf_path.exists():
         raise FileNotFoundError(f"Missing source PDF: {pdf_path}")
 

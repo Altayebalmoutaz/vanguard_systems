@@ -23,9 +23,7 @@ for p in patients:
     for r in ins:
         carrier_num = r.get("CarrierNum")
         if carrier_num and carrier_num not in carrier_cache:
-            carrier_cache[carrier_num] = client.get(
-                f"{B}/carriers/{carrier_num}", headers=H
-            ).json()
+            carrier_cache[carrier_num] = client.get(f"{B}/carriers/{carrier_num}", headers=H).json()
         carrier = carrier_cache.get(carrier_num, {})
         electid = (carrier.get("ElectID") or "").strip()
         if electid:

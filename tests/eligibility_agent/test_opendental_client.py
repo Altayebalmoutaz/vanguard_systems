@@ -24,7 +24,9 @@ def _client(*, replay_dir: str | None = None) -> OpenDentalClient:
 @respx.mock
 def test_get_patient_uses_odfhir_header() -> None:
     route = respx.get("http://localhost:30222/api/v1/patients/1").mock(
-        return_value=Response(200, json={"PatNum": 1, "FName": "A", "LName": "B", "Birthdate": "1970-01-01"})
+        return_value=Response(
+            200, json={"PatNum": 1, "FName": "A", "LName": "B", "Birthdate": "1970-01-01"}
+        )
     )
     out = _client().get_patient(1)
     assert out.PatNum == 1
@@ -48,7 +50,9 @@ def test_create_insverify_put() -> None:
         )
     )
     out = _client().create_insverify(
-        ODInsVerifyCreate(DateLastVerified="2026-05-11", VerifyType="PatientEnrollment", FKey=101, Note="ok")
+        ODInsVerifyCreate(
+            DateLastVerified="2026-05-11", VerifyType="PatientEnrollment", FKey=101, Note="ok"
+        )
     )
     assert route.called
     assert out.InsVerifyNum == 999
@@ -77,4 +81,3 @@ def test_missing_keys_raise() -> None:
         assert False, "expected OpenDentalConfigError"
     except OpenDentalConfigError:
         pass
-

@@ -39,7 +39,9 @@ def _llm_fallback() -> dict:
     }
 
 
-def run_prior_auth_agent(settings: Settings, request: PriorAuthAgentRequest) -> PriorAuthAgentResponse:
+def run_prior_auth_agent(
+    settings: Settings, request: PriorAuthAgentRequest
+) -> PriorAuthAgentResponse:
     cdt_codes = list(request.coding.cdt_codes)
     insurance = request.insurance
 
@@ -76,8 +78,7 @@ def run_prior_auth_agent(settings: Settings, request: PriorAuthAgentRequest) -> 
     requires_auth = bool(rules_out["requires_auth"] or llm_out.get("requires_auth", False))
     required_documents = list(
         dict.fromkeys(
-            list(rules_out["required_documents"])
-            + list(llm_out.get("required_documents") or [])
+            list(rules_out["required_documents"]) + list(llm_out.get("required_documents") or [])
         )
     )
     payer_rules = list(

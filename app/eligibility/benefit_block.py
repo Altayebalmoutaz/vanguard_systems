@@ -43,7 +43,12 @@ def _infer_in_network(benefit: dict[str, Any]) -> tuple[bool | None, str]:
     ]
     blob = " ".join(texts)
     inn = "in network" in blob or " in-network" in blob or "in-network" in blob
-    oon = "out of network" in blob or " out-of-network" in blob or "out-of-network" in blob or " oon " in f" {blob} "
+    oon = (
+        "out of network" in blob
+        or " out-of-network" in blob
+        or "out-of-network" in blob
+        or " oon " in f" {blob} "
+    )
     if inn and not oon:
         return True, ""
     if oon and not inn:
@@ -154,7 +159,9 @@ def normalize_benefit_block(raw_benefit: dict[str, Any], payer_id: str) -> dict[
 
     # --- Branch 4: not covered (N / I) -----------------------------------------
     if code in ("N", "I") or ("not covered" in name_l and code not in ("1",)):
-        proc = _procedure_from_top_level(raw_benefit) or _procedure_from_composite(raw_benefit) or ""
+        proc = (
+            _procedure_from_top_level(raw_benefit) or _procedure_from_composite(raw_benefit) or ""
+        )
         inn, inn_reason = _infer_in_network(raw_benefit)
         return six(
             False,
@@ -255,4 +262,3 @@ def normalize_benefit_block(raw_benefit: dict[str, Any], payer_id: str) -> dict[
         str(qual),
         time_qualifier or "",
     )
-

@@ -181,10 +181,16 @@ def run_realtime_pipeline(
     check_id = insert_eligibility_check(supabase, row)
 
     proc_rows: list[dict[str, Any]] = []
-    if canonical.get("is_active") and routing.get("status") == "CLEARED" and canonical.get("response_complete"):
+    if (
+        canonical.get("is_active")
+        and routing.get("status") == "CLEARED"
+        and canonical.get("response_complete")
+    ):
         try:
             fee = fetch_payer_fee_schedule_as_dict(supabase, payer_for_row)
-            cdt_for_est = [str(p.get("cdt_code") or "") for p in canonical.get("procedure_details") or []]
+            cdt_for_est = [
+                str(p.get("cdt_code") or "") for p in canonical.get("procedure_details") or []
+            ]
             merge_ucr_fallback_into_fee_schedule(fee, payer_for_row, cdt_for_est, s)
             est = calculate_responsibility(canonical, fee)
             detail_by_cdt = {p["cdt_code"]: p for p in canonical.get("procedure_details") or []}
@@ -247,7 +253,9 @@ def run_eligibility_check_endpoint(
         write_audit_event(
             patient_id=request.patient_id,
             event_type="SSN_FALLBACK",
-            detail={"reason": "SSN present on request; subscriber_id path preferred; proceeding with audited fallback path"},
+            detail={
+                "reason": "SSN present on request; subscriber_id path preferred; proceeding with audited fallback path"
+            },
             settings=s,
         )
 
@@ -297,5 +305,3 @@ def run_eligibility_check_endpoint(
         "primary": results[0],
         "secondary": results[1] if len(results) > 1 else None,
     }
-
-

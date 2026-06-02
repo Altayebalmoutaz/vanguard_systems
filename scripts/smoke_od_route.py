@@ -32,7 +32,9 @@ def smoke(pat_num: int) -> dict[str, Any]:
         "rendering_provider_npi": "1104023674",
         "write_back": False,
     }
-    print(f"\n==================== POST /eligibility/from-opendental (PatNum={pat_num}) ====================")
+    print(
+        f"\n==================== POST /eligibility/from-opendental (PatNum={pat_num}) ===================="
+    )
     print(f"Request body: {json.dumps(payload)}")
     resp = client.post("/eligibility/from-opendental", json=payload)
     print(f"HTTP status: {resp.status_code}")

@@ -99,7 +99,9 @@ class ResolveClaimContextErrors(unittest.TestCase):
 
 
 class FetchClaimSnapshotPaths(unittest.TestCase):
-    def _make_supabase(self, *, rpc_data=None, rpc_raises=False, table_data=None, table_raises=False) -> MagicMock:
+    def _make_supabase(
+        self, *, rpc_data=None, rpc_raises=False, table_data=None, table_raises=False
+    ) -> MagicMock:
         supabase = MagicMock()
         if rpc_raises:
             supabase.rpc.side_effect = RuntimeError("rpc unavailable")

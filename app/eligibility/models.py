@@ -136,7 +136,9 @@ class EligibilityRequest(BaseModel):
             if self.subscriber_dob is None:
                 missing.append("subscriber_dob")
             if missing:
-                raise ValueError(f"dependent eligibility requires subscriber policyholder fields: {', '.join(missing)}")
+                raise ValueError(
+                    f"dependent eligibility requires subscriber policyholder fields: {', '.join(missing)}"
+                )
         return self
 
 
@@ -228,7 +230,9 @@ class AuditLogEntry(BaseModel):
 
 
 class StediAPIError(Exception):
-    def __init__(self, message: str, status_code: int | None = None, body: str | None = None) -> None:
+    def __init__(
+        self, message: str, status_code: int | None = None, body: str | None = None
+    ) -> None:
         super().__init__(message)
         self.status_code = status_code
         self.body = body
@@ -237,7 +241,9 @@ class StediAPIError(Exception):
 class Layer1ValidationError(ValueError):
     """Deterministic Layer-1 validation error with stable code and detail."""
 
-    def __init__(self, code: Layer1ErrorCode, message: str, detail: dict[str, Any] | None = None) -> None:
+    def __init__(
+        self, code: Layer1ErrorCode, message: str, detail: dict[str, Any] | None = None
+    ) -> None:
         super().__init__(message)
         self.code = code
         self.detail = detail or {}

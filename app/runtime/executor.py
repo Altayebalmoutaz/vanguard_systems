@@ -39,7 +39,10 @@ async def _agent_prior_auth(ctx: AgentContext, payload: dict[str, Any]) -> dict[
         {
             "agent_id": "prior_auth",
             "step": "start",
-            "payload": {"patient_id": payload.get("patient_id"), "cpt_code": payload.get("cpt_code")},
+            "payload": {
+                "patient_id": payload.get("patient_id"),
+                "cpt_code": payload.get("cpt_code"),
+            },
             "practice_id": payload.get("practice_id"),
         },
     )

@@ -10,7 +10,9 @@ from app.integrations.opendental.models import ODCarrier, ODInsuranceRow, ODPati
 
 class TestOpenDentalMapping(unittest.TestCase):
     def test_maps_primary_and_secondary(self) -> None:
-        patient = ODPatient(PatNum=1, FName="Aardvark", LName="Dent", Birthdate="1970-12-12", SSN="111-22-3333")
+        patient = ODPatient(
+            PatNum=1, FName="Aardvark", LName="Dent", Birthdate="1970-12-12", SSN="111-22-3333"
+        )
         rows = [
             ODInsuranceRow(
                 PatPlanNum=101,
@@ -99,4 +101,3 @@ class TestOpenDentalMapping(unittest.TestCase):
                 practice_id=None,
                 rendering_provider_npi=None,
             )
-

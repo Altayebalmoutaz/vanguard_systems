@@ -10,7 +10,7 @@ authors = [{ name = "Vanguard MD" }]
 # Pinned upper bounds prevent surprise major-version drift in CI.
 # Keep ranges tight; bump deliberately and run the full test suite.
 dependencies = [
-    "fastapi>=0.115,<0.120",
+    "fastapi>=0.136,<0.137",
     "uvicorn[standard]>=0.32,<0.40",
     "pydantic>=2.7,<3",
     "pydantic-settings>=2.4,<3",
@@ -18,8 +18,11 @@ dependencies = [
     "python-multipart>=0.0.9,<1",
     "supabase>=2.7,<3",
     "psycopg[binary]>=3.2,<4",
-    "httpx>=0.27,<1",
-    "pypdf>=5.0,<6",
+    "httpx>=0.28,<1",
+    "idna>=3.15,<4",
+    "starlette>=1.0.1,<2",
+    "urllib3>=2.7,<3",
+    "pypdf>=6.10.2,<7",
     # Presidio + spaCy for PHI scrubbing.
     # NOTE: spaCy models are installed via a separate command (see README) because PEP 517
     # cannot pull from arbitrary URLs; we declare the loader package as a runtime dep.

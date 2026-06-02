@@ -51,7 +51,10 @@ def test_integrity_missing_critical_is_active() -> None:
     assert out["response_complete"] is False
     assert "is_active" in out["missing_fields"]
     issues = out.get("integrity_issues") or []
-    assert any(i.get("code") == "L4_MISSING_CRITICAL_FIELD" and i.get("field") == "is_active" for i in issues)
+    assert any(
+        i.get("code") == "L4_MISSING_CRITICAL_FIELD" and i.get("field") == "is_active"
+        for i in issues
+    )
 
 
 def test_integrity_null_remainders_ok_when_no_financial_totals() -> None:
@@ -111,7 +114,10 @@ def test_integrity_flags_important_nulls() -> None:
     warns = out.get("integrity_warnings") or []
     assert any("important_field_null:coverage_percent" in w for w in warns)
     issues = out.get("integrity_issues") or []
-    assert any(i.get("code") == "L4_IMPORTANT_FIELD_NULL" and i.get("field") == "coverage_percent" for i in issues)
+    assert any(
+        i.get("code") == "L4_IMPORTANT_FIELD_NULL" and i.get("field") == "coverage_percent"
+        for i in issues
+    )
 
 
 def test_integrity_range_and_consistency_warnings() -> None:
@@ -135,11 +141,22 @@ def test_integrity_range_and_consistency_warnings() -> None:
     assert "deductible_remaining_gt_total" in warns
     assert "annual_max_remaining_gt_total" in warns
     issues = out.get("integrity_issues") or []
-    assert any(i.get("field") == "coverage_percent" and i.get("code") == "L4_RANGE_VIOLATION" for i in issues)
+    assert any(
+        i.get("field") == "coverage_percent" and i.get("code") == "L4_RANGE_VIOLATION"
+        for i in issues
+    )
     assert any(i.get("field") == "copay" and i.get("code") == "L4_RANGE_VIOLATION" for i in issues)
-    assert any(i.get("field") == "coinsurance" and i.get("code") == "L4_RANGE_VIOLATION" for i in issues)
-    assert any(i.get("field") == "deductible_remaining" and i.get("code") == "L4_CONSISTENCY_VIOLATION" for i in issues)
-    assert any(i.get("field") == "annual_max_remaining" and i.get("code") == "L4_CONSISTENCY_VIOLATION" for i in issues)
+    assert any(
+        i.get("field") == "coinsurance" and i.get("code") == "L4_RANGE_VIOLATION" for i in issues
+    )
+    assert any(
+        i.get("field") == "deductible_remaining" and i.get("code") == "L4_CONSISTENCY_VIOLATION"
+        for i in issues
+    )
+    assert any(
+        i.get("field") == "annual_max_remaining" and i.get("code") == "L4_CONSISTENCY_VIOLATION"
+        for i in issues
+    )
 
 
 def test_integrity_stedi_x12_999_blocks_complete() -> None:

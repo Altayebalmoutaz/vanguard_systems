@@ -11,6 +11,7 @@ Write-back order (each step independently flag-gated and fault-isolated):
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime
@@ -302,10 +303,8 @@ def build_enrollment_note(
             cdt = row.get("cdt_code") or "?"
             covered = _yes_no(row.get("procedure_covered"))
             pat_val = row.get("patient_responsibility")
-            try:
+            with contextlib.suppress(TypeError, ValueError):
                 total += float(pat_val or 0)
-            except (TypeError, ValueError):
-                pass
             pat = _money(pat_val)
             ins = _money(row.get("insurance_pays"))
             allowed = _money(row.get("allowed_amount"))
@@ -381,7 +380,7 @@ def _percent_int(value: Any) -> int | None:
     f = _to_float(value)
     if f is None:
         return None
-    return max(0, min(100, int(round(f))))
+    return max(0, min(100, round(f)))
 
 
 def build_benefit_grid_targets(
@@ -435,7 +434,7 @@ def run_opendental_benefits_grid_writeback(
     try:
         covcats = client.get_covcats()
         existing = client.get_benefits(plan_num)
-    except Exception as exc:  # noqa: BLE001 - fault isolation by design
+    except Exception as exc:
         logger.warning("OpenDental benefits-grid fetch failed: %s", exc)
         return {"error": f"fetch_failed: {exc}"}
 
@@ -469,30 +468,55 @@ def run_opendental_benefits_grid_writeback(
                     )
                 )
                 actions.append(
-                    {"target": label, "type": "CoInsurance", "cov_cat_num": cov_cat_num,
-                     "percent": percent, "action": "created", "benefit_num": created.BenefitNum}
+                    {
+                        "target": label,
+                        "type": "CoInsurance",
+                        "cov_cat_num": cov_cat_num,
+                        "percent": percent,
+                        "action": "created",
+                        "benefit_num": created.BenefitNum,
+                    }
                 )
             elif (existing_row.Percent or -1) != percent:
                 client.update_benefit(existing_row.BenefitNum, ODBenefitUpdate(Percent=percent))
                 actions.append(
-                    {"target": label, "type": "CoInsurance", "cov_cat_num": cov_cat_num,
-                     "percent": percent, "action": "updated", "benefit_num": existing_row.BenefitNum,
-                     "previous_percent": existing_row.Percent}
+                    {
+                        "target": label,
+                        "type": "CoInsurance",
+                        "cov_cat_num": cov_cat_num,
+                        "percent": percent,
+                        "action": "updated",
+                        "benefit_num": existing_row.BenefitNum,
+                        "previous_percent": existing_row.Percent,
+                    }
                 )
             else:
                 actions.append(
-                    {"target": label, "type": "CoInsurance", "cov_cat_num": cov_cat_num,
-                     "percent": percent, "action": "unchanged", "benefit_num": existing_row.BenefitNum}
+                    {
+                        "target": label,
+                        "type": "CoInsurance",
+                        "cov_cat_num": cov_cat_num,
+                        "percent": percent,
+                        "action": "unchanged",
+                        "benefit_num": existing_row.BenefitNum,
+                    }
                 )
-        except Exception as exc:  # noqa: BLE001 - fault isolation by design
+        except Exception as exc:
             logger.warning("OpenDental CoInsurance upsert failed (cat %s): %s", cov_cat_num, exc)
             actions.append(
-                {"target": label, "type": "CoInsurance", "cov_cat_num": cov_cat_num, "error": str(exc)}
+                {
+                    "target": label,
+                    "type": "CoInsurance",
+                    "cov_cat_num": cov_cat_num,
+                    "error": str(exc),
+                }
             )
 
     def _upsert_monetary(benefit_type: str, amount: float, label: str) -> None:
         if general_num is None:
-            actions.append({"target": label, "type": benefit_type, "action": "skipped_no_general_covcat"})
+            actions.append(
+                {"target": label, "type": benefit_type, "action": "skipped_no_general_covcat"}
+            )
             return
         existing_row = _find(benefit_type, general_num)
         try:
@@ -508,22 +532,42 @@ def run_opendental_benefits_grid_writeback(
                     )
                 )
                 actions.append(
-                    {"target": label, "type": benefit_type, "cov_cat_num": general_num,
-                     "amount": amount, "action": "created", "benefit_num": created.BenefitNum}
+                    {
+                        "target": label,
+                        "type": benefit_type,
+                        "cov_cat_num": general_num,
+                        "amount": amount,
+                        "action": "created",
+                        "benefit_num": created.BenefitNum,
+                    }
                 )
-            elif (existing_row.MonetaryAmt if existing_row.MonetaryAmt is not None else -1.0) != amount:
+            elif (
+                existing_row.MonetaryAmt if existing_row.MonetaryAmt is not None else -1.0
+            ) != amount:
                 client.update_benefit(existing_row.BenefitNum, ODBenefitUpdate(MonetaryAmt=amount))
                 actions.append(
-                    {"target": label, "type": benefit_type, "cov_cat_num": general_num,
-                     "amount": amount, "action": "updated", "benefit_num": existing_row.BenefitNum,
-                     "previous_amount": existing_row.MonetaryAmt}
+                    {
+                        "target": label,
+                        "type": benefit_type,
+                        "cov_cat_num": general_num,
+                        "amount": amount,
+                        "action": "updated",
+                        "benefit_num": existing_row.BenefitNum,
+                        "previous_amount": existing_row.MonetaryAmt,
+                    }
                 )
             else:
                 actions.append(
-                    {"target": label, "type": benefit_type, "cov_cat_num": general_num,
-                     "amount": amount, "action": "unchanged", "benefit_num": existing_row.BenefitNum}
+                    {
+                        "target": label,
+                        "type": benefit_type,
+                        "cov_cat_num": general_num,
+                        "amount": amount,
+                        "action": "unchanged",
+                        "benefit_num": existing_row.BenefitNum,
+                    }
                 )
-        except Exception as exc:  # noqa: BLE001 - fault isolation by design
+        except Exception as exc:
             logger.warning("OpenDental %s upsert failed: %s", benefit_type, exc)
             actions.append({"target": label, "type": benefit_type, "error": str(exc)})
 
@@ -612,7 +656,7 @@ def run_opendental_writeback(
                 "note_sent": benefit_notes_text,
                 "response": resp,
             }
-        except Exception as exc:  # noqa: BLE001 - fault isolation by design
+        except Exception as exc:
             logger.warning("OpenDental BenefitNotes write failed: %s", exc)
             result["benefit_notes"] = {"error": str(exc), "note_sent": benefit_notes_text}
 
@@ -629,7 +673,7 @@ def run_opendental_writeback(
                 "note_sent": subscriber_note_text,
                 "response": resp,
             }
-        except Exception as exc:  # noqa: BLE001 - fault isolation by design
+        except Exception as exc:
             logger.warning("OpenDental SubscNote write failed: %s", exc)
             result["subscriber_note"] = {"error": str(exc), "note_sent": subscriber_note_text}
 
@@ -673,7 +717,7 @@ def run_opendental_writeback(
         result["patient_enrollment"] = enrollment_payload
         result["insurance_benefit"] = benefit_payload
         result["write_back_result"] = enrollment_payload
-    except Exception as exc:  # noqa: BLE001 - fault isolation by design
+    except Exception as exc:
         logger.warning("OpenDental InsVerifies write failed: %s", exc)
         result["insverifies"] = {"error": str(exc)}
 
@@ -687,14 +731,18 @@ def run_opendental_writeback(
                 "note_sent": commlog_note,
                 "response": resp.model_dump(mode="json") if hasattr(resp, "model_dump") else resp,
             }
-        except Exception as exc:  # noqa: BLE001 - fault isolation by design
+        except Exception as exc:
             logger.warning("OpenDental Commlog write failed: %s", exc)
             result["commlog"] = {"error": str(exc), "note_sent": commlog_note}
 
     # 4) PHASE 2: ClaimProcs InsAdjust -------------------------------------------------
     if write_insadjust:
-        ins_used = _derive_used(canonical.get("annual_max_total"), canonical.get("annual_max_remaining"))
-        ded_used = _derive_used(canonical.get("deductible_total"), canonical.get("deductible_remaining"))
+        ins_used = _derive_used(
+            canonical.get("annual_max_total"), canonical.get("annual_max_remaining")
+        )
+        ded_used = _derive_used(
+            canonical.get("deductible_total"), canonical.get("deductible_remaining")
+        )
         if ins_used is None and ded_used is None:
             result["insadjust"] = {"skipped": "insufficient_data"}
         else:
@@ -711,7 +759,7 @@ def run_opendental_writeback(
                     "deductible_used": ded_used,
                     "response": resp,
                 }
-            except Exception as exc:  # noqa: BLE001 - fault isolation by design
+            except Exception as exc:
                 logger.warning("OpenDental InsAdjust write failed: %s", exc)
                 result["insadjust"] = {"error": str(exc)}
 
@@ -724,7 +772,7 @@ def run_opendental_writeback(
                 canonical=canonical,
                 universal_record=primary_result.get("universal_dental_record"),
             )
-        except Exception as exc:  # noqa: BLE001 - fault isolation by design
+        except Exception as exc:
             logger.warning("OpenDental benefits-grid write failed: %s", exc)
             result["benefits_grid"] = {"error": str(exc)}
 

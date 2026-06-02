@@ -29,7 +29,9 @@ def _pick_primary_row(rows: list[ODInsuranceRow]) -> ODInsuranceRow:
     return rows[0]
 
 
-def _pick_secondary_row(rows: list[ODInsuranceRow], primary_row: ODInsuranceRow) -> ODInsuranceRow | None:
+def _pick_secondary_row(
+    rows: list[ODInsuranceRow], primary_row: ODInsuranceRow
+) -> ODInsuranceRow | None:
     for row in rows:
         if row is primary_row:
             continue
@@ -76,10 +78,12 @@ def od_to_eligibility_request(
 
     primary_payer_id = _payer_id_for_row(primary_row, carriers_by_num)
     secondary_row = _pick_secondary_row(insurance_rows, primary_row)
-    secondary_payer_id = _payer_id_for_row(secondary_row, carriers_by_num) if secondary_row else None
+    secondary_payer_id = (
+        _payer_id_for_row(secondary_row, carriers_by_num) if secondary_row else None
+    )
 
     carrier = carriers_by_num.get(primary_row.CarrierNum)
-    carrier_name = (primary_row.CarrierName or (carrier.CarrierName if carrier else None) or None)
+    carrier_name = primary_row.CarrierName or (carrier.CarrierName if carrier else None) or None
 
     patient_uuid = uuid.uuid5(uuid.NAMESPACE_DNS, f"opendental:{patient.PatNum}")
     req = EligibilityRequest(
@@ -102,4 +106,3 @@ def od_to_eligibility_request(
         primary_ins_sub_num=primary_row.InsSubNum,
         primary_carrier_name=carrier_name,
     )
-
