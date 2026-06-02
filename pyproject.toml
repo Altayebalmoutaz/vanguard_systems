@@ -119,17 +119,7 @@ select = [
     "SIM",  # flake8-simplify
     "RUF",  # ruff-specific
 ]
-[tool.ruff.lint]
-select = [
-    "E",    # pycodestyle errors
-    "W",    # pycodestyle warnings
-    "F",    # pyflakes
-    "I",    # isort
-    "B",    # flake8-bugbear
-    "UP",   # pyupgrade
-    "SIM",  # flake8-simplify
-    "RUF",  # ruff-specific
-]
+
 ignore = [
     "E501",  # line length handled by formatter
     "B008",  # FastAPI uses Depends() in defaults
