@@ -3,11 +3,23 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
 
 from app.eligibility.mock_clinic import DEFAULT_MOCK_PRACTICE_ID, DEFAULT_MOCK_RENDERING_NPI
 from app.eligibility.models import EligibilityRequest, TriggerEvent
 from app.integrations.opendental.errors import OpenDentalMappingError
 from app.integrations.opendental.models import ODCarrier, ODInsuranceRow, ODPatient
+
+
+@dataclass(frozen=True)
+class MappedEligibility:
+    """Result of mapping OD records -> EligibilityRequest plus write-back identifiers."""
+
+    request: EligibilityRequest
+    primary_pat_plan_num: int
+    primary_plan_num: int
+    primary_ins_sub_num: int
+    primary_carrier_name: str | None = None
 
 
 def _pick_primary_row(rows: list[ODInsuranceRow]) -> ODInsuranceRow:
@@ -48,8 +60,12 @@ def od_to_eligibility_request(
     cdt_codes: list[str] | None,
     practice_id: str | None,
     rendering_provider_npi: str | None,
-) -> tuple[EligibilityRequest, int]:
-    """Map OpenDental records to EligibilityRequest and return selected primary PatPlanNum."""
+) -> MappedEligibility:
+    """Map OpenDental records to EligibilityRequest plus primary write-back identifiers.
+
+    Returns a ``MappedEligibility`` carrying the request and the primary plan's
+    PatPlanNum, PlanNum, InsSubNum and carrier name (for benefit write-back).
+    """
     if not insurance_rows:
         raise OpenDentalMappingError("Patient has no insurance rows in OpenDental")
 
@@ -61,6 +77,9 @@ def od_to_eligibility_request(
     primary_payer_id = _payer_id_for_row(primary_row, carriers_by_num)
     secondary_row = _pick_secondary_row(insurance_rows, primary_row)
     secondary_payer_id = _payer_id_for_row(secondary_row, carriers_by_num) if secondary_row else None
+
+    carrier = carriers_by_num.get(primary_row.CarrierNum)
+    carrier_name = (primary_row.CarrierName or (carrier.CarrierName if carrier else None) or None)
 
     patient_uuid = uuid.uuid5(uuid.NAMESPACE_DNS, f"opendental:{patient.PatNum}")
     req = EligibilityRequest(
@@ -76,5 +95,11 @@ def od_to_eligibility_request(
         practice_id=practice_id or DEFAULT_MOCK_PRACTICE_ID,
         rendering_provider_npi=rendering_provider_npi or DEFAULT_MOCK_RENDERING_NPI,
     )
-    return req, primary_row.PatPlanNum
+    return MappedEligibility(
+        request=req,
+        primary_pat_plan_num=primary_row.PatPlanNum,
+        primary_plan_num=primary_row.PlanNum,
+        primary_ins_sub_num=primary_row.InsSubNum,
+        primary_carrier_name=carrier_name,
+    )
 

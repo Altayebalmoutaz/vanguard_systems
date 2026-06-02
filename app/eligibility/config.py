@@ -96,8 +96,52 @@ class EligibilitySettings(BaseSettings):
         default=False,
         validation_alias="OPENDENTAL_WRITEBACK_ENABLED",
     )
+    # Per-target write-back switches (only apply when opendental_writeback_enabled is True).
+    opendental_write_benefit_notes_enabled: bool = Field(
+        default=True,
+        validation_alias="OPENDENTAL_WRITE_BENEFIT_NOTES_ENABLED",
+    )
+    # InsSub.SubscNote one-liner (bold-red on the insurance grid); within standard API permission.
+    opendental_write_subscriber_note_enabled: bool = Field(
+        default=True,
+        validation_alias="OPENDENTAL_WRITE_SUBSCRIBER_NOTE_ENABLED",
+    )
+    opendental_write_commlog_enabled: bool = Field(
+        default=True,
+        validation_alias="OPENDENTAL_WRITE_COMMLOG_ENABLED",
+    )
+    # Phase 2 financial sync (alters running deductible/annual-max used); default off.
+    opendental_write_insadjust_enabled: bool = Field(
+        default=False,
+        validation_alias="OPENDENTAL_WRITE_INSADJUST_ENABLED",
+    )
+    # Structured Benefits grid (CoInsurance %, Deductible, Annual Max). Mutates plan-level
+    # benefits shared by all subscribers on the plan, so default off.
+    opendental_write_benefits_grid_enabled: bool = Field(
+        default=False,
+        validation_alias="OPENDENTAL_WRITE_BENEFITS_GRID_ENABLED",
+    )
     # When set, OpenDental client reads fixtures from disk instead of issuing HTTP calls.
     opendental_replay_dir: str = Field(default="", validation_alias="OPENDENTAL_REPLAY_DIR")
+
+    # Automatic appointment poller (in-process FastAPI background task). Off by default.
+    opendental_auto_poll_enabled: bool = Field(
+        default=False,
+        validation_alias="OPENDENTAL_AUTO_POLL_ENABLED",
+    )
+    opendental_auto_poll_interval_seconds: float = Field(
+        default=60.0,
+        validation_alias="OPENDENTAL_AUTO_POLL_INTERVAL_SECONDS",
+    )
+    # 0 = today only; N = today plus the next N days.
+    opendental_auto_poll_date_window_days: int = Field(
+        default=0,
+        validation_alias="OPENDENTAL_AUTO_POLL_DATE_WINDOW_DAYS",
+    )
+    opendental_auto_poll_cdt_codes: str = Field(
+        default="D1110",
+        validation_alias="OPENDENTAL_AUTO_POLL_CDT_CODES",
+    )
 
 
 @lru_cache

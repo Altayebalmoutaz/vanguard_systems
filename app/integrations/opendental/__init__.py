@@ -6,7 +6,7 @@ from app.integrations.opendental.errors import (
     OpenDentalConfigError,
     OpenDentalMappingError,
 )
-from app.integrations.opendental.mapping import od_to_eligibility_request
+from app.integrations.opendental.mapping import MappedEligibility, od_to_eligibility_request
 from app.integrations.opendental.models import ODInsVerifyCreate
 
 __all__ = [
@@ -14,6 +14,7 @@ __all__ = [
     "OpenDentalClient",
     "OpenDentalConfigError",
     "OpenDentalMappingError",
+    "MappedEligibility",
     "ODInsVerifyCreate",
     "od_to_eligibility_request",
 ]

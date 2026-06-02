@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import secrets
-from datetime import date
+from collections.abc import AsyncIterator
 from typing import Any
 from uuid import UUID
 
@@ -19,7 +20,7 @@ from app.api.errors import sanitized_http_exception
 from app.eligibility.api_client import build_payload, call_stedi_batch
 from app.eligibility.audit import write_audit_event
 from app.eligibility.cob import calculate_cob
-from app.eligibility.config import get_settings
+from app.eligibility.config import EligibilitySettings, get_settings
 from app.eligibility.db import (
     get_eligibility_check_by_id,
     get_latest_eligibility_for_patient,
@@ -44,9 +45,10 @@ from app.integrations.opendental import (
     OpenDentalClient,
     OpenDentalConfigError,
     OpenDentalMappingError,
-    ODInsVerifyCreate,
     od_to_eligibility_request,
 )
+from app.integrations.opendental.poller import start_appointment_poller
+from app.integrations.opendental.writeback import run_opendental_writeback
 from app.security.phi import scrub_for_log
 
 logging.basicConfig(level=logging.INFO)
@@ -97,7 +99,24 @@ def _opendental_http_exception(exc: OpenDentalAPIError) -> HTTPException:
     )
 
 
-app = FastAPI(title="Vanguard MD Eligibility Agent", version="0.1.0")
+@contextlib.asynccontextmanager
+async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Start the OpenDental appointment poller on startup (if enabled); cancel on shutdown."""
+    settings = get_settings()
+    poller_task = None
+    if settings.opendental_auto_poll_enabled:
+        poller_task = start_appointment_poller(run_from_opendental, settings)
+        logger.info("OpenDental auto-poll enabled (interval=%ss)", settings.opendental_auto_poll_interval_seconds)
+    try:
+        yield
+    finally:
+        if poller_task is not None:
+            poller_task.cancel()
+            with contextlib.suppress(Exception):
+                await poller_task
+
+
+app = FastAPI(title="Vanguard MD Eligibility Agent", version="0.1.0", lifespan=_lifespan)
 
 
 class EligibilityAgentApiKeyMiddleware(BaseHTTPMiddleware):
@@ -181,58 +200,89 @@ def post_eligibility_check(body: EligibilityRequest) -> EligibilityCheckHttpResp
         ) from e
 
 
+def run_from_opendental(
+    *,
+    pat_num: int,
+    trigger_event: TriggerEvent = TriggerEvent.PRE_APPOINTMENT,
+    cdt_codes: list[str] | None = None,
+    practice_id: str | None = None,
+    rendering_provider_npi: str | None = None,
+    write_back: bool = False,
+    settings: EligibilitySettings | None = None,
+    client: OpenDentalClient | None = None,
+) -> dict[str, Any]:
+    """Core OpenDental -> eligibility -> write-back flow shared by the route and poller.
+
+    Raises OpenDental*/Stedi*/Layer1 errors to the caller (the HTTP route maps them to
+    responses; the poller logs and continues).
+    """
+    settings = settings or get_settings()
+    client = client or OpenDentalClient.from_settings(settings)
+
+    patient = client.get_patient(pat_num)
+    insurance_rows = client.get_patient_insurance(pat_num)
+
+    carriers_by_num: dict[int, Any] = {}
+    for row in insurance_rows:
+        if row.CarrierNum not in carriers_by_num:
+            carriers_by_num[row.CarrierNum] = client.get_carrier(row.CarrierNum)
+
+    mapped = od_to_eligibility_request(
+        patient,
+        insurance_rows,
+        carriers_by_num,
+        trigger_event=trigger_event,
+        cdt_codes=cdt_codes,
+        practice_id=practice_id,
+        rendering_provider_npi=rendering_provider_npi,
+    )
+    out = run_eligibility_check_endpoint(mapped.request, settings=settings)
+
+    writeback_detail: dict[str, Any] | None = None
+    primary = out.get("primary") or {}
+    if write_back and settings.opendental_writeback_enabled and primary:
+        writeback_detail = run_opendental_writeback(
+            client,
+            pat_num=pat_num,
+            primary_pat_plan_num=mapped.primary_pat_plan_num,
+            primary_plan_num=mapped.primary_plan_num,
+            primary_ins_sub_num=mapped.primary_ins_sub_num,
+            primary_result=primary,
+            carrier_name=mapped.primary_carrier_name,
+            write_benefit_notes=settings.opendental_write_benefit_notes_enabled,
+            write_subscriber_note=settings.opendental_write_subscriber_note_enabled,
+            write_commlog=settings.opendental_write_commlog_enabled,
+            write_insadjust=settings.opendental_write_insadjust_enabled,
+            write_benefits_grid=settings.opendental_write_benefits_grid_enabled,
+        )
+
+    opendental_detail = {
+        "pat_num": pat_num,
+        "primary_pat_plan_num": mapped.primary_pat_plan_num,
+        "primary_plan_num": mapped.primary_plan_num,
+        "primary_ins_sub_num": mapped.primary_ins_sub_num,
+        "write_back_requested": write_back,
+        "write_back_enabled": settings.opendental_writeback_enabled,
+        "write_back_result": (writeback_detail or {}).get("write_back_result"),
+        "write_back_notes": writeback_detail,
+    }
+    return {**out, "opendental": opendental_detail}
+
+
 @app.post("/eligibility/from-opendental", response_model=FromOpenDentalResponse)
 def post_eligibility_from_opendental(body: FromOpenDentalRequest) -> FromOpenDentalResponse:
     settings = get_settings()
     try:
-        client = OpenDentalClient.from_settings(settings)
-        patient = client.get_patient(body.pat_num)
-        insurance_rows = client.get_patient_insurance(body.pat_num)
-
-        carriers_by_num: dict[int, Any] = {}
-        for row in insurance_rows:
-            if row.CarrierNum not in carriers_by_num:
-                carriers_by_num[row.CarrierNum] = client.get_carrier(row.CarrierNum)
-
-        eligibility_request, primary_pat_plan_num = od_to_eligibility_request(
-            patient,
-            insurance_rows,
-            carriers_by_num,
+        out = run_from_opendental(
+            pat_num=body.pat_num,
             trigger_event=body.trigger_event,
             cdt_codes=body.cdt_codes,
             practice_id=body.practice_id,
             rendering_provider_npi=body.rendering_provider_npi,
+            write_back=body.write_back,
+            settings=settings,
         )
-        out = run_eligibility_check_endpoint(eligibility_request, settings=settings)
-
-        writeback: dict[str, Any] | None = None
-        if body.write_back and settings.opendental_writeback_enabled:
-            primary = out.get("primary") or {}
-            routing = primary.get("routing") or {}
-            proc_estimates = primary.get("procedure_estimates") or []
-            patient_resp_total = sum(float(p.get("patient_responsibility") or 0) for p in proc_estimates)
-            note = (
-                f"Vanguard MD: {routing.get('status', 'UNKNOWN')} - "
-                f"estimated patient responsibility ${patient_resp_total:.2f}"
-            )
-            verify = client.create_insverify(
-                ODInsVerifyCreate(
-                    DateLastVerified=date.today(),
-                    VerifyType="PatientEnrollment",
-                    FKey=primary_pat_plan_num,
-                    Note=note,
-                )
-            )
-            writeback = verify.model_dump(mode="json")
-
-        opendental_detail = {
-            "pat_num": body.pat_num,
-            "primary_pat_plan_num": primary_pat_plan_num,
-            "write_back_requested": body.write_back,
-            "write_back_enabled": settings.opendental_writeback_enabled,
-            "write_back_result": writeback,
-        }
-        return FromOpenDentalResponse(**out, opendental=opendental_detail)
+        return FromOpenDentalResponse(**out)
     except OpenDentalConfigError as e:
         raise sanitized_http_exception(
             503,
