@@ -1,0 +1,26 @@
+{
+  "name": "stedi_denied_missing_xray",
+  "request": {
+    "claim_id": "CLM99999",
+    "cdt_codes": ["D2750"],
+    "icd10_codes": ["K02.9"],
+    "patient_name": "Jane Doe",
+    "insurance_company_name": "Delta Dental",
+    "provider_name": "Dr. Smith",
+    "era_remittance": {
+      "transactionId": "txn-era-denied-001",
+      "claims": [
+        {
+          "patientControlNumber": "CLM99999",
+          "claimStatus": "4",
+          "denialReason": "missing_xray"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "status": "denied",
+    "reason": "missing_xray",
+    "next_action": "upload_xray_and_resubmit"
+  }
+}

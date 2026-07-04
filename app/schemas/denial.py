@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -18,6 +18,10 @@ class DenialAgentRequest(BaseModel):
     icd10_codes: list[str] = Field(default_factory=list)
     patient_name: str | None = None
     mock_era: MockEraResponse = Field(default_factory=MockEraResponse)
+    era_remittance: dict[str, Any] | None = Field(
+        default=None,
+        description="Stedi sandbox 835 JSON remittance (alternative to mock_era)",
+    )
     # Optional context for appeal letter / correspondence
     insurance_company_name: str | None = None
     provider_name: str | None = None
@@ -41,3 +45,4 @@ class DenialAgentResponse(BaseModel):
     reasoning_summary: str = ""
     required_evidence: list[str] = Field(default_factory=list)
     requires_human_review: bool = False
+    hitl_task_id: str | None = None

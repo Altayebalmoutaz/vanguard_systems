@@ -180,6 +180,14 @@ class ClaimDraftSubmitRequest(BaseModel):
     """Biller-reviewed claim payload ready for submission."""
 
     claim_payload: ClaimStructure
+    claim_record_id: str | None = Field(
+        default=None,
+        description="Neon rcm.claims row id to mark submitted after clearinghouse accept",
+    )
+    task_id: str | None = Field(
+        default=None,
+        description="Optional HITL task id linked to this submission",
+    )
 
 
 class FullRcmPipelineRequest(BaseModel):
@@ -220,5 +228,6 @@ class FullRcmPipelineResponse(BaseModel):
     coding: CodingAgentResponse
     prior_auth: PriorAuthAgentResponse
     claim_draft: ClaimDraftResponse
+    claim_record_id: str | None = None
     claim: ClaimSubmissionResponse | None = None
     denial: DenialAgentResponse | None = None

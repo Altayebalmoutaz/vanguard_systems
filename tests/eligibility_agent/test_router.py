@@ -29,7 +29,8 @@ def test_route_inactive() -> None:
     assert "member_inactive" in out["detail"]["reasons"]
 
 
-def test_route_incomplete() -> None:
+@patch("app.eligibility.router.fetch_payer_voice_config", return_value=None)
+def test_route_incomplete(_mock_payer: object) -> None:
     canonical = _base_canonical()
     canonical.update({"response_complete": False, "missing_fields": ["annual_max_remaining"]})
     out = route(canonical, supabase=object())  # type: ignore[arg-type]
@@ -37,6 +38,21 @@ def test_route_incomplete() -> None:
     assert out["action"] == "notify_front_office_missing_fields"
     assert out["notify_front_office"] is True
     assert "completeness_gate_failed" in out["detail"]["reasons"]
+
+
+@patch("app.eligibility.router.fetch_payer_voice_config")
+def test_route_incomplete_voice_escalation(mock_payer_cfg: object) -> None:
+    mock_payer_cfg.return_value = {
+        "eligibility_phone": "+18005551234",
+        "voice_escalation_enabled": True,
+    }
+    canonical = _base_canonical()
+    canonical.update({"response_complete": False, "missing_fields": ["annual_max_remaining"]})
+    out = route(canonical, supabase=object())  # type: ignore[arg-type]
+    assert out["status"] == "INCOMPLETE"
+    assert out["action"] == "queue_voice_verification"
+    assert out["next_agent"] == "payer_voice_verification"
+    assert out["detail"]["voice_escalation_eligible"] is True
 
 
 def test_route_stedi_x12_999_forces_incomplete_even_when_otherwise_cleared_shaped() -> None:
@@ -48,7 +64,8 @@ def test_route_stedi_x12_999_forces_incomplete_even_when_otherwise_cleared_shape
     assert out["detail"].get("stedi_x12_transaction_kind") == "999"
 
 
-def test_route_coverage_ambiguous() -> None:
+@patch("app.eligibility.router.fetch_payer_voice_config", return_value=None)
+def test_route_coverage_ambiguous(_mock_payer: object) -> None:
     canonical = _base_canonical()
     canonical.update(
         {
@@ -82,7 +99,8 @@ def test_route_coverage_ambiguous_low_confidence() -> None:
     assert "coverage_confidence_low" in out["detail"]["reasons"]
 
 
-def test_route_incomplete_surfaces_payer_aaa_errors() -> None:
+@patch("app.eligibility.router.fetch_payer_voice_config", return_value=None)
+def test_route_incomplete_surfaces_payer_aaa_errors(_mock_payer: object) -> None:
     canonical = _base_canonical()
     canonical.update(
         {
@@ -104,7 +122,8 @@ def test_route_incomplete_surfaces_payer_aaa_errors() -> None:
     assert "payer_aaa_errors_present" in out["detail"]["reasons"]
 
 
-def test_route_incomplete_surfaces_structured_stedi_actions_and_warnings() -> None:
+@patch("app.eligibility.router.fetch_payer_voice_config", return_value=None)
+def test_route_incomplete_surfaces_structured_stedi_actions_and_warnings(_mock_payer: object) -> None:
     canonical = _base_canonical()
     canonical.update(
         {

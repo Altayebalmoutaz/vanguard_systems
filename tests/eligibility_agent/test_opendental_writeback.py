@@ -57,7 +57,7 @@ def test_benefits_note_includes_financial_snapshot() -> None:
             {"cdt_code": "D1110", "patient_responsibility": 50, "insurance_pays": 70}
         ],
     )
-    assert "Vanguard MD - benefits snapshot" in note
+    assert "Verified by ezfi - benefits snapshot" in note
     assert "Deductible remaining" in note
     assert "$1356.00" in note
     assert "D1110" in note
@@ -101,15 +101,14 @@ def test_format_benefit_notes_is_deterministic_ascii() -> None:
         now=__import__("datetime").datetime(2026, 5, 29, 10, 49),
     )
     note = format_benefit_notes(snapshot)
-    assert note.startswith("[ELIGIBILITY SNAPSHOT | STEDI]")
+    assert note.startswith("[Verified by ezfi]")
     assert "Date: 2026-05-29 10:49" in note
     assert "Plan: PPO - Aetna" in note
     assert "Total: $100.00" in note
     assert "Remaining: $1356.00" in note
     assert "D1110: 58%" in note  # 70/120
     assert "D2740: 50%" in note  # 400/800
-    assert "Source: Stedi" in note
-    assert "Agent: eligibility-agent-v1" in note
+    assert "Verified by ezfi" in note
     # ASCII only (no encoding artifacts in OD/PowerShell).
     note.encode("ascii")
 
@@ -124,6 +123,46 @@ def test_format_benefit_notes_renders_na_for_missing_fields() -> None:
     assert "Plan: n/a" in note
     assert "Coverage:\n - n/a" in note
     assert "Frequency:\n - n/a" in note
+    assert "Waiting Periods:\n - n/a" in note
+    assert "Missing Tooth Clause:\n - n/a" in note
+
+
+def test_build_benefit_snapshot_surfaces_structured_limitations() -> None:
+    canonical = {
+        **_CANONICAL,
+        "dental_benefit_breakdown": {
+            "frequency_limitations": [
+                {
+                    "cdt_code": "D1110",
+                    "category": "DIAGNOSTIC",
+                    "description": "2 per 12 months",
+                    "quantity": 2,
+                    "period_months": 12,
+                }
+            ],
+            "waiting_periods": [
+                {
+                    "cdt_code": "D2740",
+                    "category": "MAJOR",
+                    "months": 6,
+                    "description": "6 month waiting period applies",
+                }
+            ],
+            "missing_tooth_clause": {
+                "present": True,
+                "description": "Missing tooth clause applies to prosthetics",
+            },
+        },
+    }
+    snapshot = build_benefit_snapshot(
+        routing={"status": "CLEARED"},
+        canonical=canonical,
+        procedure_estimates=_ESTIMATES,
+    )
+    note = format_benefit_notes(snapshot)
+    assert "D1110: 2 per 12 months" in note
+    assert "D2740: 6 month waiting period applies" in note
+    assert "Missing tooth clause applies to prosthetics" in note
 
 
 def test_commlog_summary_is_concise_ascii() -> None:
@@ -134,7 +173,7 @@ def test_commlog_summary_is_concise_ascii() -> None:
         carrier_name="Aetna",
     )
     summary = build_commlog_summary(snapshot)
-    assert summary.startswith("[Eligibility - Stedi]")
+    assert summary.startswith("[Verified by ezfi]")
     assert "CLEARED" in summary
     summary.encode("ascii")
 
@@ -219,6 +258,8 @@ _COVCATS = [
     ODCovCat(CovCatNum=2, Description="Diagnostic", EbenefitCat="Diagnostic"),
     ODCovCat(CovCatNum=4, Description="Restorative", EbenefitCat="Restorative"),
     ODCovCat(CovCatNum=8, Description="Crowns", EbenefitCat="Crowns"),
+    ODCovCat(CovCatNum=10, Description="Prosth", EbenefitCat="Prosthodontics"),
+    ODCovCat(CovCatNum=11, Description="MaxProsth", EbenefitCat="MaxillofacialProsth"),
     ODCovCat(CovCatNum=12, Description="Ortho", EbenefitCat="Orthodontics"),
 ]
 _UNIVERSAL_RECORD = {
@@ -250,6 +291,41 @@ def test_build_benefit_grid_targets_maps_coverage_and_totals() -> None:
     assert by_label["MAJOR"] == 50
     assert targets["annual_max"] == 1500
     assert targets["deductible"] == 100
+
+
+def test_build_benefit_grid_targets_includes_limitation_rows() -> None:
+    canonical = {
+        **_CANONICAL,
+        "dental_benefit_breakdown": {
+            "frequency_limitations": [
+                {
+                    "category": "DIAGNOSTIC",
+                    "quantity": 2,
+                    "quantity_qualifier": "Visits",
+                    "period_months": 12,
+                    "description": "2 per 12 months",
+                }
+            ],
+            "waiting_periods": [
+                {
+                    "category": "MAJOR",
+                    "months": 6,
+                    "description": "6 month waiting period applies",
+                }
+            ],
+            "missing_tooth_clause": {
+                "present": True,
+                "description": "Missing tooth clause applies",
+            },
+        },
+    }
+    targets = build_benefit_grid_targets(canonical=canonical, universal_record=_UNIVERSAL_RECORD)
+    assert len(targets["frequency_limitations"]) == 1
+    assert targets["frequency_limitations"][0]["quantity"] == 2
+    assert len(targets["waiting_periods"]) == 1
+    assert targets["waiting_periods"][0]["months"] == 6
+    assert len(targets["exclusions"]) == 1
+    assert targets["exclusions"][0]["label"] == "missing_tooth_clause"
 
 
 class _BenefitsStub:
@@ -287,6 +363,7 @@ def test_benefits_grid_upsert_creates_and_updates() -> None:
         plan_num=19,
         canonical=_CANONICAL,
         universal_record=_UNIVERSAL_RECORD,
+        respect_manual_edits=False,
     )
     actions = {(a["target"], a["action"]) for a in result["actions"]}
     assert ("DIAGNOSTIC/Diagnostic", "unchanged") in actions
@@ -296,6 +373,53 @@ def test_benefits_grid_upsert_creates_and_updates() -> None:
     assert ("annual_max", "created") in actions
     assert any(c.get("MonetaryAmt") == 1500 and c.get("CovCatNum") == 1 for c in stub.created)
     assert (192, {"Percent": 80}) in stub.updated
+
+
+def test_benefits_grid_upsert_frequency_waiting_and_exclusions() -> None:
+    canonical = {
+        **_CANONICAL,
+        "dental_benefit_breakdown": {
+            "frequency_limitations": [
+                {
+                    "category": "DIAGNOSTIC",
+                    "quantity": 2,
+                    "quantity_qualifier": "Visits",
+                    "period_months": 12,
+                    "description": "2 per 12 months",
+                }
+            ],
+            "waiting_periods": [
+                {
+                    "category": "MAJOR",
+                    "months": 6,
+                    "description": "6 month waiting period applies",
+                }
+            ],
+            "missing_tooth_clause": {
+                "present": True,
+                "description": "Missing tooth clause applies",
+            },
+        },
+    }
+    stub = _BenefitsStub(existing=[])
+    result = run_opendental_benefits_grid_writeback(
+        stub,  # type: ignore[arg-type]
+        plan_num=19,
+        canonical=canonical,
+        universal_record=_UNIVERSAL_RECORD,
+    )
+    actions = {(a.get("target"), a.get("type"), a.get("action")) for a in result["actions"]}
+    assert ("2 per 12 months", "Limitations", "created") in actions
+    assert ("6 month waiting period applies", "WaitingPeriod", "created") in actions
+    assert ("missing_tooth_clause/Prosthodontics", "Exclusions", "created") in actions
+    assert ("missing_tooth_clause/MaxillofacialProsth", "Exclusions", "created") in actions
+    assert any(
+        c.get("BenefitType") == "Limitations"
+        and c.get("CovCatNum") == 2
+        and c.get("Quantity") == 2
+        for c in stub.created
+    )
+    assert any(c.get("BenefitType") == "WaitingPeriod" and c.get("CovCatNum") == 8 for c in stub.created)
 
 
 def test_benefits_grid_isolates_row_failure() -> None:
@@ -312,6 +436,7 @@ def test_benefits_grid_isolates_row_failure() -> None:
         plan_num=19,
         canonical=_CANONICAL,
         universal_record=_UNIVERSAL_RECORD,
+        respect_manual_edits=False,
     )
     # The failing Restorative update is captured as an error but others still created.
     assert any("error" in a for a in result["actions"])

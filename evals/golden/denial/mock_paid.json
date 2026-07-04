@@ -1,0 +1,16 @@
+{
+  "name": "mock_paid_clean",
+  "request": {
+    "claim_id": "CLM10001",
+    "cdt_codes": ["D0120"],
+    "mock_era": {
+      "status": "paid",
+      "reason": ""
+    }
+  },
+  "expect": {
+    "status": "paid",
+    "reason": "",
+    "next_action": "none"
+  }
+}

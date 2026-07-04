@@ -5,9 +5,11 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from app.eligibility.db import payer_requires_prior_auth
+from app.eligibility.voice.db import fetch_payer_voice_config
+from app.eligibility.voice.gate import canonical_voice_escalation_eligible
 from supabase import Client
 
-ROUTING_POLICY_VERSION = "2.4"
+ROUTING_POLICY_VERSION = "2.5"
 
 COVERAGE_AMBIGUOUS_ROUTING_REASON = (
     "Coverage could not be confirmed with sufficient confidence from normalized 271 data "
@@ -68,6 +70,43 @@ def _normalized_coverage_confidence(canonical: dict[str, Any]) -> str | None:
         return None
     s = cc.strip().lower()
     return s if s in ("high", "medium", "low") else None
+
+
+def _voice_routing_overlay(
+    canonical: dict[str, Any],
+    supabase: Client,
+    detail: dict[str, Any],
+    reasons: list[str],
+) -> tuple[str | None, str, dict[str, Any]]:
+    """
+    When payer phone is configured, escalate INCOMPLETE/AMBIGUOUS to voice agent queue.
+    """
+    eligible, targets = canonical_voice_escalation_eligible(canonical)
+    if not eligible:
+        action = str(detail.get("action") or "notify_front_office_missing_fields")
+        return None, action, detail
+
+    payer_id = str(canonical.get("payer_id") or "").strip()
+    payer_cfg = fetch_payer_voice_config(supabase, payer_id)
+    if not payer_cfg or not payer_cfg.get("eligibility_phone"):
+        detail = {**detail, "voice_escalation_eligible": False, "voice_skip_reason": "payer_phone_missing"}
+        return None, str(detail.get("action") or "notify_front_office_missing_fields"), detail
+    if not payer_cfg.get("voice_escalation_enabled"):
+        detail = {
+            **detail,
+            "voice_escalation_eligible": False,
+            "voice_skip_reason": "payer_voice_escalation_disabled",
+        }
+        return None, str(detail.get("action") or "notify_front_office_missing_fields"), detail
+
+    detail = {
+        **detail,
+        "voice_escalation_eligible": True,
+        "missing_fields_target": targets,
+        "payer_eligibility_phone": payer_cfg.get("eligibility_phone"),
+    }
+    reasons.append("voice_escalation_eligible")
+    return "payer_voice_verification", "queue_voice_verification", detail
 
 
 def _routing_state(
@@ -165,21 +204,26 @@ def route(canonical: dict[str, Any], supabase: Client) -> dict[str, Any]:
                 incomplete_msg = "Verify member ID, legal name, date of birth, and payer before retrying eligibility."
             elif canonical.get("payer_aaa_errors"):
                 incomplete_msg = "Payer returned AAA error(s). Verify member ID, patient name, date of birth, and payer id, then retry."
+            detail = _attach_payer_aaa_errors(
+                {
+                    "missing_fields": list(canonical.get("missing_fields") or []),
+                    "integrity_warnings": list(canonical.get("integrity_warnings") or []),
+                    "message": incomplete_msg,
+                    "routing_policy_version": ROUTING_POLICY_VERSION,
+                    "reasons": reasons,
+                    "action": "notify_front_office_missing_fields",
+                },
+                canonical,
+            )
+            next_agent, action, detail = _voice_routing_overlay(canonical, supabase, detail, reasons)
+            if next_agent is None:
+                action = detail.pop("action", "notify_front_office_missing_fields")
             return {
                 "status": "INCOMPLETE",
-                "action": "notify_front_office_missing_fields",
-                "next_agent": None,
+                "action": action,
+                "next_agent": next_agent,
                 "notify_front_office": True,
-                "detail": _attach_payer_aaa_errors(
-                    {
-                        "missing_fields": list(canonical.get("missing_fields") or []),
-                        "integrity_warnings": list(canonical.get("integrity_warnings") or []),
-                        "message": incomplete_msg,
-                        "routing_policy_version": ROUTING_POLICY_VERSION,
-                        "reasons": reasons,
-                    },
-                    canonical,
-                ),
+                "detail": detail,
             }
         case "NOT_COVERED":
             reasons.append("coverage_or_procedure_not_covered")
@@ -216,21 +260,26 @@ def route(canonical: dict[str, Any], supabase: Client) -> dict[str, Any]:
             except (TypeError, ValueError):
                 copay_part = "Verify coinsurance and copay with payer if covered."
             suggested = f"Call payer to verify procedure coverage. {copay_part}"
+            detail = _attach_payer_aaa_errors(
+                {
+                    "message": suggested,
+                    "routing_policy_version": ROUTING_POLICY_VERSION,
+                    "reasons": reasons,
+                    "action": "notify_front_office_coverage_ambiguous",
+                },
+                canonical,
+            )
+            next_agent, action, detail = _voice_routing_overlay(canonical, supabase, detail, reasons)
+            if next_agent is None:
+                action = detail.pop("action", "notify_front_office_coverage_ambiguous")
             return {
                 "status": "COVERAGE_AMBIGUOUS",
                 "routing_reason": COVERAGE_AMBIGUOUS_ROUTING_REASON,
                 "suggested_action": suggested,
-                "action": "notify_front_office_coverage_ambiguous",
-                "next_agent": None,
+                "action": action,
+                "next_agent": next_agent,
                 "notify_front_office": True,
-                "detail": _attach_payer_aaa_errors(
-                    {
-                        "message": suggested,
-                        "routing_policy_version": ROUTING_POLICY_VERSION,
-                        "reasons": reasons,
-                    },
-                    canonical,
-                ),
+                "detail": detail,
             }
         case "CLEARED":
             needs_auth = (

@@ -16,6 +16,7 @@ from __future__ import annotations
 from typing import Any, Literal, cast
 
 from app.config import get_settings
+from app.integrations.era import parse_remittance_dict
 from app.schemas.denial import DenialAgentRequest, DenialAgentResponse
 from app.tools.denial_tools import (
     auto_resubmit_tool,
@@ -23,7 +24,6 @@ from app.tools.denial_tools import (
     detect_denial_reason_tool,
     generate_appeal_letter_tool,
     map_denial_reason_tool,
-    parse_era_tool,
 )
 
 
@@ -35,6 +35,12 @@ def _claim_snapshot(request: DenialAgentRequest) -> dict[str, Any]:
     if request.patient_name:
         snap["patient_name"] = request.patient_name
     return snap
+
+
+def _parse_era_from_request(request: DenialAgentRequest) -> dict[str, Any]:
+    if request.era_remittance:
+        return parse_remittance_dict(request.era_remittance)
+    return parse_remittance_dict({"mock_era": request.mock_era.model_dump()})
 
 
 def run_denial_agent(request: DenialAgentRequest) -> DenialAgentResponse:
@@ -50,8 +56,7 @@ def run_denial_agent(request: DenialAgentRequest) -> DenialAgentResponse:
             resubmission_steps=steps,
         )
 
-    era_dict = request.mock_era.model_dump()
-    parsed = parse_era_tool(era_dict)
+    parsed = _parse_era_from_request(request)
     claim_snapshot = _claim_snapshot(request)
 
     llm_reason_token = ""

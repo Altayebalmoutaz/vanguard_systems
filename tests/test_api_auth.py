@@ -15,6 +15,7 @@ from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
 from app.api.auth import Principal, _verify_supabase_jwt, require_principal
+from app.api.rbac import PracticeRole
 from app.config import Settings, get_settings
 
 
@@ -23,7 +24,14 @@ def _build_app(settings: Settings) -> TestClient:
 
     @app.get("/whoami")
     def whoami(principal: Principal = Depends(require_principal)) -> dict:
-        return {"kind": principal.kind, "subject": principal.subject}
+        return {
+            "kind": principal.kind,
+            "subject": principal.subject,
+            "practice_roles": [
+                {"practice_id": role.practice_id, "role": role.role}
+                for role in principal.practice_roles
+            ],
+        }
 
     app.dependency_overrides[get_settings] = lambda: settings
     return TestClient(app)
@@ -34,7 +42,10 @@ class AuthDisabledMode(unittest.TestCase):
         client = _build_app(Settings(require_auth=False))
         resp = client.get("/whoami")
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json(), {"kind": "anonymous", "subject": "anonymous"})
+        self.assertEqual(
+            resp.json(),
+            {"kind": "anonymous", "subject": "anonymous", "practice_roles": []},
+        )
 
 
 class ApiKeyAuth(unittest.TestCase):
@@ -96,6 +107,42 @@ class JwtAuth(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()["subject"], "uid-9")
 
+    def test_jwt_metadata_roles_used_when_rbac_not_required(self) -> None:
+        token = jwt.encode(
+            {
+                "sub": "user-42",
+                "app_metadata": {
+                    "practice_roles": {"practice-a": "admin", "practice-b": "read_only"}
+                },
+            },
+            self.secret,
+            algorithm="HS256",
+        )
+        client = _build_app(Settings(require_auth=True, supabase_jwt_secret=self.secret))
+        resp = client.get("/whoami", headers={"Authorization": f"Bearer {token}"})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(
+            resp.json()["practice_roles"],
+            [
+                {"practice_id": "practice-a", "role": "admin"},
+                {"practice_id": "practice-b", "role": "read_only"},
+            ],
+        )
+
+    def test_required_rbac_without_neon_returns_503(self) -> None:
+        token = jwt.encode({"sub": "user-42"}, self.secret, algorithm="HS256")
+        client = _build_app(
+            Settings(
+                require_auth=True,
+                require_rbac=True,
+                supabase_jwt_secret=self.secret,
+                neon_database_url="",
+            )
+        )
+        resp = client.get("/whoami", headers={"Authorization": f"Bearer {token}"})
+        self.assertEqual(resp.status_code, 503)
+        self.assertEqual(resp.json()["detail"], "rbac_not_configured")
+
     def test_invalid_jwt_signature_rejected(self) -> None:
         token = jwt.encode(
             {"sub": "u"},
@@ -154,6 +201,17 @@ class PrincipalDataclass(unittest.TestCase):
         signed = Principal(kind="jwt", subject="u", claims={"sub": "u"})
         self.assertTrue(anon.is_anonymous)
         self.assertFalse(signed.is_anonymous)
+
+    def test_practice_ids_and_role_helper(self) -> None:
+        principal = Principal(
+            kind="jwt",
+            subject="u",
+            claims={"sub": "u"},
+            practice_roles=(PracticeRole(practice_id="p1", role="billing_lead"),),
+        )
+        self.assertEqual(principal.practice_ids, ("p1",))
+        self.assertTrue(principal.has_any_role("admin", "billing_lead"))
+        self.assertFalse(principal.has_any_role("front_office"))
 
 
 if __name__ == "__main__":

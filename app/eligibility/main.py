@@ -17,6 +17,8 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from app.api.errors import sanitized_http_exception
+from app.config import get_settings as get_app_settings
+from app.db.connection import get_neon_dsn
 from app.eligibility.api_client import build_payload, call_stedi_batch
 from app.eligibility.audit import write_audit_event
 from app.eligibility.cob import calculate_cob
@@ -40,6 +42,10 @@ from app.eligibility.models import (
 )
 from app.eligibility.services import run_eligibility_check_endpoint
 from app.eligibility.triggers import layer0_supabase_validation
+from app.eligibility.voice.approve import approve_voice_verification_session, reject_voice_verification_session
+from app.eligibility.voice.db import fetch_session_by_id
+from app.eligibility.voice.queue import maybe_auto_queue_voice_verification, queue_voice_verification
+from app.eligibility.voice.twilio_routes import router as voice_twilio_router
 from app.integrations.opendental import (
     OpenDentalAPIError,
     OpenDentalClient,
@@ -47,8 +53,13 @@ from app.integrations.opendental import (
     OpenDentalMappingError,
     od_to_eligibility_request,
 )
+from app.pilot.shadow import record_eligibility_shadow
 from app.integrations.opendental.poller import start_appointment_poller
 from app.integrations.opendental.writeback import run_opendental_writeback
+from app.pipeline.writeback_queue import (
+    build_opendental_writeback_payload,
+    enqueue_opendental_writeback,
+)
 from app.security.phi import scrub_for_log
 
 logging.basicConfig(level=logging.INFO)
@@ -119,6 +130,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="Vanguard MD Eligibility Agent", version="0.1.0", lifespan=_lifespan)
+app.include_router(voice_twilio_router)
 
 
 class EligibilityAgentApiKeyMiddleware(BaseHTTPMiddleware):
@@ -131,6 +143,8 @@ class EligibilityAgentApiKeyMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         path = request.url.path or ""
         if request.method == "GET" and path.rstrip("/").endswith("/health"):
+            return await call_next(request)
+        if "/eligibility/voice/" in path:
             return await call_next(request)
         auth = request.headers.get("authorization") or ""
         if not auth.startswith("Bearer "):
@@ -158,6 +172,22 @@ class EligibilityCheckHttpResponse(BaseModel):
     primary: dict[str, Any] | None = None
     secondary: dict[str, Any] | None = None
     record: dict[str, Any] | None = None
+    voice_verification: dict[str, Any] | None = None
+
+
+class VoiceQueueRequest(BaseModel):
+    check_id: UUID
+    request_id: UUID | None = None
+    force: bool = False
+
+
+class VoiceApproveRequest(BaseModel):
+    approved_by: str = Field(default="staff")
+    action: str = Field(default="approve")
+
+
+class VoiceQueueFromRequestBody(BaseModel):
+    request_id: UUID
 
 
 class FromOpenDentalRequest(BaseModel):
@@ -177,7 +207,11 @@ class FromOpenDentalResponse(EligibilityCheckHttpResponse):
 def post_eligibility_check(body: EligibilityRequest) -> EligibilityCheckHttpResponse:
     """Single real-time eligibility (Layers 0–6); secondary payer = second independent Stedi call."""
     try:
-        out = run_eligibility_check_endpoint(body, settings=get_settings())
+        out = run_eligibility_check_endpoint(
+            body,
+            settings=get_settings(),
+            eligibility_request_id=body.eligibility_request_id,
+        )
         return EligibilityCheckHttpResponse(**out)
     except Layer1ValidationError as e:
         raise HTTPException(
@@ -242,9 +276,8 @@ def run_from_opendental(
 
     writeback_detail: dict[str, Any] | None = None
     primary = out.get("primary") or {}
-    if write_back and settings.opendental_writeback_enabled and primary:
-        writeback_detail = run_opendental_writeback(
-            client,
+    if write_back and settings.opendental_writeback_allowed and primary:
+        wb_payload = build_opendental_writeback_payload(
             pat_num=pat_num,
             primary_pat_plan_num=mapped.primary_pat_plan_num,
             primary_plan_num=mapped.primary_plan_num,
@@ -256,7 +289,29 @@ def run_from_opendental(
             write_commlog=settings.opendental_write_commlog_enabled,
             write_insadjust=settings.opendental_write_insadjust_enabled,
             write_benefits_grid=settings.opendental_write_benefits_grid_enabled,
+            respect_manual_edits=settings.opendental_write_benefits_grid_respect_manual_edits,
+            check_id=primary.get("check_id"),
+            patient_id=mapped.request.patient_id,
         )
+        effective_practice = practice_id or mapped.request.practice_id
+        pipeline_run_id = None
+        if effective_practice and get_neon_dsn(get_app_settings()):
+            check_id = primary.get("check_id")
+            idempotency_key = (
+                f"od_writeback:{effective_practice}:{pat_num}:{check_id}"
+                if check_id
+                else f"od_writeback:{effective_practice}:{pat_num}"
+            )
+            pipeline_run_id = enqueue_opendental_writeback(
+                get_app_settings(),
+                practice_id=str(effective_practice),
+                payload=wb_payload,
+                idempotency_key=idempotency_key,
+            )
+        if pipeline_run_id:
+            writeback_detail = {"queued": True, "pipeline_run_id": str(pipeline_run_id)}
+        else:
+            writeback_detail = run_opendental_writeback(client, **wb_payload)
 
     opendental_detail = {
         "pat_num": pat_num,
@@ -264,10 +319,19 @@ def run_from_opendental(
         "primary_plan_num": mapped.primary_plan_num,
         "primary_ins_sub_num": mapped.primary_ins_sub_num,
         "write_back_requested": write_back,
-        "write_back_enabled": settings.opendental_writeback_enabled,
+        "write_back_enabled": settings.opendental_writeback_allowed,
         "write_back_result": (writeback_detail or {}).get("write_back_result"),
         "write_back_notes": writeback_detail,
     }
+    effective_practice = practice_id or mapped.request.practice_id or settings.pilot_default_practice_id
+    if effective_practice and settings.pilot_shadow_mode and primary:
+        app_settings = get_app_settings()
+        record_eligibility_shadow(
+            app_settings,
+            practice_id=str(effective_practice),
+            pat_num=pat_num,
+            primary_result=primary,
+        )
     return {**out, "opendental": opendental_detail}
 
 
@@ -532,3 +596,99 @@ def get_eligibility_audit(patient_id: UUID) -> dict[str, Any]:
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "service": "eligibility_agent"}
+
+
+@app.post("/eligibility/voice/queue")
+def post_voice_queue(body: VoiceQueueRequest) -> dict[str, Any]:
+    """Manually queue or re-queue voice verification for an eligibility check."""
+    s = get_settings()
+    supabase = get_supabase(s)
+    from app.eligibility.db import get_eligibility_check_by_id
+
+    check = get_eligibility_check_by_id(supabase, body.check_id)
+    if not check:
+        raise HTTPException(status_code=404, detail="check_not_found")
+
+    canonical = {
+        "payer_id": check.get("payer_id"),
+        "is_active": check.get("is_active"),
+        "is_covered": check.get("is_covered"),
+        "missing_fields": list(check.get("missing_fields") or []),
+        "stedi_aaa_actions": [],
+    }
+    routing = {
+        "status": check.get("routing_status"),
+        "detail": {"missing_fields_target": list(check.get("missing_fields") or [])},
+    }
+    result = queue_voice_verification(
+        eligibility_check_id=body.check_id,
+        patient_id=check["patient_id"],
+        payer_id=str(check.get("payer_id") or ""),
+        canonical=canonical,
+        routing=routing,
+        cdt_codes=[],
+        request_id=body.request_id,
+        settings=s,
+        force=body.force,
+    )
+    return result
+
+
+@app.post("/eligibility/voice/queue-from-request")
+def post_voice_queue_from_request(body: VoiceQueueFromRequestBody) -> dict[str, Any]:
+    """Queue voice verification using a completed eligibility_requests row."""
+    s = get_settings()
+    supabase = get_supabase(s)
+    from app.eligibility.voice.db import fetch_eligibility_request
+
+    req = fetch_eligibility_request(supabase, body.request_id)
+    if not req:
+        raise HTTPException(status_code=404, detail="request_not_found")
+    check_id = req.get("primary_check_id")
+    if not check_id:
+        raise HTTPException(status_code=422, detail="request_has_no_primary_check")
+
+    er = EligibilityRequest(
+        patient_id=req["patient_id"],
+        first_name=req["first_name"],
+        last_name=req["last_name"],
+        dob=req["dob"],
+        subscriber_id=req["subscriber_id"],
+        primary_payer_id=req["primary_payer_id"],
+        secondary_payer_id=req.get("secondary_payer_id"),
+        plan_id=req.get("plan_id"),
+        cdt_codes=list(req.get("cdt_codes") or []),
+        trigger_event=TriggerEvent(req.get("trigger_event") or "PRE_APPOINTMENT"),
+    )
+    out = req.get("output_json") or {}
+    primary = out.get("primary") if isinstance(out, dict) else None
+    if not primary:
+        raise HTTPException(status_code=422, detail="request_missing_primary_output")
+
+    return maybe_auto_queue_voice_verification(
+        request=er,
+        primary_result=primary,
+        request_id=body.request_id,
+        settings=s,
+    )
+
+
+@app.post("/eligibility/voice/sessions/{session_id}/review")
+def post_voice_session_review(session_id: UUID, body: VoiceApproveRequest) -> dict[str, Any]:
+    s = get_settings()
+    supabase = get_supabase(s)
+    session = fetch_session_by_id(supabase, session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="session_not_found")
+
+    if body.action == "reject":
+        return reject_voice_verification_session(
+            session_id,
+            rejected_by=body.approved_by,
+            settings=s,
+        )
+    return approve_voice_verification_session(
+        session_id,
+        approved_by=body.approved_by,
+        settings=s,
+    )

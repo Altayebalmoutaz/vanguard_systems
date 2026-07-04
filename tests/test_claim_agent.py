@@ -17,6 +17,16 @@ FIXTURE = Path(__file__).resolve().parent / "fixtures" / "full_rcm_pipeline_requ
 
 
 class TestClaimAgent(unittest.TestCase):
+    def setUp(self) -> None:
+        self._settings_patch = patch(
+            "app.tools.claim_tools.get_settings",
+            return_value=Settings(allow_claim_mock_submission=True),
+        )
+        self._settings_patch.start()
+
+    def tearDown(self) -> None:
+        self._settings_patch.stop()
+
     @staticmethod
     def _billing_payload() -> dict:
         return {

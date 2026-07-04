@@ -2,8 +2,9 @@
 
 Replaces the manual ``scripts/watch_od_appointments.py`` loop: when enabled, this runs
 as a FastAPI background task, polls OpenDental for appointments across a configurable
-date window, and fires the shared ``run_from_opendental`` flow (with write-back) for
-each new patient.
+date window, and fires the shared ``run_from_opendental`` flow for each new patient.
+When ``PILOT_SHADOW_MODE=1``, write-back is disabled and eligibility results are logged
+to ``platform.pilot_shadow_events`` for ROI tracking.
 
 Idempotency: a patient is processed at most once per day, enforced by an in-memory set
 (fast path) plus a Supabase timestamp check (survives process restarts). All OD/Stedi
@@ -113,18 +114,22 @@ async def _poll_once(
                 seen.add(pat_num)
                 continue
             seen.add(pat_num)
+            write_back = settings.opendental_writeback_allowed
             try:
                 out = await asyncio.to_thread(
                     runner,
                     pat_num=pat_num,
                     trigger_event=TriggerEvent.PRE_APPOINTMENT,
                     cdt_codes=cdt_codes,
-                    write_back=True,
+                    write_back=write_back,
                     settings=settings,
                 )
                 routing = ((out.get("primary") or {}).get("routing")) or {}
                 logger.warning(
-                    "poller processed PatNum=%s status=%s", pat_num, routing.get("status", "-")
+                    "poller processed PatNum=%s status=%s shadow=%s",
+                    pat_num,
+                    routing.get("status", "-"),
+                    shadow,
                 )
             except Exception as exc:
                 logger.warning("poller PatNum=%s failed: %s: %s", pat_num, type(exc).__name__, exc)
@@ -136,7 +141,13 @@ async def _poll_loop(runner: Callable[..., dict[str, Any]], settings: Eligibilit
         c.strip() for c in (settings.opendental_auto_poll_cdt_codes or "").split(",") if c.strip()
     ]
     interval = max(1.0, float(settings.opendental_auto_poll_interval_seconds))
-    logger.info("OpenDental poller loop started (interval=%ss, cdt=%s)", interval, cdt_codes)
+    shadow = settings.pilot_shadow_mode
+    logger.info(
+        "OpenDental poller loop started (interval=%ss, cdt=%s, shadow_mode=%s)",
+        interval,
+        cdt_codes,
+        shadow,
+    )
     while True:
         try:
             await _poll_once(runner, settings, seen=seen, cdt_codes=cdt_codes)

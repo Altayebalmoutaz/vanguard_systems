@@ -115,11 +115,12 @@ def run_prior_auth_agent(
     if supabase is not None:
         try:
             from app.integrations.agent_runs import AGENT_PRIOR_AUTH, insert_agent_run
+            from app.workflow.rcm_tasks import create_hitl_task_from_prior_auth
 
             rid = resolve_canonical_payer_id(supabase, insurance)
             gate_blocked = bool(requires_auth or required_documents)
-            insert_agent_run(
-                supabase,
+            agent_run_id = insert_agent_run(
+                settings,
                 agent=AGENT_PRIOR_AUTH,
                 input_json=request.model_dump(mode="json"),
                 output_json=response.model_dump(mode="json"),
@@ -132,6 +133,16 @@ def run_prior_auth_agent(
                 patient_id=request.patient_id,
                 practice_id=request.practice_id,
             )
+            if agent_run_id and request.practice_id:
+                hitl_task_id = create_hitl_task_from_prior_auth(
+                    settings,
+                    practice_id=request.practice_id,
+                    agent_run_id=str(agent_run_id),
+                    request=request.model_dump(mode="json"),
+                    response=response.model_dump(mode="json"),
+                )
+                if hitl_task_id:
+                    response = response.model_copy(update={"hitl_task_id": hitl_task_id})
         except Exception as e:
             logger.warning("prior_auth: agent_runs persist skipped: %s", e)
 

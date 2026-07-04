@@ -171,6 +171,11 @@ export type EligibilityDashboardRow = {
   raw_response: Record<string, unknown> | null;
   status_label: DashboardStatusLabel;
   status_detail: string | null;
+  voice_session_id: string | null;
+  voice_session_status: string | null;
+  voice_merged_check_id: string | null;
+  voice_extracted_fields: Record<string, unknown> | null;
+  voice_call_reference: string | null;
 };
 
 export type EligibilityRequestEvent = {
@@ -185,6 +190,8 @@ export type EligibilityAgentSettings = {
   id: boolean;
   auto_check_enabled: boolean;
   auto_retry_enabled: boolean;
+  voice_verification_enabled?: boolean;
+  voice_verification_auto_queue?: boolean;
   last_sync_at: string | null;
   next_retry_at: string | null;
   updated_at: string;

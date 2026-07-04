@@ -1,10 +1,10 @@
 """
-Claim submission tools: build structured claim + Stedi (or mock) clearinghouse submit.
+Claim submission tools: build structured claim + Stedi clearinghouse submit.
 
-No LLM — pure logic. ``submit_claim_tool`` automatically delegates to the real
-Stedi 837 adapter when ``Settings.stedi_claims_api_key`` is configured;
-otherwise it falls back to the deterministic ``stedi_mock`` channel so local
-development and the existing test suite stay offline.
+No LLM — pure logic. ``submit_claim_tool`` delegates to the real Stedi 837 adapter
+when ``Settings.stedi_claims_api_key`` is configured. Mock submission
+(``stedi_mock``) is opt-in via ``Settings.allow_claim_mock_submission`` for local
+development and offline tests only — production must not fall back on adapter errors.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ import secrets
 from typing import Any
 
 from app.config import Settings, get_settings
-from app.integrations.stedi_claims import StediClaimsError, submit_dental_claim
+from app.integrations.stedi_claims import submit_dental_claim
 from app.schemas.claim import (
     ClaimAgentRequest,
     ClaimCodesBlock,
@@ -22,9 +22,11 @@ from app.schemas.claim import (
     ClaimProviderBlock,
     ClaimStructure,
 )
-from app.security.phi import scrub_for_log
-
 logger = logging.getLogger(__name__)
+
+
+class ClaimSubmissionError(RuntimeError):
+    """Raised when a claim cannot be submitted to a configured clearinghouse."""
 
 
 def build_claim_tool(data: ClaimAgentRequest) -> dict[str, Any]:
@@ -93,28 +95,22 @@ def submit_claim_tool(
 
     * If ``Settings.stedi_claims_api_key`` is set → POST to Stedi's Healthcare
       Claims API via :func:`app.integrations.stedi_claims.submit_dental_claim`.
-      On a 4xx/5xx or transport error we log the *scrubbed* exception detail
-      and fall back to the mock channel so the agent loop still produces a
-      deterministic ``ClaimSubmissionResponse``. The real failure surfaces in
-      the application log (with PHI scrubbed) for operator triage.
-    * Otherwise (no API key, e.g. tests / local dev) → return the legacy
-      ``stedi_mock`` shape with a random control number.
+      Adapter failures propagate (no mock fallback).
+    * If no API key and ``Settings.allow_claim_mock_submission`` is true → return
+      the deterministic ``stedi_mock`` shape (tests / local dev only).
+    * Otherwise → raise :class:`ClaimSubmissionError`.
 
     The return shape is intentionally narrow (``claim_id``, ``status``,
     ``submission_channel``) so downstream code can stay vendor-agnostic.
     """
     s = settings or get_settings()
     if s.stedi_claims_api_key:
-        try:
-            return submit_dental_claim(claim, s)
-        except StediClaimsError as exc:
-            logger.warning(
-                "Stedi claim submission failed; falling back to mock. status=%s detail=%s",
-                exc.status_code,
-                scrub_for_log(exc.message),
-            )
-            # fall through to mock so the pipeline still produces a draft id;
-            # the operator dashboard / logs will show the failure clearly.
+        return submit_dental_claim(claim, s)
+
+    if not s.allow_claim_mock_submission:
+        raise ClaimSubmissionError(
+            "STEDI_CLAIMS_API_KEY is not configured and mock claim submission is disabled"
+        )
 
     suffix = secrets.randbelow(90_000) + 10_000
     return {

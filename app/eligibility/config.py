@@ -46,6 +46,7 @@ class EligibilitySettings(BaseSettings):
         default="",
         validation_alias=AliasChoices("SUPABASE_KEY", "SUPABASE_SERVICE_ROLE_KEY"),
     )
+    neon_database_url: str = Field(default="", validation_alias="NEON_DATABASE_URL")
 
     # Mock defaults for local/Stedi sandbox; set PROVIDER_* in .env for production.
     provider_npi: str = Field(default="1999999984", validation_alias="PROVIDER_NPI")
@@ -131,6 +132,10 @@ class EligibilitySettings(BaseSettings):
         default=False,
         validation_alias="OPENDENTAL_WRITE_BENEFITS_GRID_ENABLED",
     )
+    opendental_write_benefits_grid_respect_manual_edits: bool = Field(
+        default=True,
+        validation_alias="OPENDENTAL_WRITE_BENEFITS_GRID_RESPECT_MANUAL_EDITS",
+    )
     # When set, OpenDental client reads fixtures from disk instead of issuing HTTP calls.
     opendental_replay_dir: str = Field(default="", validation_alias="OPENDENTAL_REPLAY_DIR")
 
@@ -152,6 +157,91 @@ class EligibilitySettings(BaseSettings):
         default="D1110",
         validation_alias="OPENDENTAL_AUTO_POLL_CDT_CODES",
     )
+
+    # Eligibility retry worker (in-process FastAPI background task). Re-queues
+    # 'retrying' requests whose next_retry_at is due, honoring the live
+    # eligibility_agent_settings.auto_retry_enabled toggle. Off by default.
+    eligibility_retry_worker_enabled: bool = Field(
+        default=False,
+        validation_alias="ELIGIBILITY_RETRY_WORKER_ENABLED",
+    )
+    eligibility_retry_worker_interval_seconds: float = Field(
+        default=60.0,
+        validation_alias="ELIGIBILITY_RETRY_WORKER_INTERVAL_SECONDS",
+    )
+    eligibility_retry_batch_size: int = Field(
+        default=20,
+        validation_alias="ELIGIBILITY_RETRY_BATCH_SIZE",
+    )
+
+    # Voice payer verification (Twilio fallback for incomplete 271)
+    voice_verification_enabled: bool = Field(
+        default=False,
+        validation_alias="VOICE_VERIFICATION_ENABLED",
+    )
+    voice_verification_worker_enabled: bool = Field(
+        default=False,
+        validation_alias="VOICE_VERIFICATION_WORKER_ENABLED",
+    )
+    voice_verification_worker_interval_seconds: float = Field(
+        default=30.0,
+        validation_alias="VOICE_VERIFICATION_WORKER_INTERVAL_SECONDS",
+    )
+    voice_verification_batch_size: int = Field(
+        default=5,
+        validation_alias="VOICE_VERIFICATION_BATCH_SIZE",
+    )
+    twilio_account_sid: str = Field(default="", validation_alias="TWILIO_ACCOUNT_SID")
+    twilio_auth_token: str = Field(default="", validation_alias="TWILIO_AUTH_TOKEN")
+    twilio_from_number: str = Field(default="", validation_alias="TWILIO_FROM_NUMBER")
+    twilio_webhook_base_url: str = Field(default="", validation_alias="TWILIO_WEBHOOK_BASE_URL")
+    voice_openai_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("VOICE_OPENAI_API_KEY", "OPENAI_API_KEY"),
+    )
+    voice_openai_model: str = Field(
+        default="gpt-4o-mini",
+        validation_alias="VOICE_OPENAI_MODEL",
+    )
+    voice_demo_auto_complete: bool = Field(
+        default=False,
+        validation_alias="VOICE_DEMO_AUTO_COMPLETE",
+    )
+    voice_demo_transcript: str = Field(
+        default="",
+        validation_alias="VOICE_DEMO_TRANSCRIPT",
+    )
+    voice_call_provider: str = Field(
+        default="twilio",
+        validation_alias="VOICE_CALL_PROVIDER",
+    )
+    bland_api_key: str = Field(default="", validation_alias="BLAND_API_KEY")
+    bland_base_url: str = Field(
+        default="https://api.bland.ai",
+        validation_alias="BLAND_BASE_URL",
+    )
+    bland_voice: str = Field(default="", validation_alias="BLAND_VOICE")
+    bland_model: str = Field(default="", validation_alias="BLAND_MODEL")
+    bland_record: bool = Field(default=False, validation_alias="BLAND_RECORD")
+    # When set, our backend triggers this Bland conversation Pathway instead of the
+    # inline task prompt; patient/payer data is passed as request_data variables.
+    bland_pathway_id: str = Field(default="", validation_alias="BLAND_PATHWAY_ID")
+    bland_pathway_version: str = Field(default="", validation_alias="BLAND_PATHWAY_VERSION")
+    voice_auto_approve_when_complete: bool = Field(
+        default=True,
+        validation_alias="VOICE_AUTO_APPROVE_WHEN_COMPLETE",
+    )
+
+    # Wave 9: shadow pilot — run eligibility, block all OD write-back.
+    pilot_shadow_mode: bool = Field(default=False, validation_alias="PILOT_SHADOW_MODE")
+    pilot_default_practice_id: str = Field(
+        default="",
+        validation_alias="PILOT_DEFAULT_PRACTICE_ID",
+    )
+
+    @property
+    def opendental_writeback_allowed(self) -> bool:
+        return self.opendental_writeback_enabled and not self.pilot_shadow_mode
 
 
 @lru_cache

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { DM_Sans, Source_Code_Pro } from "next/font/google";
+import { DashboardChrome } from "@/components/DashboardChrome";
 import "./globals.css";
 
 const dmSans = DM_Sans({
@@ -15,8 +16,9 @@ const sourceCodePro = Source_Code_Pro({
 });
 
 export const metadata: Metadata = {
-  title: "VanguardDental | Eligibility Agent",
-  description: "Real-time eligibility verification dashboard for dental practices.",
+  title: "Vanguard MD | Revenue Cycle Platform",
+  description:
+    "AI-powered revenue cycle management: eligibility, coding, prior authorization, claims, and denials in one platform.",
 };
 
 export default function RootLayout({
@@ -26,7 +28,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${dmSans.variable} ${sourceCodePro.variable}`}>{children}</body>
+      <body className={`${dmSans.variable} ${sourceCodePro.variable}`}>
+        <div className="min-h-screen">
+          <DashboardChrome>{children}</DashboardChrome>
+        </div>
+      </body>
     </html>
   );
 }

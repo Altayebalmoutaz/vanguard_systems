@@ -26,6 +26,7 @@ class PriorAuthAgentResponse(BaseModel):
     risk_level: Literal["low", "medium", "high"] = "low"
     risk_reason: str = ""
     status: Literal["pending_review"] = "pending_review"
+    hitl_task_id: str | None = None
 
 
 class RcmPipelineResponse(BaseModel):

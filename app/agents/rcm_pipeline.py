@@ -8,6 +8,8 @@ from app.agents.claim_agent import run_claim_draft_agent
 from app.agents.coding_agent import run_coding_agent
 from app.agents.prior_auth_agent import run_prior_auth_agent
 from app.config import Settings
+from app.integrations.claim_snapshots import fetch_claim_intake_snapshot
+from app.rcm.claims_store import persist_claim_draft
 from app.schemas.claim import (
     ClaimAgentRequest,
     ClaimBillingInput,
@@ -72,7 +74,11 @@ def run_full_rcm_pipeline(
     )
     prior_auth = run_prior_auth_agent(settings, prior_request)
 
-    patient, provider, billing = _resolve_claim_context(request, supabase)
+    patient, provider, billing = _resolve_claim_context(
+        settings,
+        request,
+        practice_id=request.practice_id,
+    )
 
     claim_request = ClaimAgentRequest(
         coding=coding,
@@ -83,22 +89,39 @@ def run_full_rcm_pipeline(
     )
     claim_draft = run_claim_draft_agent(claim_request)
 
-    return FullRcmPipelineResponse(
+    claim_record_id: str | None = None
+    if request.practice_id:
+        claim_record_id = persist_claim_draft(
+            settings,
+            practice_id=request.practice_id,
+            patient_id=request.patient_id,
+            clinical_note=request.clinical_note,
+            provider=provider.name if provider else None,
+            coding=coding.model_dump(),
+            prior_auth=prior_auth.model_dump(),
+            claim_draft=claim_draft.model_dump(),
+        )
+
+    response = FullRcmPipelineResponse(
         coding=coding,
         prior_auth=prior_auth,
         claim_draft=claim_draft,
+        claim_record_id=claim_record_id,
     )
+    return response
 
 
 def _resolve_claim_context(
+    settings: Settings,
     request: FullRcmPipelineRequest,
-    supabase: Client | None,
+    *,
+    practice_id: str | None = None,
 ) -> tuple[PatientInfo, ProviderInfo, ClaimBillingInput]:
     """
     Resolve patient/provider/billing for claim stage.
     Priority:
       1) Direct values supplied in request.
-      2) Snapshot lookup by encounter_id from Supabase.
+      2) Snapshot lookup by encounter_id from Neon or Supabase.
     """
     if request.patient and request.provider and request.billing:
         return request.patient, request.provider, request.billing
@@ -107,10 +130,12 @@ def _resolve_claim_context(
         raise RuntimeError(
             "Claim context missing: provide patient/provider/billing or encounter_id."
         )
-    if supabase is None:
-        raise RuntimeError("Supabase client is required for encounter_id snapshot lookup.")
 
-    snapshot = _fetch_claim_snapshot(supabase, request.encounter_id)
+    snapshot = fetch_claim_intake_snapshot(
+        settings,
+        request.encounter_id,
+        practice_id=practice_id,
+    )
     if not snapshot:
         raise RuntimeError(
             f"No claim intake snapshot found for encounter_id={request.encounter_id}"
@@ -155,39 +180,3 @@ def _resolve_claim_context(
         ) from exc
 
     return patient, provider, billing
-
-
-def _fetch_claim_snapshot(supabase: Client, encounter_id: str) -> dict | None:
-    """Load claim intake snapshot using RPC first, then direct table lookup fallback."""
-    try:
-        rpc_resp = supabase.rpc(
-            "get_claim_intake_snapshot", {"p_encounter_id": encounter_id}
-        ).execute()
-        if isinstance(rpc_resp.data, dict):
-            return rpc_resp.data
-        if isinstance(rpc_resp.data, list) and rpc_resp.data:
-            first = rpc_resp.data[0]
-            if isinstance(first, dict):
-                return first
-    except Exception:
-        # Fallback below handles environments where RPC is unavailable.
-        pass
-
-    try:
-        table_resp = (
-            supabase.table("claim_intake_snapshot")
-            .select("*")
-            .eq("encounter_id", encounter_id)
-            .limit(1)
-            .execute()
-        )
-        if isinstance(table_resp.data, list) and table_resp.data:
-            first = table_resp.data[0]
-            if isinstance(first, dict):
-                return first
-    except Exception as exc:
-        raise RuntimeError(
-            f"Failed to load claim intake snapshot for encounter_id={encounter_id}: {exc}"
-        ) from exc
-
-    return None

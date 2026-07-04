@@ -129,6 +129,7 @@ function buildEligibilityPayload(row: EligibilityRequestRow): Record<string, unk
     plan_id: row.plan_id,
     cdt_codes: row.cdt_codes ?? [],
     trigger_event: row.trigger_event,
+    eligibility_request_id: row.id,
   };
 }
 

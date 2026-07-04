@@ -733,6 +733,297 @@ def _quantity_based_frequency_rules(benefit: dict[str, Any], idx: int) -> list[d
     return [{"source_benefit_index": idx, "description": desc, "raw": raw}]
 
 
+_STC_TO_BENEFIT_CATEGORY: dict[str, str] = {
+    "23": "DIAGNOSTIC",
+    "25": "BASIC",
+    "36": "MAJOR",
+    "38": "ORTHO",
+    "35": "DENTAL",
+}
+
+_DENTAL_LIMITATION_STCS = frozenset({"35", "23", "25", "36", "38", "39", "40", "41"})
+
+_MISSING_TOOTH_KEYWORDS = ("missing tooth", "missing teeth", "missing-tooth")
+
+
+def _is_dental_limitation_benefit(benefit: dict[str, Any]) -> bool:
+    """Broader dental scope than calculator rows — includes category STCs for limitation parsing."""
+    stcs = _service_type_codes_from(benefit)
+    if any(stc in _DENTAL_LIMITATION_STCS for stc in stcs):
+        return True
+    if procedure_identifier_from_benefit(benefit):
+        return True
+    blob = _benefit_text_blob(benefit)
+    return "dental" in blob or "oral" in blob
+
+
+def _category_from_stcs(stcs: list[str]) -> str | None:
+    for stc in stcs:
+        cat = _STC_TO_BENEFIT_CATEGORY.get(stc)
+        if cat and cat != "DENTAL":
+            return cat
+    if "35" in stcs:
+        return "DENTAL"
+    return None
+
+
+def _parse_int_from_text(text: str) -> int | None:
+    match = re.search(r"\b(\d+)\b", text)
+    if not match:
+        return None
+    try:
+        return int(match.group(1))
+    except ValueError:
+        return None
+
+
+def _parse_period_months(text: str) -> int | None:
+    low = text.lower()
+    match = re.search(r"(\d+)\s*month", low)
+    if match:
+        return int(match.group(1))
+    match = re.search(r"(\d+)\s*year", low)
+    if match:
+        return int(match.group(1)) * 12
+    return None
+
+
+def _parse_frequency_from_note(text: str) -> tuple[int | None, int | None]:
+    """Parse ``2 per 12 months`` style frequency strings."""
+    low = text.lower()
+    per_match = re.search(r"(\d+)\s*per\s*(\d+)\s*month", low)
+    if per_match:
+        return int(per_match.group(1)), int(per_match.group(2))
+    qty_match = re.search(r"(\d+)\s*(?:visits?|services?)", low)
+    period = _parse_period_months(low)
+    if qty_match:
+        return int(qty_match.group(1)), period
+    return None, period
+
+
+def _frequency_dedupe_key(row: dict[str, Any]) -> tuple[Any, ...]:
+    return (
+        row.get("cdt_code") or "",
+        row.get("category") or "",
+        row.get("quantity"),
+        row.get("period_months"),
+        row.get("description") or "",
+    )
+
+
+def _append_unique_frequency(out: list[dict[str, Any]], seen: set[tuple[Any, ...]], row: dict[str, Any]) -> None:
+    key = _frequency_dedupe_key(row)
+    if key in seen:
+        return
+    seen.add(key)
+    out.append(row)
+
+
+def _collect_structured_frequency_limitations(benefits: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Structured frequency rows for benefit-grid write-back and BenefitNotes."""
+    out: list[dict[str, Any]] = []
+    seen: set[tuple[Any, ...]] = set()
+
+    for idx, benefit in enumerate(benefits):
+        if not _is_dental_limitation_benefit(benefit):
+            continue
+        stcs = _service_type_codes_from(benefit)
+        category = _category_from_stcs(stcs)
+        cdt = procedure_identifier_from_benefit(benefit)
+        time_period = _time_period_for_benefit(benefit)
+
+        delivery = benefit.get("benefitsServiceDelivery")
+        if isinstance(delivery, list):
+            for item in delivery:
+                if not isinstance(item, dict):
+                    continue
+                text = " ".join(str(v) for v in item.values() if v is not None).strip()
+                low = text.lower()
+                if not any(k in low for k in ("visit", "month", "year", "frequency", "limit", "per")):
+                    continue
+                qty = _parse_int_from_text(str(item.get("quantity") or ""))
+                period_months = _parse_period_months(text)
+                _append_unique_frequency(
+                    out,
+                    seen,
+                    {
+                        "source_benefit_index": idx,
+                        "cdt_code": cdt,
+                        "service_type_codes": stcs,
+                        "category": category,
+                        "quantity": qty,
+                        "quantity_qualifier": str(item.get("unit") or "Visits").strip() or None,
+                        "period_months": period_months,
+                        "time_period": time_period,
+                        "description": text,
+                    },
+                )
+
+        q = benefit.get("benefitQuantity")
+        qq = benefit.get("quantityQualifier") or benefit.get("quantityQualifierCode")
+        if q is not None and str(q).strip() and qq is not None and str(qq).strip():
+            desc = f"{str(q).strip()} {str(qq).strip()} (benefit quantity)"
+            _append_unique_frequency(
+                out,
+                seen,
+                {
+                    "source_benefit_index": idx,
+                    "cdt_code": cdt,
+                    "service_type_codes": stcs,
+                    "category": category,
+                    "quantity": _parse_int_from_text(str(q)),
+                    "quantity_qualifier": str(qq).strip(),
+                    "period_months": None,
+                    "time_period": time_period,
+                    "description": desc,
+                },
+            )
+
+        for note in _additional_info_strings(benefit):
+            low = note.lower()
+            if "frequency" not in low and " per " not in low and "limit" not in low:
+                continue
+            qty, period_months = _parse_frequency_from_note(note)
+            _append_unique_frequency(
+                out,
+                seen,
+                {
+                    "source_benefit_index": idx,
+                    "cdt_code": cdt,
+                    "service_type_codes": stcs,
+                    "category": category,
+                    "quantity": qty,
+                    "quantity_qualifier": "Visits" if qty is not None else None,
+                    "period_months": period_months,
+                    "time_period": time_period,
+                    "description": note.strip(),
+                },
+            )
+
+    return out
+
+
+def _waiting_dedupe_key(row: dict[str, Any]) -> tuple[Any, ...]:
+    return (
+        row.get("cdt_code") or "",
+        row.get("category") or "",
+        row.get("months"),
+        row.get("end_date"),
+        row.get("description") or "",
+    )
+
+
+def _append_unique_waiting(out: list[dict[str, Any]], seen: set[tuple[Any, ...]], row: dict[str, Any]) -> None:
+    key = _waiting_dedupe_key(row)
+    if key in seen:
+        return
+    seen.add(key)
+    out.append(row)
+
+
+def _collect_structured_waiting_periods(
+    benefits: list[dict[str, Any]],
+    procedure_details: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Per-category or per-CDT waiting periods with month counts when parseable."""
+    out: list[dict[str, Any]] = []
+    seen: set[tuple[Any, ...]] = set()
+
+    for idx, benefit in enumerate(benefits):
+        if not _is_dental_limitation_benefit(benefit):
+            continue
+        stcs = _service_type_codes_from(benefit)
+        category = _category_from_stcs(stcs)
+        cdt = procedure_identifier_from_benefit(benefit)
+        name = str(benefit.get("name") or "").lower()
+        end_date: date | None = None
+        bdi = benefit.get("benefitsDateInformation")
+        if isinstance(bdi, dict):
+            end_s = bdi.get("waitingPeriodEnd") or bdi.get("end") or bdi.get("planEnd")
+            if isinstance(end_s, str):
+                end_date = _calendar_date_from_yyyymmdd(end_s)
+
+        for note in _additional_info_strings(benefit):
+            low = note.lower()
+            if "waiting" not in low:
+                continue
+            months = _parse_period_months(note)
+            _append_unique_waiting(
+                out,
+                seen,
+                {
+                    "source_benefit_index": idx,
+                    "cdt_code": cdt,
+                    "service_type_codes": stcs,
+                    "category": category,
+                    "months": months,
+                    "end_date": end_date.isoformat() if end_date else None,
+                    "description": note.strip(),
+                },
+            )
+
+        if "waiting" in name:
+            months = _parse_period_months(name)
+            _append_unique_waiting(
+                out,
+                seen,
+                {
+                    "source_benefit_index": idx,
+                    "cdt_code": cdt,
+                    "service_type_codes": stcs,
+                    "category": category,
+                    "months": months,
+                    "end_date": end_date.isoformat() if end_date else None,
+                    "description": str(benefit.get("name") or "Waiting period").strip(),
+                },
+            )
+
+    for proc in procedure_details:
+        if not isinstance(proc, dict):
+            continue
+        wend = proc.get("waiting_period_end")
+        if wend is None:
+            continue
+        cdt = str(proc.get("cdt_code") or "").strip().upper() or None
+        wcat = proc.get("waiting_period_category")
+        category = str(wcat).upper() if wcat else None
+        end_iso = wend.isoformat() if isinstance(wend, date) else str(wend)
+        _append_unique_waiting(
+            out,
+            seen,
+            {
+                "source_benefit_index": None,
+                "cdt_code": cdt,
+                "service_type_codes": [],
+                "category": category,
+                "months": None,
+                "end_date": end_iso,
+                "description": f"Waiting period for {cdt or 'procedure'} until {end_iso}",
+            },
+        )
+
+    return out
+
+
+def _detect_missing_tooth_clause(benefits: list[dict[str, Any]]) -> dict[str, Any]:
+    """Detect missing-tooth-clause language in dental benefit rows."""
+    for idx, benefit in enumerate(benefits):
+        if not _is_dental_limitation_benefit(benefit):
+            continue
+        blobs = [str(benefit.get("name") or "")]
+        blobs.extend(_additional_info_strings(benefit))
+        for text in blobs:
+            low = text.lower()
+            if not any(k in low for k in _MISSING_TOOTH_KEYWORDS):
+                continue
+            return {
+                "present": True,
+                "description": text.strip(),
+                "source_benefit_index": idx,
+            }
+    return {"present": False, "description": None, "source_benefit_index": None}
+
+
 def _classify_stedi_x12_payload(raw_271: dict[str, Any]) -> tuple[str | None, list[str]]:
     """
     Stedi may return raw X12 in ``x12``: usually a 271, sometimes a 999 implementation acknowledgment.
@@ -1244,6 +1535,8 @@ def normalize(raw_271: dict[str, Any], coverage_order: str) -> dict[str, Any]:
         "coinsurance_patient_pct_by_stc": _collect_dental_coinsurance_by_stc(benefits),
         "ortho_lifetime_max": _collect_ortho_lifetime_max_stc38(benefits),
         "limitation_notes": _collect_dental_limitation_notes(benefits),
+        "frequency_limitations": _collect_structured_frequency_limitations(benefits),
+        "missing_tooth_clause": _detect_missing_tooth_clause(benefits),
     }
     ded_rem, ded_warn = _derive_remaining(
         fin["deductible_total"],
@@ -1311,6 +1604,10 @@ def normalize(raw_271: dict[str, Any], coverage_order: str) -> dict[str, Any]:
                 "non_covered_reason": reason,
             }
         )
+
+    dental_benefit_breakdown["waiting_periods"] = _collect_structured_waiting_periods(
+        benefits, procedure_details
+    )
 
     is_covered: bool | None
     if any_not_covered and not any_covered:

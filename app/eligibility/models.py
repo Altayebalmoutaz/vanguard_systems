@@ -85,6 +85,10 @@ class EligibilityRequest(BaseModel):
         description="Overrides organizationName in Stedi provider block when not using person-provider fields; default is PROVIDER_NAME.",
         max_length=256,
     )
+    eligibility_request_id: UUID | None = Field(
+        default=None,
+        description="Optional queue row id for voice auto-queue and eligibility_request_events.",
+    )
 
     @field_validator("stedi_provider_npi", mode="before")
     @classmethod

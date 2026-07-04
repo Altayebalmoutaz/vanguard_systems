@@ -100,6 +100,45 @@ def test_raw_payload_hash_stable() -> None:
     assert build_universal_dental_record(c, raw2, "1").raw_payload_hash == h1
 
 
+def test_universal_record_structured_limitations() -> None:
+    c = _minimal_canonical(
+        dental_benefit_breakdown={
+            "coinsurance_patient_pct_by_stc": {"23": 20.0},
+            "ortho_lifetime_max": None,
+            "limitation_notes": ["Frequency: 2 per 12 months"],
+            "frequency_limitations": [
+                {
+                    "category": "DIAGNOSTIC",
+                    "description": "2 per 12 months",
+                    "quantity": 2,
+                    "period_months": 12,
+                    "quantity_qualifier": "Visits",
+                }
+            ],
+            "waiting_periods": [
+                {
+                    "category": "MAJOR",
+                    "months": 6,
+                    "description": "6 month waiting period applies",
+                }
+            ],
+            "missing_tooth_clause": {
+                "present": True,
+                "description": "Missing tooth clause applies",
+            },
+        },
+    )
+    rec = build_universal_dental_record(c, _minimal_raw(), "60054")
+    assert len(rec.frequency_limitations) == 1
+    assert rec.frequency_limitations[0].quantity == 2
+    assert rec.frequency_limitations[0].period_months == 12
+    assert len(rec.waiting_periods) == 1
+    assert rec.waiting_periods[0].months == 6
+    assert rec.missing_tooth_clause is not None
+    assert rec.missing_tooth_clause.present is True
+    assert rec.waiting_periods_present is True
+
+
 def test_ortho_block_when_stc38_or_lifetime() -> None:
     c = _minimal_canonical(
         dental_benefit_breakdown={

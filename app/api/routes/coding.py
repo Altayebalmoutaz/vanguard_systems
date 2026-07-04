@@ -6,7 +6,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.api.errors import sanitized_http_exception
-from app.integrations.supabase_client import get_supabase_client
+from app.api.tenancy import PracticeContextDep
+from app.config import get_settings
 from app.services.decision_service import run_agent_for_encounter
 
 router = APIRouter(tags=["dental-coding"])
@@ -17,13 +18,20 @@ class RunCodingAgentRequest(BaseModel):
 
 
 @router.post("/run-coding-agent")
-def run_coding_agent_for_encounter(body: RunCodingAgentRequest) -> dict:
+def run_coding_agent_for_encounter(
+    body: RunCodingAgentRequest,
+    tenant: PracticeContextDep,
+) -> dict:
     """
     Run coding agent against one encounter and persist a reviewable decision.
     """
     try:
-        supabase = get_supabase_client()
-        return run_agent_for_encounter(supabase, body.encounter_id)
+        settings = get_settings()
+        return run_agent_for_encounter(
+            settings,
+            body.encounter_id,
+            practice_id=tenant.practice_id,
+        )
     except HTTPException:
         raise
     except RuntimeError as e:

@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.api.deps import get_agent_context
 from app.api.errors import sanitized_http_exception
 from app.api.schemas import AgentRunRequest, AgentRunResponse
+from app.api.tenancy import PracticeContextDep
 from app.runtime.context import AgentContext
 from app.runtime.executor import UnknownAgentError, run_agent
 
@@ -15,10 +16,12 @@ router = APIRouter(prefix="/agents", tags=["agents"])
 async def agents_run(
     body: AgentRunRequest,
     ctx: Annotated[AgentContext, Depends(get_agent_context)],
+    tenant: PracticeContextDep,
 ) -> AgentRunResponse:
-    ctx.practice_id = body.practice_id or ctx.practice_id
+    ctx.practice_id = tenant.practice_id
+    payload = {**body.payload, "practice_id": tenant.practice_id}
     try:
-        result = await run_agent(body.agent_id, body.payload, ctx)
+        result = await run_agent(body.agent_id, payload, ctx)
         return AgentRunResponse(ok=True, result=result)
     except UnknownAgentError as e:
         # The agent id is caller-supplied (not PHI), so we surface it for UX.

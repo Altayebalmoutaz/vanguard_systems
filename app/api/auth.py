@@ -25,6 +25,13 @@ from typing import Annotated, Any
 
 from fastapi import Depends, Header, HTTPException, status
 
+from app.api.rbac import (
+    PracticeRole,
+    RbacNotConfiguredError,
+    RbacResolutionError,
+    has_any_role,
+    resolve_practice_roles,
+)
 from app.config import Settings, get_settings
 
 
@@ -35,10 +42,18 @@ class Principal:
     kind: str
     subject: str
     claims: dict[str, Any]
+    practice_roles: tuple[PracticeRole, ...] = ()
 
     @property
     def is_anonymous(self) -> bool:
         return self.kind == "anonymous"
+
+    @property
+    def practice_ids(self) -> tuple[str, ...]:
+        return tuple(role.practice_id for role in self.practice_roles)
+
+    def has_any_role(self, *roles: str) -> bool:
+        return self.kind == "api_key" or has_any_role(self.practice_roles, set(roles))
 
 
 def _verify_supabase_jwt(token: str, secret: str) -> dict[str, Any]:
@@ -96,7 +111,24 @@ async def require_principal(
         token = authorization.split(" ", 1)[1].strip()
         claims = _verify_supabase_jwt(token, settings.supabase_jwt_secret)
         sub = str(claims.get("sub") or claims.get("user_id") or "unknown")
-        return Principal(kind="jwt", subject=sub, claims=claims)
+        try:
+            practice_roles = resolve_practice_roles(settings, user_id=sub, claims=claims)
+        except RbacNotConfiguredError as e:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="rbac_not_configured",
+            ) from e
+        except RbacResolutionError as e:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="rbac_unavailable",
+            ) from e
+        if settings.require_rbac and not practice_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="role_required",
+            )
+        return Principal(kind="jwt", subject=sub, claims=claims, practice_roles=practice_roles)
 
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,

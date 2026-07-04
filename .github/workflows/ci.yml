@@ -46,11 +46,13 @@ jobs:
       - name: Ruff (format check)
         run: ruff format --check .
 
-      - name: Mypy (type check, non-blocking)
-        # Type errors are surfaced but do not yet fail the build.
-        # Flip `continue-on-error: false` once the codebase reaches strict-mypy clean.
-        continue-on-error: true
-        run: mypy app
+      - name: Supabase migration PHI guard (forward migrations)
+        run: python scripts/check_supabase_migrations_phi_columns.py
+
+      - name: Mypy (type check, blocking — narrow scope)
+        # Full `mypy app` still has ~90 errors; gate the new PHI-plane modules first.
+        # Expand scope to `mypy app` once the codebase is clean.
+        run: mypy --follow-imports=silent app/db app/integrations/agent_runs.py
 
       - name: Pytest
         env:
@@ -63,6 +65,11 @@ jobs:
           STEDI_API_KEY: ""
           JINA_API_KEY: ""
         run: pytest --cov=app --cov-report=xml --cov-report=term
+
+      - name: Agent evals (golden datasets)
+        env:
+          OPENROUTER_API_KEY: ""
+        run: python -m evals.runner
 
       - name: Upload coverage
         if: always()
@@ -91,6 +98,35 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run build
+
+  dashboard-e2e:
+    name: Dashboard Playwright smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: eligibility-dashboard
+    defaults:
+      run:
+        working-directory: eligibility_dashboard
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: eligibility_dashboard/package-lock.json
+
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+        env:
+          CI: "true"
+          DASHBOARD_REQUIRE_AUTH: "0"
+          NEXT_PUBLIC_SUPABASE_URL: ""
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ""
+          FASTAPI_BASE_URL: ""
 
   supply-chain:
     # HIPAA / vendor-risk gate: every build produces a CycloneDX SBOM for the

@@ -8,8 +8,17 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.api.errors import sanitized_http_exception
-from app.integrations.supabase_client import get_supabase_client
+from app.api.tenancy import PracticeContextDep
+from app.config import get_settings
 from app.services.decision_service import review_decision
+
+_REVIEW_DECISION_ROLES = frozenset({"admin", "billing_lead"})
+
+
+def _require_review_role(tenant: PracticeContextDep) -> None:
+    if tenant.role not in _REVIEW_DECISION_ROLES:
+        raise HTTPException(status_code=403, detail="role_forbidden")
+
 
 router = APIRouter(tags=["review"])
 
@@ -21,13 +30,23 @@ class ReviewDecisionRequest(BaseModel):
 
 
 @router.post("/review-decision")
-def review_agent_decision(body: ReviewDecisionRequest) -> dict[str, str]:
+def review_agent_decision(
+    body: ReviewDecisionRequest,
+    tenant: PracticeContextDep,
+) -> dict[str, str]:
     """
     Update decision status and optionally store manual override feedback.
     """
+    _require_review_role(tenant)
     try:
-        supabase = get_supabase_client()
-        return review_decision(supabase, body.decision_id, body.status, body.override)
+        settings = get_settings()
+        return review_decision(
+            settings,
+            body.decision_id,
+            body.status,
+            body.override,
+            practice_id=tenant.practice_id,
+        )
     except HTTPException:
         raise
     except RuntimeError as e:

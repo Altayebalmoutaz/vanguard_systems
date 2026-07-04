@@ -14,10 +14,13 @@ from app.eligibility.universal_dental.models import (
     CategoryBenefit,
     ConfidenceLevel,
     FinancialSummary,
+    FrequencyLimitation,
+    MissingToothClause,
     NetworkStatus,
     NormalizationMethod,
     OrthoDetail,
     UniversalDentalRecord,
+    WaitingPeriod,
     data_point_bool,
     data_point_float,
     data_point_int,
@@ -192,6 +195,85 @@ def _build_ortho(canonical: dict[str, Any], _warnings: list[str]) -> OrthoDetail
     )
 
 
+def _category_enum(value: str | None) -> BenefitCategory | None:
+    if not value:
+        return None
+    try:
+        return BenefitCategory(str(value).upper())
+    except ValueError:
+        return None
+
+
+def _build_frequency_limitations(breakdown: dict[str, Any]) -> list[FrequencyLimitation]:
+    rows = breakdown.get("frequency_limitations") or []
+    out: list[FrequencyLimitation] = []
+    if not isinstance(rows, list):
+        return out
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        desc = str(row.get("description") or "").strip()
+        if not desc:
+            continue
+        qty = row.get("quantity")
+        period = row.get("period_months")
+        confidence = ConfidenceLevel.EXPLICIT if qty is not None or period is not None else ConfidenceLevel.INFERRED
+        out.append(
+            FrequencyLimitation(
+                category=_category_enum(row.get("category")),
+                cdt_code=row.get("cdt_code"),
+                quantity=int(qty) if qty is not None else None,
+                quantity_qualifier=row.get("quantity_qualifier"),
+                period_months=int(period) if period is not None else None,
+                description=desc,
+                confidence=confidence,
+            )
+        )
+    return out
+
+
+def _build_waiting_periods(breakdown: dict[str, Any]) -> list[WaitingPeriod]:
+    rows = breakdown.get("waiting_periods") or []
+    out: list[WaitingPeriod] = []
+    if not isinstance(rows, list):
+        return out
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        desc = str(row.get("description") or "").strip()
+        if not desc:
+            continue
+        end_raw = row.get("end_date")
+        end_date = _parse_yyyymmdd(str(end_raw)) if end_raw else None
+        months = row.get("months")
+        confidence = ConfidenceLevel.EXPLICIT if months is not None or end_date else ConfidenceLevel.INFERRED
+        out.append(
+            WaitingPeriod(
+                category=_category_enum(row.get("category")),
+                cdt_code=row.get("cdt_code"),
+                months=int(months) if months is not None else None,
+                end_date=end_date,
+                description=desc,
+                confidence=confidence,
+            )
+        )
+    return out
+
+
+def _build_missing_tooth_clause(breakdown: dict[str, Any]) -> MissingToothClause:
+    raw = breakdown.get("missing_tooth_clause")
+    if not isinstance(raw, dict):
+        return MissingToothClause(present=False, description=None, confidence=ConfidenceLevel.UNKNOWN)
+    present = bool(raw.get("present"))
+    desc = raw.get("description")
+    confidence = ConfidenceLevel.EXPLICIT if present and desc else ConfidenceLevel.UNKNOWN
+    return MissingToothClause(
+        present=present,
+        description=str(desc).strip() if desc else None,
+        confidence=confidence,
+    )
+
+
 def build_universal_dental_record(
     canonical: dict[str, Any],
     raw_stored_271: dict[str, Any],
@@ -295,7 +377,10 @@ def build_universal_dental_record(
     if not isinstance(br_notes, list):
         br_notes = []
     notes_str = [str(x) for x in br_notes]
-    waiting = any("waiting" in n.lower() for n in notes_str) or any(
+    frequency_limitations = _build_frequency_limitations(dbreak if isinstance(dbreak, dict) else {})
+    waiting_periods = _build_waiting_periods(dbreak if isinstance(dbreak, dict) else {})
+    missing_tooth = _build_missing_tooth_clause(dbreak if isinstance(dbreak, dict) else {})
+    waiting = bool(waiting_periods) or any("waiting" in n.lower() for n in notes_str) or any(
         bool(p.get("waiting_period_end"))
         for p in (canonical.get("procedure_details") or [])
         if isinstance(p, dict)
@@ -315,6 +400,9 @@ def build_universal_dental_record(
         financial=fin,
         categories=_build_categories(canonical),
         ortho=ortho,
+        frequency_limitations=frequency_limitations,
+        waiting_periods=waiting_periods,
+        missing_tooth_clause=missing_tooth,
         waiting_periods_present=waiting,
         limitation_notes=notes_str,
         normalization_method=NormalizationMethod.HEURISTIC,

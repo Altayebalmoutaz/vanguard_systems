@@ -1,0 +1,10 @@
+{
+  "transactionId": "txn-era-denied-001",
+  "claims": [
+    {
+      "patientControlNumber": "CLM99999",
+      "claimStatus": "4",
+      "denialReason": "missing_xray"
+    }
+  ]
+}

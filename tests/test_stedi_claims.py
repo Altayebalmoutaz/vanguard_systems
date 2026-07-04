@@ -9,9 +9,8 @@ verify:
    non-2xx responses, and non-JSON or non-object payloads — and never logs raw
    PHI in those error paths.
 3. ``submit_claim_tool`` honours ``Settings.stedi_claims_api_key``: when set, it
-   delegates to the real adapter; on ``StediClaimsError`` it logs a scrubbed
-   warning and falls back to the deterministic mock so the agent loop still
-   completes.
+   delegates to the real adapter and propagates ``StediClaimsError``. Mock submission
+   requires ``Settings.allow_claim_mock_submission`` (tests / local dev only).
 """
 
 from __future__ import annotations
@@ -28,7 +27,7 @@ from app.integrations.stedi_claims import (
     build_dental_claim_payload,
     submit_dental_claim,
 )
-from app.tools.claim_tools import submit_claim_tool
+from app.tools.claim_tools import ClaimSubmissionError, submit_claim_tool
 
 
 def _claim_dict() -> dict:
@@ -285,8 +284,15 @@ class SubmitDentalClaimTests(unittest.TestCase):
 
 
 class SubmitClaimToolIntegrationTests(unittest.TestCase):
-    def test_no_api_key_returns_mock(self) -> None:
-        out = submit_claim_tool(_claim_dict(), settings=Settings())
+    def test_no_api_key_without_mock_flag_raises(self) -> None:
+        with self.assertRaises(ClaimSubmissionError):
+            submit_claim_tool(_claim_dict(), settings=Settings())
+
+    def test_no_api_key_with_mock_flag_returns_mock(self) -> None:
+        out = submit_claim_tool(
+            _claim_dict(),
+            settings=Settings(allow_claim_mock_submission=True),
+        )
         self.assertEqual(out["submission_channel"], "stedi_mock")
         self.assertEqual(out["status"], "submitted")
         self.assertTrue(out["claim_id"].startswith("CLM"))
@@ -306,20 +312,15 @@ class SubmitClaimToolIntegrationTests(unittest.TestCase):
         self.assertEqual(out["claim_id"], "0007")
 
     @patch("app.tools.claim_tools.submit_dental_claim")
-    def test_falls_back_to_mock_on_stedi_error(self, mock_submit: MagicMock) -> None:
+    def test_stedi_error_propagates_without_mock_fallback(self, mock_submit: MagicMock) -> None:
         mock_submit.side_effect = StediClaimsError(
             message="HTTP 500",
             status_code=500,
             body="server exploded",
         )
         s = Settings(stedi_claims_api_key="key-real")
-        with self.assertLogs("app.tools.claim_tools", level="WARNING") as logs:
-            out = submit_claim_tool(_claim_dict(), settings=s)
-        self.assertEqual(out["submission_channel"], "stedi_mock")
-        self.assertTrue(out["claim_id"].startswith("CLM"))
-        joined = "\n".join(logs.output)
-        self.assertIn("Stedi claim submission failed", joined)
-        self.assertIn("HTTP 500", joined)
+        with self.assertRaises(StediClaimsError):
+            submit_claim_tool(_claim_dict(), settings=s)
 
 
 if __name__ == "__main__":

@@ -3,7 +3,7 @@ Claim Submission Agent — linear flow (claw-style, no LLM).
 
 1. Gate: if prior auth still requires PA or outstanding document checklist → do not submit.
 2. Tool: build_claim_tool → structured claim dict.
-3. Tool: submit_claim_tool → mock Stedi response.
+3. Tool: submit_claim_tool → clearinghouse adapter (mock only when explicitly enabled).
 """
 
 from __future__ import annotations

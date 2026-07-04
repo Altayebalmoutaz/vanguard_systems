@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.deps import get_agent_context
 from app.api.schemas import AgentRunResponse, LegacyRunAgentRequest
+from app.api.tenancy import PracticeContextDep
 from app.runtime.context import AgentContext
 from app.runtime.executor import run_agent
 
@@ -14,6 +15,7 @@ router = APIRouter(tags=["legacy"])
 async def run_agent_legacy(
     body: LegacyRunAgentRequest,
     ctx: Annotated[AgentContext, Depends(get_agent_context)],
+    tenant: PracticeContextDep,
 ) -> AgentRunResponse:
     """Original endpoint shape from the starter app."""
     if body.agent != "prior_auth":
@@ -21,8 +23,8 @@ async def run_agent_legacy(
     payload = {
         "patient_id": body.patient_id,
         "cpt_code": body.cpt_code,
-        "practice_id": body.practice_id,
+        "practice_id": tenant.practice_id,
     }
-    ctx.practice_id = body.practice_id
+    ctx.practice_id = tenant.practice_id
     result = await run_agent("prior_auth", payload, ctx)
     return AgentRunResponse(ok=True, result=result)

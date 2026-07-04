@@ -10,12 +10,9 @@ import json
 import re
 from typing import Any
 
-import httpx
-
 from app.config import Settings
+from app.llm.client import openrouter_chat_completion
 from app.security.phi import scrub_for_llm
-
-OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 SYSTEM_PROMPT = """You are a dental coding assistant for US practices.
 Return ONLY valid JSON (no markdown fences) with exactly these keys:
@@ -79,17 +76,14 @@ def llm_generate_codes(
         "temperature": 0.2,
     }
 
-    headers = {
-        "Authorization": f"Bearer {settings.openrouter_api_key}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": settings.openrouter_http_referer or "https://localhost",
-        "X-Title": settings.app_name,
-    }
-
-    with httpx.Client(timeout=120.0) as client:
-        response = client.post(OPENROUTER_URL, headers=headers, json=payload)
-        response.raise_for_status()
-        data = response.json()
+    data = openrouter_chat_completion(
+        api_key=settings.openrouter_api_key,
+        payload=payload,
+        http_referer=settings.openrouter_http_referer or "https://localhost",
+        app_name=settings.app_name,
+        timeout_seconds=settings.openrouter_timeout_seconds,
+        max_retries=settings.openrouter_max_retries,
+    )
 
     content = data["choices"][0]["message"]["content"]
     raw = _strip_json_fence(content)

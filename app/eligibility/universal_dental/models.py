@@ -76,6 +76,31 @@ class OrthoDetail(BaseModel):
     months_remaining: DataPoint[int]
 
 
+class FrequencyLimitation(BaseModel):
+    category: BenefitCategory | None = None
+    cdt_code: str | None = None
+    quantity: int | None = None
+    quantity_qualifier: str | None = None
+    period_months: int | None = None
+    description: str
+    confidence: ConfidenceLevel = ConfidenceLevel.EXPLICIT
+
+
+class WaitingPeriod(BaseModel):
+    category: BenefitCategory | None = None
+    cdt_code: str | None = None
+    months: int | None = None
+    end_date: date | None = None
+    description: str
+    confidence: ConfidenceLevel = ConfidenceLevel.EXPLICIT
+
+
+class MissingToothClause(BaseModel):
+    present: bool = False
+    description: str | None = None
+    confidence: ConfidenceLevel = ConfidenceLevel.UNKNOWN
+
+
 class UniversalDentalRecord(BaseModel):
     """
     Semantic dental eligibility snapshot (v1).
@@ -95,6 +120,9 @@ class UniversalDentalRecord(BaseModel):
     financial: FinancialSummary
     categories: list[CategoryBenefit] = Field(default_factory=list)
     ortho: OrthoDetail | None = None
+    frequency_limitations: list[FrequencyLimitation] = Field(default_factory=list)
+    waiting_periods: list[WaitingPeriod] = Field(default_factory=list)
+    missing_tooth_clause: MissingToothClause | None = None
     waiting_periods_present: bool = False
     limitation_notes: list[str] = Field(default_factory=list)
     normalization_method: NormalizationMethod = NormalizationMethod.HEURISTIC

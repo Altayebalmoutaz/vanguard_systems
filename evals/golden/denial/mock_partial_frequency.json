@@ -1,0 +1,16 @@
+{
+  "name": "mock_partial_frequency_limit",
+  "request": {
+    "claim_id": "CLM10002",
+    "cdt_codes": ["D1110"],
+    "mock_era": {
+      "status": "partial",
+      "reason": "frequency_limit"
+    }
+  },
+  "expect": {
+    "status": "partial",
+    "reason": "frequency_limit",
+    "next_action": "review_contract_and_patient_balance"
+  }
+}

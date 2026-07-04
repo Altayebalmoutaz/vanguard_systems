@@ -124,6 +124,26 @@ class TestDenialAgent(unittest.TestCase):
         self.assertEqual(out.appeal_letter, "")
         self.assertTrue(out.resubmission_steps)
 
+    def test_stedi_835_era_remittance_shape(self) -> None:
+        req = DenialAgentRequest(
+            claim_id="CLM99999",
+            cdt_codes=["D2750"],
+            era_remittance={
+                "transactionId": "txn-1",
+                "claims": [
+                    {
+                        "patientControlNumber": "CLM99999",
+                        "claimStatus": "4",
+                        "denialReason": "missing_xray",
+                    }
+                ],
+            },
+        )
+        out = run_denial_agent(req)
+        self.assertEqual(out.status, "denied")
+        self.assertEqual(out.reason, "missing_xray")
+        self.assertEqual(out.next_action, "upload_xray_and_resubmit")
+
     @patch("app.agents.denial_agent.denial_llm_intelligence_tool")
     def test_llm_mismatch_flags_human_review(self, mock_llm) -> None:
         mock_llm.return_value = {

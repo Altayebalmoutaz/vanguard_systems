@@ -99,6 +99,9 @@ def test_parent_app_lifespan_starts_poller_when_enabled(monkeypatch) -> None:  #
             opendental_auto_poll_enabled=True,
             opendental_auto_poll_interval_seconds=30.0,
             opendental_auto_poll_date_window_days=0,
+            eligibility_retry_worker_enabled=False,
+            eligibility_retry_worker_interval_seconds=60.0,
+            eligibility_retry_batch_size=20,
         ),
     )
 
@@ -127,6 +130,9 @@ def test_parent_app_lifespan_skips_poller_when_disabled(monkeypatch) -> None:  #
             opendental_auto_poll_enabled=False,
             opendental_auto_poll_interval_seconds=30.0,
             opendental_auto_poll_date_window_days=0,
+            eligibility_retry_worker_enabled=False,
+            eligibility_retry_worker_interval_seconds=60.0,
+            eligibility_retry_batch_size=20,
         ),
     )
 

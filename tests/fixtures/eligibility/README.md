@@ -54,3 +54,23 @@ The TR3 corpus adds **breadth** (COB, dependents, Medicare/Medicaid labels, freq
 ## Live Stedi JSON
 
 For production fidelity, continue to use archived responses such as [`examples/eligibility_beaver_umr_52133_response.latest.json`](../../../examples/eligibility_beaver_umr_52133_response.latest.json) alongside this corpus.
+
+## Adding payer-shaped goldens
+
+Use [`../eligibility_271`](../eligibility_271) for scrubbed Stedi-shaped payer fixtures that should
+run directly through Layer 3. These are the highest-signal fixtures for production readiness because
+they preserve the `benefitsInformation` / `planStatus` shape consumed by
+[`app/eligibility/normalizer.py`](../../../app/eligibility/normalizer.py).
+
+To create one from a saved sandbox or pilot payload:
+
+```powershell
+python scripts/freeze_eligibility_fixture.py saved_271.json `
+  --fixture-name delta_94036_active_baseline `
+  --request-procedure-codes D0120
+```
+
+The script scrubs common subscriber identifiers, writes the fixture format consumed by
+[`tests/eligibility_agent/test_normalizer_fixtures.py`](../../eligibility_agent/test_normalizer_fixtures.py),
+and leaves `expected` empty on purpose. Fill `expected` only after reviewing the canonical output so
+the fixture locks intended behavior rather than current bugs.

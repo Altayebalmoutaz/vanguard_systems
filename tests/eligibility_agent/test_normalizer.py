@@ -731,3 +731,56 @@ def test_stedi_x12_transaction_kind_271_vs_999() -> None:
         "stedi_x12_payload:implementation_ack_999" in w
         for w in (c999.get("normalization_warnings") or [])
     )
+
+
+def test_structured_frequency_waiting_and_missing_tooth_in_breakdown() -> None:
+    raw = {
+        "payer": {"payorIdentification": "DELTA"},
+        "subscriber": {"subscriberStatus": "Active"},
+        "planStatus": [{"status": "Active Coverage", "serviceTypeCodes": ["35"]}],
+        "benefitsInformation": [
+            {
+                "code": "A",
+                "name": "Co-Insurance",
+                "benefitPercent": "1.0",
+                "serviceTypeCodes": ["23"],
+                "inPlanNetworkIndicatorCode": "Y",
+                "additionalInformation": [{"description": "Frequency: 2 per 12 months"}],
+            },
+            {
+                "code": "A",
+                "name": "Co-Insurance",
+                "benefitPercent": "0.5",
+                "serviceTypeCodes": ["36"],
+                "inPlanNetworkIndicatorCode": "Y",
+                "additionalInformation": [{"description": "6 month waiting period applies"}],
+            },
+            {
+                "code": "F",
+                "name": "Limitations",
+                "benefitAmount": "1500",
+                "serviceTypeCodes": ["35"],
+                "inPlanNetworkIndicatorCode": "Y",
+                "benefitsServiceDelivery": [{"quantity": "1", "unit": "visit", "period": "6 months"}],
+                "additionalInformation": [{"description": "Missing tooth clause applies to prosthetics"}],
+            },
+        ],
+        "_request_procedure_codes": ["D2740"],
+        "_trading_partner_service_id": "DELTA",
+    }
+    c = normalize(raw, "primary")
+    br = c.get("dental_benefit_breakdown") or {}
+
+    freq = br.get("frequency_limitations") or []
+    assert len(freq) >= 2
+    assert any(row.get("quantity") == 2 and row.get("period_months") == 12 for row in freq)
+    assert any("1 visit 6 months" in str(row.get("description")) for row in freq)
+
+    waiting = br.get("waiting_periods") or []
+    assert len(waiting) >= 1
+    assert any(row.get("months") == 6 for row in waiting)
+    assert any(row.get("category") == "MAJOR" for row in waiting)
+
+    missing = br.get("missing_tooth_clause") or {}
+    assert missing.get("present") is True
+    assert "missing tooth clause" in str(missing.get("description")).lower()

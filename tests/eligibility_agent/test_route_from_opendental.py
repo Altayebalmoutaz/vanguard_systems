@@ -107,6 +107,7 @@ def test_from_opendental_route(monkeypatch) -> None:  # type: ignore[no-untyped-
                 "opendental_write_commlog_enabled": True,
                 "opendental_write_insadjust_enabled": False,
                 "opendental_write_benefits_grid_enabled": False,
+                "opendental_write_benefits_grid_respect_manual_edits": True,
                 "opendental_auto_poll_enabled": False,
                 "eligibility_agent_api_key": "",
             },
@@ -142,7 +143,7 @@ def test_from_opendental_route(monkeypatch) -> None:  # type: ignore[no-untyped-
     bn = stub.benefit_notes[0]
     assert bn["ins_sub_num"] == 201
     assert bn["plan_num"] == 301
-    assert "[ELIGIBILITY SNAPSHOT | STEDI]" in str(bn["note"])
+    assert "[Verified by ezfi]" in str(bn["note"])
     assert "Aetna PPO" in str(bn["note"])
 
     # Front-desk Commlog summary written.

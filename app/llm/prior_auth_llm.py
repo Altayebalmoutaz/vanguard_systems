@@ -10,12 +10,9 @@ import json
 import re
 from typing import Any
 
-import httpx
-
 from app.config import Settings
+from app.llm.client import openrouter_chat_completion
 from app.security.phi import scrub_for_llm
-
-OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 SYSTEM_PROMPT = """You are a US dental revenue-cycle prior authorization analyst.
 Given CDT codes, ICD-10 codes, payer name, and optional clinical context, return ONLY valid JSON (no markdown) with exactly these keys:
@@ -65,17 +62,14 @@ def llm_prior_auth_decision(settings: Settings, data: dict[str, Any]) -> dict[st
         "temperature": 0.2,
     }
 
-    headers = {
-        "Authorization": f"Bearer {settings.openrouter_api_key}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": settings.openrouter_http_referer or "https://localhost",
-        "X-Title": settings.app_name,
-    }
-
-    with httpx.Client(timeout=120.0) as client:
-        response = client.post(OPENROUTER_URL, headers=headers, json=payload)
-        response.raise_for_status()
-        data_out = response.json()
+    data_out = openrouter_chat_completion(
+        api_key=settings.openrouter_api_key,
+        payload=payload,
+        http_referer=settings.openrouter_http_referer or "https://localhost",
+        app_name=settings.app_name,
+        timeout_seconds=settings.openrouter_timeout_seconds,
+        max_retries=settings.openrouter_max_retries,
+    )
 
     content = data_out["choices"][0]["message"]["content"]
     raw = _strip_json_fence(content)

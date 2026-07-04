@@ -8,6 +8,7 @@ import logging
 from typing import Any
 from uuid import UUID
 
+from app.config import get_settings as get_app_settings
 from app.eligibility.api_client import build_payload, call_stedi
 from app.eligibility.audit import write_audit_event
 from app.eligibility.canonical_record import attach_eligibility_canonical_record
@@ -31,6 +32,7 @@ from app.eligibility.normalizer import normalize
 from app.eligibility.router import _routing_state, route
 from app.eligibility.triggers import layer0_supabase_validation, resolve_cached_vs_api
 from app.eligibility.universal_dental import build_universal_dental_record
+from app.eligibility.voice.queue import maybe_auto_queue_voice_verification
 
 logger = logging.getLogger(__name__)
 
@@ -178,7 +180,16 @@ def run_realtime_pipeline(
         secondary_payer_id=request.secondary_payer_id,
         raw_for_db=raw_for_db,
     )
-    check_id = insert_eligibility_check(supabase, row)
+    app_settings = get_app_settings()
+    practice_id = str(getattr(request, "practice_id", None) or "").strip() or None
+    if practice_id:
+        row["practice_id"] = practice_id
+    check_id = insert_eligibility_check(
+        supabase,
+        row,
+        practice_id=practice_id,
+        settings=app_settings,
+    )
 
     proc_rows: list[dict[str, Any]] = []
     if (
@@ -208,16 +219,32 @@ def run_realtime_pipeline(
                         "patient_responsibility": e["patient_responsibility"],
                     }
                 )
-            insert_procedure_estimates(supabase, check_id, proc_rows)
-        except Exception as ex:
-            logger.warning("cost calculation skipped: %s", ex)
+            insert_procedure_estimates(
+                supabase,
+                check_id,
+                proc_rows,
+                practice_id=practice_id,
+                settings=app_settings,
+            )
+        except Exception:
+            logger.exception("cost calculation failed for check_id=%s", check_id)
+            raise
     elif pre_route_state == "COVERAGE_AMBIGUOUS":
         proc_rows = build_coverage_ambiguous_partial_estimates(canonical)
         if proc_rows:
             try:
-                insert_procedure_estimates(supabase, check_id, proc_rows)
-            except Exception as ex:
-                logger.warning("partial procedure estimate insert skipped: %s", ex)
+                insert_procedure_estimates(
+                supabase,
+                check_id,
+                proc_rows,
+                practice_id=practice_id,
+                settings=app_settings,
+            )
+            except Exception:
+                logger.exception(
+                    "partial procedure estimate insert failed for check_id=%s", check_id
+                )
+                raise
 
     udr = build_universal_dental_record(
         canonical,
@@ -242,6 +269,7 @@ def run_eligibility_check_endpoint(
     request: EligibilityRequest,
     *,
     settings: EligibilitySettings | None = None,
+    eligibility_request_id: UUID | None = None,
 ) -> dict[str, Any]:
     """Full POST /eligibility/check flow including Layer 0–1."""
     s = settings or get_settings()
@@ -257,6 +285,7 @@ def run_eligibility_check_endpoint(
                 "reason": "SSN present on request; subscriber_id path preferred; proceeding with audited fallback path"
             },
             settings=s,
+            practice_id=str(getattr(request, "practice_id", None) or "") or None,
         )
 
     request, layer0_warnings = layer0_supabase_validation(request, settings=s)
@@ -299,9 +328,21 @@ def run_eligibility_check_endpoint(
         settings=s,
     )
 
-    return {
+    voice_queue: dict[str, Any] | None = None
+    if eligibility_request_id is not None:
+        voice_queue = maybe_auto_queue_voice_verification(
+            request=request,
+            primary_result=results[0],
+            request_id=eligibility_request_id,
+            settings=s,
+        )
+
+    out: dict[str, Any] = {
         "cached": False,
         "layer0_warnings": layer0_warnings,
         "primary": results[0],
         "secondary": results[1] if len(results) > 1 else None,
     }
+    if voice_queue is not None:
+        out["voice_verification"] = voice_queue
+    return out
