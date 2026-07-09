@@ -128,12 +128,21 @@ def run_retry_sweep(
     return {"requeued": requeued, "exhausted": exhausted, "considered": len(due)}
 
 
+def _leased_retry_sweep(settings: EligibilitySettings) -> dict[str, Any]:
+    from app.db.leases import LEASE_RETRY_WORKER, try_lease
+
+    with try_lease(get_app_settings(), LEASE_RETRY_WORKER) as acquired:
+        if not acquired:
+            return {"skipped": "lease_held_elsewhere", "requeued": 0, "exhausted": 0}
+        return run_retry_sweep(settings)
+
+
 async def _retry_loop(settings: EligibilitySettings) -> None:
     interval = max(5.0, float(settings.eligibility_retry_worker_interval_seconds))
     logger.info("eligibility retry worker started (interval=%ss)", interval)
     while True:
         try:
-            summary = await asyncio.to_thread(run_retry_sweep, settings)
+            summary = await asyncio.to_thread(_leased_retry_sweep, settings)
             if summary.get("requeued") or summary.get("exhausted"):
                 logger.warning("eligibility retry sweep: %s", summary)
         except asyncio.CancelledError:

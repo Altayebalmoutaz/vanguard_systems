@@ -5,6 +5,9 @@
 -- Prerequisite: PIPELINE_WORKER_ENABLED=true and NEON_DATABASE_URL set on FastAPI.
 -- Dashboard create_eligibility_request already enqueues platform.pipeline_runs.
 
+-- Live triggers are on rcm.eligibility_requests (see 054). Keep public drops for idempotency.
+drop trigger if exists trg_process_eligibility_request on rcm.eligibility_requests;
+drop trigger if exists trg_retry_eligibility_request on rcm.eligibility_requests;
 drop trigger if exists trg_process_eligibility_request on public.eligibility_requests;
 drop trigger if exists trg_retry_eligibility_request on public.eligibility_requests;
 

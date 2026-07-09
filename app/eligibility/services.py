@@ -8,7 +8,6 @@ import logging
 from typing import Any
 from uuid import UUID
 
-from app.config import get_settings as get_app_settings
 from app.eligibility.api_client import build_payload, call_stedi
 from app.eligibility.audit import write_audit_event
 from app.eligibility.canonical_record import attach_eligibility_canonical_record
@@ -180,7 +179,6 @@ def run_realtime_pipeline(
         secondary_payer_id=request.secondary_payer_id,
         raw_for_db=raw_for_db,
     )
-    app_settings = get_app_settings()
     practice_id = str(getattr(request, "practice_id", None) or "").strip() or None
     if practice_id:
         row["practice_id"] = practice_id
@@ -188,7 +186,7 @@ def run_realtime_pipeline(
         supabase,
         row,
         practice_id=practice_id,
-        settings=app_settings,
+        settings=s,
     )
 
     proc_rows: list[dict[str, Any]] = []
@@ -224,7 +222,7 @@ def run_realtime_pipeline(
                 check_id,
                 proc_rows,
                 practice_id=practice_id,
-                settings=app_settings,
+                settings=s,
             )
         except Exception:
             logger.exception("cost calculation failed for check_id=%s", check_id)
@@ -234,12 +232,12 @@ def run_realtime_pipeline(
         if proc_rows:
             try:
                 insert_procedure_estimates(
-                supabase,
-                check_id,
-                proc_rows,
-                practice_id=practice_id,
-                settings=app_settings,
-            )
+                    supabase,
+                    check_id,
+                    proc_rows,
+                    practice_id=practice_id,
+                    settings=s,
+                )
             except Exception:
                 logger.exception(
                     "partial procedure estimate insert failed for check_id=%s", check_id
@@ -297,6 +295,7 @@ def run_eligibility_check_endpoint(
             event_type="CACHE_HIT",
             detail={"payer_id": request.primary_payer_id, "check_id": cached.get("id")},
             settings=s,
+            practice_id=request.practice_id,
         )
         return {
             "cached": True,
@@ -326,6 +325,7 @@ def run_eligibility_check_endpoint(
         event_type="ROUTING",
         detail={"results": [{"routing": r["routing"], "check_id": r["check_id"]} for r in results]},
         settings=s,
+        practice_id=request.practice_id,
     )
 
     voice_queue: dict[str, Any] | None = None

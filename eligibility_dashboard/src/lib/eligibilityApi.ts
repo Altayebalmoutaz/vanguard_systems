@@ -42,6 +42,64 @@ export async function fetchEligibilitySettings(): Promise<{
   return { ok: true, settings: payload.settings ?? null };
 }
 
+export type UpdateEligibilitySettingsPayload = {
+  voice_verification_enabled?: boolean;
+  voice_verification_auto_queue?: boolean;
+  auto_check_enabled?: boolean;
+  auto_retry_enabled?: boolean;
+};
+
+export async function updateEligibilitySettings(
+  body: UpdateEligibilitySettingsPayload,
+): Promise<{ ok: boolean; settings: EligibilityAgentSettings | null; message?: string }> {
+  const resp = await fetch("/api/dashboard/eligibility/settings", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const payload = await parseJson<{ settings?: EligibilityAgentSettings | null }>(resp);
+  if (!resp.ok) {
+    return { ok: false, settings: null, message: errorMessage(payload, "Failed to update settings") };
+  }
+  return { ok: true, settings: payload.settings ?? null };
+}
+
+export async function queueVoiceForRequest(requestId: string): Promise<{
+  ok: boolean;
+  result: Record<string, unknown> | null;
+  message?: string;
+}> {
+  const resp = await fetch(
+    `/api/dashboard/eligibility/requests/${encodeURIComponent(requestId)}/voice/queue`,
+    { method: "POST" },
+  );
+  const payload = await parseJson<Record<string, unknown>>(resp);
+  if (!resp.ok) {
+    return {
+      ok: false,
+      result: null,
+      message: errorMessage(payload, "Failed to queue voice call"),
+    };
+  }
+  return { ok: true, result: payload };
+}
+
+export async function reviewVoiceSession(
+  sessionId: string,
+  action: "approve" | "reject",
+): Promise<{ ok: boolean; message?: string }> {
+  const resp = await fetch("/api/eligibility/voice/approve", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ session_id: sessionId, action }),
+  });
+  const payload = await parseJson<ApiError>(resp);
+  if (!resp.ok) {
+    return { ok: false, message: errorMessage(payload, "Voice review failed") };
+  }
+  return { ok: true };
+}
+
 export async function fetchProcedureEstimates(requestId: string): Promise<{
   ok: boolean;
   estimates: ProcedureEstimate[];

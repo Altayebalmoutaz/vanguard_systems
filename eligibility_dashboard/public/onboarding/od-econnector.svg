@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="420" viewBox="0 0 640 420" fill="none">
+  <rect width="640" height="420" rx="24" fill="#F8FAFC"/>
+  <rect x="90" y="60" width="460" height="300" rx="16" fill="#fff" stroke="#E2E8F0"/>
+  <text x="120" y="110" fill="#0F172A" font-family="Arial, sans-serif" font-size="18" font-weight="700">eConnector Service</text>
+  <text x="120" y="138" fill="#64748B" font-family="Arial, sans-serif" font-size="13">Setup � eServices � eConnector</text>
+  <rect x="120" y="170" width="400" height="72" rx="12" fill="#ECFDF5" stroke="#A7F3D0"/>
+  <circle cx="156" cy="206" r="10" fill="#10B981"/>
+  <text x="180" y="200" fill="#065F46" font-family="Arial, sans-serif" font-size="14" font-weight="700">Status: Working</text>
+  <text x="180" y="222" fill="#047857" font-family="Arial, sans-serif" font-size="12">Bridge to Open Dental cloud is online</text>
+  <rect x="120" y="270" width="120" height="40" rx="10" fill="#1880F0"/>
+  <text x="155" y="295" fill="#fff" font-family="Arial, sans-serif" font-size="14" font-weight="700">Start</text>
+  <rect x="256" y="270" width="120" height="40" rx="10" fill="#F1F5F9" stroke="#E2E8F0"/>
+  <text x="288" y="295" fill="#475569" font-family="Arial, sans-serif" font-size="14" font-weight="600">Install</text>
+</svg>

@@ -11,6 +11,7 @@ import {
   fetchEligibilitySettings,
   fetchProcedureEstimates,
   fetchRequestEvents,
+  reviewVoiceSession as reviewVoiceSessionApi,
 } from "@/lib/eligibilityApi";
 import type {
   AgentStatusSummary,
@@ -24,7 +25,10 @@ import type {
 import {
   Activity,
   AlertTriangle,
+  ArrowDown,
   ArrowLeft,
+  ArrowUp,
+  ArrowUpDown,
   BrainCircuit,
   Calendar,
   CalendarDays,
@@ -52,9 +56,20 @@ import {
 } from "lucide-react";
 import { ConfidenceGauge, RadialDonut } from "@/components/ui/Gauges";
 import { useClientValue } from "@/hooks/useClientValue";
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
 type FilterValue = "all" | "verified" | "inactive" | "attention";
+type SortColumn = "patient" | "payer" | "status" | "appointment";
+type SortDir = "asc" | "desc";
 type PanelMode = "details" | "form" | null;
 
 type FormState = {
@@ -266,11 +281,18 @@ function deriveStatus(row: DashboardRow): DashboardStatusLabel {
   if (row.request.status === "retrying") return "Retrying";
   if (row.request.status === "needs_attention") return "Needs Attention";
   if (row.check?.is_active === false) return "Inactive";
-  if (!row.check || row.check.response_complete === false) return "Needs Attention";
-  if ((row.check.missing_fields?.length ?? 0) > 0 || (row.check.integrity_warnings?.length ?? 0) > 0) {
+  if (!row.check || row.check.response_complete === false)
+    return "Needs Attention";
+  if (
+    (row.check.missing_fields?.length ?? 0) > 0 ||
+    (row.check.integrity_warnings?.length ?? 0) > 0
+  ) {
     return "Needs Attention";
   }
-  if (row.check.routing_status && !["CLEARED", "APPROVED"].includes(row.check.routing_status)) {
+  if (
+    row.check.routing_status &&
+    !["CLEARED", "APPROVED"].includes(row.check.routing_status)
+  ) {
     return "Needs Attention";
   }
   return "Verified";
@@ -283,19 +305,28 @@ function statusClass(status: ReturnType<typeof deriveStatus>): string {
   if (status === "Needs Attention") {
     return "border-amber-200 bg-amber-50 text-amber-700";
   }
-  if (status === "Inactive" || status === "Processing" || status === "Queued" || status === "Retrying") {
+  if (
+    status === "Inactive" ||
+    status === "Processing" ||
+    status === "Queued" ||
+    status === "Retrying"
+  ) {
     return "border-slate-200 bg-slate-50 text-slate-700";
   }
   return "border-red-200 bg-red-50 text-red-700";
 }
 
-function priorityClass(priority: EligibilityDashboardRow["priority"] | null | undefined): string {
+function priorityClass(
+  priority: EligibilityDashboardRow["priority"] | null | undefined,
+): string {
   if (priority === "high") return "border-red-200 bg-red-50 text-red-700";
   if (priority === "low") return "border-slate-200 bg-slate-50 text-slate-500";
   return "border-indigo-200 bg-indigo-50 text-indigo-700";
 }
 
-function statusFromReadModel(status: DashboardStatusLabel): DashboardStatusLabel {
+function statusFromReadModel(
+  status: DashboardStatusLabel,
+): DashboardStatusLabel {
   return status;
 }
 
@@ -335,7 +366,11 @@ function formatShortDate(value: string | null | undefined): string {
   if (!value) return "\u2014";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "\u2014";
-  return date.toLocaleDateString(undefined, { year: "numeric", month: "2-digit", day: "2-digit" });
+  return date.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
 }
 
 function formatDateTime(value: string | null | undefined): string {
@@ -352,7 +387,10 @@ function formatDateTime(value: string | null | undefined): string {
 }
 
 /** Percentage of `whole` represented by `part`, clamped 0..100. */
-function pctOf(part: number | null | undefined, whole: number | null | undefined): number {
+function pctOf(
+  part: number | null | undefined,
+  whole: number | null | undefined,
+): number {
   if (!whole || whole <= 0) return 0;
   return Math.max(0, Math.min(100, Math.round(((part ?? 0) / whole) * 100)));
 }
@@ -368,7 +406,10 @@ function confidenceScore(row: DashboardRow): number {
   score -= (check.missing_fields?.length ?? 0) * 8;
   score -= (check.integrity_warnings?.length ?? 0) * 6;
   if (check.is_active === false) score -= 8;
-  if (check.routing_status && !["CLEARED", "APPROVED"].includes(check.routing_status)) {
+  if (
+    check.routing_status &&
+    !["CLEARED", "APPROVED"].includes(check.routing_status)
+  ) {
     score -= 12;
   }
   return Math.max(35, Math.min(99, Math.round(score)));
@@ -383,7 +424,10 @@ function estimatedPatientPortion(
   if (read?.estimated_patient_responsibility != null) {
     return Math.round(read.estimated_patient_responsibility);
   }
-  const fromEstimates = estimates.reduce((sum, e) => sum + (e.patient_responsibility ?? 0), 0);
+  const fromEstimates = estimates.reduce(
+    (sum, e) => sum + (e.patient_responsibility ?? 0),
+    0,
+  );
   if (fromEstimates > 0) return Math.round(fromEstimates);
   const check = row.check;
   if (!check) return null;
@@ -405,22 +449,38 @@ function buildAiSummary(
   portion: number | null,
 ): string {
   const check = row.check;
-  if (!check) return "Awaiting payer response \u2014 no benefit details returned yet.";
+  if (!check)
+    return "Awaiting payer response \u2014 no benefit details returned yet.";
   if (check.is_active === false) {
     return check.inactive_reason
       ? `Coverage is inactive: ${check.inactive_reason}.`
       : "Coverage is inactive for this member.";
   }
   const parts: string[] = [];
-  const service = serviceLabel ? serviceLabel.split("\u2013").slice(1).join("\u2013").trim() : null;
-  parts.push(service ? `Eligible for ${service.toLowerCase()}.` : "Coverage is active for today's visit.");
+  const service = serviceLabel
+    ? serviceLabel.split("\u2013").slice(1).join("\u2013").trim()
+    : null;
+  parts.push(
+    service
+      ? `Eligible for ${service.toLowerCase()}.`
+      : "Coverage is active for today's visit.",
+  );
   if (check.deductible_remaining != null) {
-    parts.push(`$${Math.round(check.deductible_remaining)} deductible remaining.`);
+    parts.push(
+      `$${Math.round(check.deductible_remaining)} deductible remaining.`,
+    );
   }
-  if (check.annual_max_total != null && check.annual_max_used != null && check.annual_max_total > 0) {
-    parts.push(`Annual max is ${pctOf(check.annual_max_used, check.annual_max_total)}% utilized.`);
+  if (
+    check.annual_max_total != null &&
+    check.annual_max_used != null &&
+    check.annual_max_total > 0
+  ) {
+    parts.push(
+      `Annual max is ${pctOf(check.annual_max_used, check.annual_max_total)}% utilized.`,
+    );
   }
-  if (portion != null) parts.push(`Estimated patient responsibility $${portion}.`);
+  if (portion != null)
+    parts.push(`Estimated patient responsibility $${portion}.`);
   return parts.join(" ");
 }
 
@@ -501,7 +561,9 @@ function rowFromReadModel(row: EligibilityDashboardRow): DashboardRow {
   };
 }
 
-function syntheticReadRowFromDashboard(row: DashboardRow): EligibilityDashboardRow {
+function syntheticReadRowFromDashboard(
+  row: DashboardRow,
+): EligibilityDashboardRow {
   const statusLabel = deriveStatus(row);
   const check = row.check;
   return {
@@ -565,7 +627,8 @@ function syntheticReadRowFromDashboard(row: DashboardRow): EligibilityDashboardR
     annual_max_used: check?.annual_max_used ?? null,
     annual_max_remaining: check?.annual_max_remaining ?? null,
     estimated_patient_responsibility: null,
-    coverage_status: check?.is_active === false ? "inactive" : check ? "active" : "unknown",
+    coverage_status:
+      check?.is_active === false ? "inactive" : check ? "active" : "unknown",
     response_complete: check?.response_complete ?? null,
     missing_fields_count: check?.missing_fields?.length ?? 0,
     missing_fields: check?.missing_fields ?? null,
@@ -583,7 +646,9 @@ function syntheticReadRowFromDashboard(row: DashboardRow): EligibilityDashboardR
   };
 }
 
-function voiceSessionStatusLabel(status: string | null | undefined): string | null {
+function voiceSessionStatusLabel(
+  status: string | null | undefined,
+): string | null {
   if (!status) return null;
   const map: Record<string, string> = {
     queued: "Queued",
@@ -597,7 +662,9 @@ function voiceSessionStatusLabel(status: string | null | undefined): string | nu
   return map[status] ?? status;
 }
 
-function isStediVoiceComplete(readRow: EligibilityDashboardRow | undefined): boolean {
+function isStediVoiceComplete(
+  readRow: EligibilityDashboardRow | undefined,
+): boolean {
   if (!readRow) return false;
   return (
     readRow.voice_session_status === "approved" &&
@@ -637,7 +704,9 @@ function countdown(value: string | null | undefined): string {
 }
 
 function needsHumanAttention(status: DashboardStatusLabel): boolean {
-  return status === "Failed" || status === "Needs Attention" || status === "Inactive";
+  return (
+    status === "Failed" || status === "Needs Attention" || status === "Inactive"
+  );
 }
 
 function deriveAgentStatus(
@@ -645,25 +714,37 @@ function deriveAgentStatus(
   settings: EligibilityAgentSettings | null,
 ): AgentStatusSummary {
   const today = new Date().toDateString();
-  const todays = readRows.filter((row) => new Date(row.created_at).toDateString() === today);
+  const todays = readRows.filter(
+    (row) => new Date(row.created_at).toDateString() === today,
+  );
   const todayTotal = todays.length;
-  const todayVerified = todays.filter((row) => row.status_label === "Verified").length;
-  const todayRetried = todays.filter((row) => (row.attempt_count ?? 0) > 1).length;
+  const todayVerified = todays.filter(
+    (row) => row.status_label === "Verified",
+  ).length;
+  const todayRetried = todays.filter(
+    (row) => (row.attempt_count ?? 0) > 1,
+  ).length;
   const todayAwaitingHuman = todays.filter((row) =>
     ["Needs Attention", "Failed", "Inactive"].includes(row.status_label),
   ).length;
   const todayAutoHandled = todays.filter(
     (row) =>
-      row.status_label === "Verified" && (row.attempt_count ?? 0) <= 1 && !row.failure_category,
+      row.status_label === "Verified" &&
+      (row.attempt_count ?? 0) <= 1 &&
+      !row.failure_category,
   ).length;
-  const autoHandledPct = todayTotal ? Math.round((todayAutoHandled / todayTotal) * 100) : 0;
+  const autoHandledPct = todayTotal
+    ? Math.round((todayAutoHandled / todayTotal) * 100)
+    : 0;
 
   const lastEventCandidates = [
     settings?.last_sync_at,
     ...readRows.map((row) => row.updated_at),
   ].filter(Boolean) as string[];
   const lastEventAt = lastEventCandidates.length
-    ? lastEventCandidates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0]
+    ? lastEventCandidates.sort(
+        (a, b) => new Date(b).getTime() - new Date(a).getTime(),
+      )[0]
     : null;
 
   const upcomingRetries = readRows
@@ -723,7 +804,9 @@ function eventToActivityLine(
   rowsById: Map<string, EligibilityDashboardRow>,
 ): { label: string; subject: string; payer: string | null } {
   const row = rowsById.get(event.request_id);
-  const subject = row ? row.patient_name.trim() || row.subscriber_id : "Unknown patient";
+  const subject = row
+    ? row.patient_name.trim() || row.subscriber_id
+    : "Unknown patient";
   const payer = row?.payer_label ?? null;
   return {
     label: humanizeEventType(event.event_type),
@@ -732,13 +815,21 @@ function eventToActivityLine(
   };
 }
 
-type DailyBucket = { bucket_date: string; total_count: number; verified_count: number };
+type DailyBucket = {
+  bucket_date: string;
+  total_count: number;
+  verified_count: number;
+};
 
 function formatDob(value: string | null | undefined): string {
   if (!value) return "—";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
-  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  return d.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
 }
 
 function deriveConfidence(
@@ -746,18 +837,28 @@ function deriveConfidence(
   row: DashboardRow,
 ): "high" | "low" | "processing" {
   const status = readRow?.status_label ?? deriveStatus(row);
-  if (status === "Queued" || status === "Processing" || status === "Retrying") return "processing";
+  if (status === "Queued" || status === "Processing" || status === "Retrying")
+    return "processing";
   if (status === "Verified") {
     const complete = readRow?.response_complete !== false;
-    const missing = (readRow?.missing_fields_count ?? row.check?.missing_fields?.length ?? 0) === 0;
-    const warns = (readRow?.integrity_warnings_count ?? row.check?.integrity_warnings?.length ?? 0) === 0;
+    const missing =
+      (readRow?.missing_fields_count ??
+        row.check?.missing_fields?.length ??
+        0) === 0;
+    const warns =
+      (readRow?.integrity_warnings_count ??
+        row.check?.integrity_warnings?.length ??
+        0) === 0;
     if (complete && missing && warns) return "high";
     return "low";
   }
   return "low";
 }
 
-function dentaiStatusPill(readRow: EligibilityDashboardRow | undefined, row: DashboardRow) {
+function dentaiStatusPill(
+  readRow: EligibilityDashboardRow | undefined,
+  row: DashboardRow,
+) {
   const status = readRow?.status_label ?? deriveStatus(row);
   const conf = deriveConfidence(readRow, row);
   if (conf === "processing") {
@@ -827,7 +928,10 @@ function dentaiStatusPill(readRow: EligibilityDashboardRow | undefined, row: Das
   };
 }
 
-function aggregateDailyFromReadRows(readRows: EligibilityDashboardRow[], days: number): DailyBucket[] {
+function aggregateDailyFromReadRows(
+  readRows: EligibilityDashboardRow[],
+  days: number,
+): DailyBucket[] {
   const keys: string[] = [];
   const today = new Date();
   for (let i = days - 1; i >= 0; i--) {
@@ -850,14 +954,29 @@ function aggregateDailyFromReadRows(readRows: EligibilityDashboardRow[], days: n
   });
 }
 
-function exportUpcomingCsv(rows: DashboardRow[], readRowById: Map<string, EligibilityDashboardRow>): void {
-  const headers = ["Patient", "DOB", "MemberId", "Payer", "Plan", "Deductible", "AnnualMax", "Status", "Confidence"];
+function exportUpcomingCsv(
+  rows: DashboardRow[],
+  readRowById: Map<string, EligibilityDashboardRow>,
+): void {
+  const headers = [
+    "Patient",
+    "DOB",
+    "MemberId",
+    "Payer",
+    "Plan",
+    "Deductible",
+    "AnnualMax",
+    "Status",
+    "Confidence",
+  ];
   const lines = rows.map((row) => {
     const r = readRowById.get(row.request.id);
     const status = r?.status_label ?? deriveStatus(row);
     const conf = deriveConfidence(r, row);
-    const ded = row.check?.deductible_remaining ?? row.check?.deductible_total ?? "";
-    const amax = row.check?.annual_max_remaining ?? row.check?.annual_max_total ?? "";
+    const ded =
+      row.check?.deductible_remaining ?? row.check?.deductible_total ?? "";
+    const amax =
+      row.check?.annual_max_remaining ?? row.check?.annual_max_total ?? "";
     const cells = [
       `${row.request.first_name} ${row.request.last_name}`,
       row.request.dob,
@@ -871,7 +990,9 @@ function exportUpcomingCsv(rows: DashboardRow[], readRowById: Map<string, Eligib
     ].map((c) => `"${String(c).replace(/"/g, '""')}"`);
     return cells.join(",");
   });
-  const blob = new Blob([`${headers.join(",")}\n${lines.join("\n")}`], { type: "text/csv;charset=utf-8" });
+  const blob = new Blob([`${headers.join(",")}\n${lines.join("\n")}`], {
+    type: "text/csv;charset=utf-8",
+  });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -882,7 +1003,8 @@ function exportUpcomingCsv(rows: DashboardRow[], readRowById: Map<string, Eligib
 
 function eventActivityIcon(eventType: string) {
   const t = eventType.toLowerCase();
-  if (t.includes("fail") || t.includes("error") || t.includes("attention")) return AlertTriangle;
+  if (t.includes("fail") || t.includes("error") || t.includes("attention"))
+    return AlertTriangle;
   if (t.includes("invoked") || t.includes("retry")) return Phone;
   if (t.includes("complet") || t.includes("verified")) return Check;
   return Sparkles;
@@ -898,12 +1020,60 @@ function VoiceWaveIcon({ size = 28 }: { size?: number }) {
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden
     >
-      <rect x="2" y="11" width="2.5" height="6" rx="1.25" fill="white" opacity="0.5" />
-      <rect x="6" y="8" width="2.5" height="12" rx="1.25" fill="white" opacity="0.7" />
-      <rect x="10" y="4" width="2.5" height="20" rx="1.25" fill="white" opacity="0.95" />
-      <rect x="14" y="7" width="2.5" height="14" rx="1.25" fill="white" opacity="0.8" />
-      <rect x="18" y="10" width="2.5" height="8" rx="1.25" fill="white" opacity="0.6" />
-      <rect x="22" y="12" width="2.5" height="4" rx="1.25" fill="white" opacity="0.4" />
+      <rect
+        x="2"
+        y="11"
+        width="2.5"
+        height="6"
+        rx="1.25"
+        fill="white"
+        opacity="0.5"
+      />
+      <rect
+        x="6"
+        y="8"
+        width="2.5"
+        height="12"
+        rx="1.25"
+        fill="white"
+        opacity="0.7"
+      />
+      <rect
+        x="10"
+        y="4"
+        width="2.5"
+        height="20"
+        rx="1.25"
+        fill="white"
+        opacity="0.95"
+      />
+      <rect
+        x="14"
+        y="7"
+        width="2.5"
+        height="14"
+        rx="1.25"
+        fill="white"
+        opacity="0.8"
+      />
+      <rect
+        x="18"
+        y="10"
+        width="2.5"
+        height="8"
+        rx="1.25"
+        fill="white"
+        opacity="0.6"
+      />
+      <rect
+        x="22"
+        y="12"
+        width="2.5"
+        height="4"
+        rx="1.25"
+        fill="white"
+        opacity="0.4"
+      />
     </svg>
   );
 }
@@ -914,28 +1084,58 @@ function activityIconStyle(eventType: string): {
   fg: string;
 } {
   const t = eventType.toLowerCase();
-  if (t.includes("fail") || t.includes("error") || t.includes("attention") || t.includes("low")) {
+  if (
+    t.includes("fail") ||
+    t.includes("error") ||
+    t.includes("attention") ||
+    t.includes("low")
+  ) {
     return { Icon: AlertTriangle, bg: "bg-amber-50", fg: "text-amber-600" };
   }
-  if (t.includes("invoked") || t.includes("calling") || t.includes("retry") || t.includes("voice")) {
+  if (
+    t.includes("invoked") ||
+    t.includes("calling") ||
+    t.includes("retry") ||
+    t.includes("voice")
+  ) {
     return { Icon: Phone, bg: "bg-blue-50", fg: "text-blue-600" };
   }
   return { Icon: Sparkles, bg: "bg-indigo-50", fg: "text-indigo-600" };
 }
 
-function activitySubPill(eventType: string): { label: string; cls: string } | null {
+function activitySubPill(
+  eventType: string,
+): { label: string; cls: string } | null {
   const t = eventType.toLowerCase();
   if (t.includes("fail") || t.includes("attention") || t.includes("low")) {
-    return { label: "Needs Review", cls: "border-amber-200 bg-amber-50 text-amber-700" };
+    return {
+      label: "Needs Review",
+      cls: "border-amber-200 bg-amber-50 text-amber-700",
+    };
   }
-  if (t.includes("invoked") || t.includes("calling") || t.includes("processing") || t.includes("retry") || t.includes("voice")) {
-    return { label: "In Progress", cls: "border-blue-200 bg-blue-50 text-blue-700" };
+  if (
+    t.includes("invoked") ||
+    t.includes("calling") ||
+    t.includes("processing") ||
+    t.includes("retry") ||
+    t.includes("voice")
+  ) {
+    return {
+      label: "In Progress",
+      cls: "border-blue-200 bg-blue-50 text-blue-700",
+    };
   }
   if (t.includes("pending_review")) {
-    return { label: "Pending Review", cls: "border-violet-200 bg-violet-50 text-violet-700" };
+    return {
+      label: "Pending Review",
+      cls: "border-violet-200 bg-violet-50 text-violet-700",
+    };
   }
   if (t.includes("complet") || t.includes("verified")) {
-    return { label: "Verified – High Confidence", cls: "border-emerald-200 bg-emerald-50 text-emerald-700" };
+    return {
+      label: "Verified – High Confidence",
+      cls: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    };
   }
   return null;
 }
@@ -953,13 +1153,17 @@ function AgentActivityRail({
   expanded: boolean;
   onToggleExpand: () => void;
 }) {
-  const wrapClass = expanded ? "max-h-[32rem]" : "max-h-[26rem] overflow-hidden";
+  const wrapClass = expanded
+    ? "max-h-[32rem]"
+    : "max-h-[26rem] overflow-hidden";
   return (
     <aside className="card flex h-fit flex-col p-4">
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Activity size={16} className="text-indigo-600" strokeWidth={2} />
-          <span className="text-[14px] font-semibold text-slate-900">Activity Feed</span>
+          <span className="text-[14px] font-semibold text-slate-900">
+            Activity Feed
+          </span>
         </div>
         <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600">
           <span className="relative flex h-2 w-2 text-emerald-500">
@@ -969,7 +1173,9 @@ function AgentActivityRail({
         </span>
       </div>
       {items.length === 0 ? (
-        <div className="text-[12px] font-normal text-slate-500">Waiting for the next agent action…</div>
+        <div className="text-[12px] font-normal text-slate-500">
+          Waiting for the next agent action…
+        </div>
       ) : (
         <ul className={`space-y-3 ${wrapClass} overflow-y-auto pr-1`}>
           {items.map((event, evIdx) => {
@@ -995,12 +1201,21 @@ function AgentActivityRail({
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1 text-[13px] font-semibold leading-tight text-slate-900">
                       {line.label}
-                      {line.subject ? <span className="font-normal text-slate-700"> for {line.subject}</span> : null}
+                      {line.subject ? (
+                        <span className="font-normal text-slate-700">
+                          {" "}
+                          for {line.subject}
+                        </span>
+                      ) : null}
                     </div>
-                    <span className="shrink-0 text-[11px] text-slate-500">{clock}</span>
+                    <span className="shrink-0 text-[11px] text-slate-500">
+                      {clock}
+                    </span>
                   </div>
                   {line.payer ? (
-                    <div className="mt-0.5 text-[12px] leading-tight text-slate-500">{line.payer}</div>
+                    <div className="mt-0.5 text-[12px] leading-tight text-slate-500">
+                      {line.payer}
+                    </div>
                   ) : null}
                   {sub ? (
                     <span
@@ -1027,9 +1242,13 @@ function AgentActivityRail({
 }
 
 export default function EligibilityDashboard() {
+  const searchParams = useSearchParams();
+  const deepLinkRequestId = searchParams.get("request");
   const [rows, setRows] = useState<DashboardRow[]>([]);
   const [readRows, setReadRows] = useState<EligibilityDashboardRow[]>([]);
-  const [settings, setSettings] = useState<EligibilityAgentSettings | null>(null);
+  const [settings, setSettings] = useState<EligibilityAgentSettings | null>(
+    null,
+  );
   const [estimates, setEstimates] = useState<ProcedureEstimate[]>([]);
   const [events, setEvents] = useState<EligibilityRequestEvent[]>([]);
   const [activity, setActivity] = useState<EligibilityRequestEvent[]>([]);
@@ -1041,14 +1260,16 @@ export default function EligibilityDashboard() {
   const [panelMode, setPanelMode] = useState<PanelMode>(null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<FilterValue>("all");
+  const [sortColumn, setSortColumn] = useState<SortColumn>("appointment");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [submitting, setSubmitting] = useState(false);
   const [showRaw, setShowRaw] = useState(false);
   const [voiceReviewBusy, setVoiceReviewBusy] = useState(false);
   const refreshTimerRef = useRef<number | null>(null);
+  const deepLinkAppliedRef = useRef<string | null>(null);
   // Time/locale-dependent labels are client-only: the server clock/timezone
   // would differ from the browser and cause a hydration mismatch. They render a
   // stable fallback on the server + first paint, then the real value once hydrated.
@@ -1057,21 +1278,36 @@ export default function EligibilityDashboard() {
     return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
   }, "Welcome");
   const clientDateLabel = useClientValue(
-    () => new Date().toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" }),
+    () =>
+      new Date().toLocaleDateString(undefined, {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      }),
     "",
   );
   const clientAsOfTime = useClientValue(
-    () => new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
+    () =>
+      new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
     "",
   );
 
-  const selectedRow = useMemo(() => rows.find((row) => row.request.id === selectedId) ?? null, [rows, selectedId]);
+  const selectedRow = useMemo(
+    () => rows.find((row) => row.request.id === selectedId) ?? null,
+    [rows, selectedId],
+  );
   const selectedReadRow = useMemo(
     () => readRows.find((row) => row.request_id === selectedId) ?? null,
     [readRows, selectedId],
   );
-  const readRowById = useMemo(() => new Map(readRows.map((row) => [row.request_id, row])), [readRows]);
-  const parsedCdtCodes = useMemo(() => parseCodes(form.cdt_codes), [form.cdt_codes]);
+  const readRowById = useMemo(
+    () => new Map(readRows.map((row) => [row.request_id, row])),
+    [readRows],
+  );
+  const parsedCdtCodes = useMemo(
+    () => parseCodes(form.cdt_codes),
+    [form.cdt_codes],
+  );
   const activityCapRef = useRef(25);
 
   useEffect(() => {
@@ -1079,7 +1315,6 @@ export default function EligibilityDashboard() {
   }, [activityExpanded]);
 
   const loadRows = useCallback(async () => {
-    setRefreshing(true);
     setBanner(null);
 
     const result = await fetchEligibilityQueue();
@@ -1088,10 +1323,12 @@ export default function EligibilityDashboard() {
         setRows(demoRows);
         setReadRows(demoRows.map(syntheticReadRowFromDashboard));
       }
-      setBanner(result.message ?? "Dashboard API unavailable. Showing local design data.");
+      setBanner(
+        result.message ??
+          "Dashboard API unavailable. Showing local design data.",
+      );
       setPollingActive(false);
       setLoading(false);
-      setRefreshing(false);
       return;
     }
 
@@ -1100,7 +1337,6 @@ export default function EligibilityDashboard() {
     setReadRows(typedRows);
     setRows(typedRows.map(rowFromReadModel));
     setLoading(false);
-    setRefreshing(false);
   }, [rows.length]);
 
   const loadSettings = useCallback(async () => {
@@ -1108,37 +1344,43 @@ export default function EligibilityDashboard() {
     setSettings(result.ok ? result.settings : null);
   }, []);
 
-  const loadEstimates = useCallback(async (requestId: string | null | undefined) => {
-    if (!requestId || requestId.startsWith("demo-")) {
-      setEstimates([]);
-      return;
-    }
+  const loadEstimates = useCallback(
+    async (requestId: string | null | undefined) => {
+      if (!requestId || requestId.startsWith("demo-")) {
+        setEstimates([]);
+        return;
+      }
 
-    const result = await fetchProcedureEstimates(requestId);
-    if (!result.ok) {
-      if (result.message) setBanner(result.message);
-      setEstimates([]);
-      return;
-    }
+      const result = await fetchProcedureEstimates(requestId);
+      if (!result.ok) {
+        if (result.message) setBanner(result.message);
+        setEstimates([]);
+        return;
+      }
 
-    setEstimates(result.estimates);
-  }, []);
+      setEstimates(result.estimates);
+    },
+    [],
+  );
 
-  const loadEvents = useCallback(async (requestId: string | null | undefined) => {
-    if (!requestId || requestId.startsWith("demo-")) {
-      setEvents([]);
-      return;
-    }
+  const loadEvents = useCallback(
+    async (requestId: string | null | undefined) => {
+      if (!requestId || requestId.startsWith("demo-")) {
+        setEvents([]);
+        return;
+      }
 
-    const result = await fetchRequestEvents(requestId);
-    if (!result.ok) {
-      if (result.message) setBanner(result.message);
-      setEvents([]);
-      return;
-    }
+      const result = await fetchRequestEvents(requestId);
+      if (!result.ok) {
+        if (result.message) setBanner(result.message);
+        setEvents([]);
+        return;
+      }
 
-    setEvents(result.events);
-  }, []);
+      setEvents(result.events);
+    },
+    [],
+  );
 
   const loadActivity = useCallback(async (limit: number) => {
     const result = await fetchEligibilityActivity(limit);
@@ -1170,6 +1412,16 @@ export default function EligibilityDashboard() {
   }, []);
 
   useEffect(() => {
+    if (!deepLinkRequestId || rows.length === 0) return;
+    if (deepLinkAppliedRef.current === deepLinkRequestId) return;
+    const match = rows.find((row) => row.request.id === deepLinkRequestId);
+    if (!match) return;
+    deepLinkAppliedRef.current = deepLinkRequestId;
+    setSelectedId(deepLinkRequestId);
+    setPanelMode("details");
+  }, [deepLinkRequestId, rows]);
+
+  useEffect(() => {
     if (!pollingActive) return;
     const interval = window.setInterval(() => {
       void loadRows();
@@ -1184,7 +1436,16 @@ export default function EligibilityDashboard() {
       }
     }, 5000);
     return () => window.clearInterval(interval);
-  }, [loadActivity, loadEstimates, loadEvents, loadRows, loadSettings, panelMode, pollingActive, selectedId]);
+  }, [
+    loadActivity,
+    loadEstimates,
+    loadEvents,
+    loadRows,
+    loadSettings,
+    panelMode,
+    pollingActive,
+    selectedId,
+  ]);
 
   useEffect(() => {
     const id = window.setTimeout(() => {
@@ -1208,7 +1469,9 @@ export default function EligibilityDashboard() {
 
   const rowsInDateRange = useMemo(() => {
     if (!dateFrom && !dateTo) return rows;
-    const fromTime = dateFrom ? new Date(`${dateFrom}T00:00:00`).getTime() : null;
+    const fromTime = dateFrom
+      ? new Date(`${dateFrom}T00:00:00`).getTime()
+      : null;
     const toTime = dateTo ? new Date(`${dateTo}T23:59:59.999`).getTime() : null;
     return rows.filter((row) => {
       const readRow = readRowById.get(row.request.id);
@@ -1230,16 +1493,79 @@ export default function EligibilityDashboard() {
         filter === "all" ||
         (filter === "verified" && status === "Verified") ||
         (filter === "inactive" && status === "Inactive") ||
-        (filter === "attention" && ["Needs Attention", "Failed", "Processing", "Queued", "Retrying"].includes(status));
+        (filter === "attention" &&
+          [
+            "Needs Attention",
+            "Failed",
+            "Processing",
+            "Queued",
+            "Retrying",
+          ].includes(status));
       const haystack =
         `${row.request.first_name} ${row.request.last_name} ${row.request.subscriber_id} ${readRow?.payer_label ?? ""}`.toLowerCase();
       return matchesFilter && (!q || haystack.includes(q));
     });
   }, [filter, query, readRowById, rowsInDateRange]);
 
+  const sortedRows = useMemo(() => {
+    const list = [...filteredRows];
+    const dir = sortDir === "asc" ? 1 : -1;
+    list.sort((a, b) => {
+      const readA = readRowById.get(a.request.id);
+      const readB = readRowById.get(b.request.id);
+      let cmp = 0;
+      if (sortColumn === "patient") {
+        const nameA =
+          `${a.request.last_name} ${a.request.first_name}`.toLowerCase();
+        const nameB =
+          `${b.request.last_name} ${b.request.first_name}`.toLowerCase();
+        cmp = nameA.localeCompare(nameB);
+      } else if (sortColumn === "payer") {
+        const payerA = (
+          readA?.payer_label ??
+          a.request.primary_payer_id ??
+          ""
+        ).toLowerCase();
+        const payerB = (
+          readB?.payer_label ??
+          b.request.primary_payer_id ??
+          ""
+        ).toLowerCase();
+        cmp = payerA.localeCompare(payerB);
+      } else if (sortColumn === "status") {
+        const statusA = readA?.status_label ?? deriveStatus(a);
+        const statusB = readB?.status_label ?? deriveStatus(b);
+        cmp = statusA.localeCompare(statusB);
+      } else {
+        const apptA =
+          readA?.appointment_date ??
+          a.request.appointment_date ??
+          a.request.created_at.slice(0, 10);
+        const apptB =
+          readB?.appointment_date ??
+          b.request.appointment_date ??
+          b.request.created_at.slice(0, 10);
+        cmp = apptA.localeCompare(apptB);
+      }
+      return cmp * dir;
+    });
+    return list;
+  }, [filteredRows, readRowById, sortColumn, sortDir]);
+
+  const toggleSort = (column: SortColumn) => {
+    if (sortColumn === column) {
+      setSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
+      return;
+    }
+    setSortColumn(column);
+    setSortDir("asc");
+  };
+
   const kpi = useMemo(() => {
     const total = readRows.length;
-    const verified = readRows.filter((r) => r.status_label === "Verified").length;
+    const verified = readRows.filter(
+      (r) => r.status_label === "Verified",
+    ).length;
     const rate = total ? Math.round((verified / total) * 1000) / 10 : 0;
     const today = new Date().toDateString();
     const yesterday = new Date();
@@ -1255,14 +1581,22 @@ export default function EligibilityDashboard() {
       const ts = r.checked_at ?? r.updated_at;
       return ts ? new Date(ts).toDateString() === yStr : false;
     }).length;
-    const attention = readRows.filter((r) => ["Needs Attention", "Failed", "Inactive"].includes(r.status_label)).length;
+    const attention = readRows.filter((r) =>
+      ["Needs Attention", "Failed", "Inactive"].includes(r.status_label),
+    ).length;
     const buckets = aggregateDailyFromReadRows(readRows, 7);
-    const rateSeries = buckets.map((b) => (b.total_count ? Math.round((b.verified_count / b.total_count) * 100) : 0));
+    const rateSeries = buckets.map((b) =>
+      b.total_count ? Math.round((b.verified_count / b.total_count) * 100) : 0,
+    );
     const verifiedSeries = buckets.map((b) => b.verified_count);
-    const attentionSeries = buckets.map((b) => Math.max(0, b.total_count - b.verified_count));
+    const attentionSeries = buckets.map((b) =>
+      Math.max(0, b.total_count - b.verified_count),
+    );
     const lastRate = rateSeries[rateSeries.length - 1] ?? 0;
     const prevRate = rateSeries[rateSeries.length - 2] ?? lastRate;
-    const deltaRate = prevRate ? Math.round(((lastRate - prevRate) / prevRate) * 1000) / 10 : 0;
+    const deltaRate = prevRate
+      ? Math.round(((lastRate - prevRate) / prevRate) * 1000) / 10
+      : 0;
     const deltaVerifiedDay = verifiedToday - verifiedYesterday;
     return {
       rate,
@@ -1356,17 +1690,16 @@ export default function EligibilityDashboard() {
     }
     setVoiceReviewBusy(true);
     try {
-      const resp = await fetch("/api/eligibility/voice/approve", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session_id: sessionId, action }),
-      });
-      const payload = (await resp.json().catch(() => ({}))) as { error?: string };
-      if (!resp.ok) {
-        setBanner(payload.error ?? "Voice review failed");
+      const result = await reviewVoiceSessionApi(sessionId, action);
+      if (!result.ok) {
+        setBanner(result.message ?? "Voice review failed");
         return;
       }
-      setBanner(action === "approve" ? "Voice verification approved." : "Voice verification rejected.");
+      setBanner(
+        action === "approve"
+          ? "Voice verification approved."
+          : "Voice verification rejected.",
+      );
       await loadRows();
       if (selectedRow?.request.id) {
         await loadEstimates(selectedRow.request.id);
@@ -1395,8 +1728,13 @@ export default function EligibilityDashboard() {
       appointment_date: form.appointment_date || null,
       appointment_time: form.appointment_time || null,
       provider_name: form.provider_name.trim() || null,
-      estimated_claim_value: form.estimated_claim_value ? Number(form.estimated_claim_value) : null,
-      idempotency_key: createIdempotencyKey("ui", `${form.subscriber_id.trim()}:${form.primary_payer_id.trim()}`),
+      estimated_claim_value: form.estimated_claim_value
+        ? Number(form.estimated_claim_value)
+        : null,
+      idempotency_key: createIdempotencyKey(
+        "ui",
+        `${form.subscriber_id.trim()}:${form.primary_payer_id.trim()}`,
+      ),
       input_json: {
         submitted_from: "eligibility_dashboard",
         parsed_cdt_codes: parseCodes(form.cdt_codes),
@@ -1416,125 +1754,179 @@ export default function EligibilityDashboard() {
 
   return (
     <div className="min-h-screen">
-      <main className="ml-[64px] min-h-screen overflow-y-auto px-7 pb-14 pt-7">
-        <section className="mb-7 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center gap-3.5">
-            <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-300/40 ring-1 ring-inset ring-white/20">
-              <VoiceWaveIcon size={24} />
+      <main className="ml-[60px] min-h-screen overflow-y-auto px-6 pb-12 pt-6">
+        <section className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--accent-primary)] shadow-sm shadow-[rgba(24,128,240,0.22)]">
+              <VoiceWaveIcon size={20} />
             </div>
             <div>
-              <h1 className="text-[22px] font-semibold leading-tight tracking-tight text-slate-900">
-                {clientGreeting}, {dashboardUserDisplayName.replace(/^(Dr\.?|Mr\.?|Mrs\.?|Ms\.?)\s+/i, "Dr. ").split(" ").slice(0, 2).join(" ")}
+              <h1 className="text-[20px] font-semibold leading-tight tracking-tight text-slate-900">
+                {clientGreeting},{" "}
+                {dashboardUserDisplayName
+                  .replace(/^(Dr\.?|Mr\.?|Mrs\.?|Ms\.?)\s+/i, "Dr. ")
+                  .split(" ")
+                  .slice(0, 2)
+                  .join(" ")}
               </h1>
-              <p className="mt-0.5 text-[13px] text-slate-500">
-                Here&apos;s what&apos;s happening with your eligibility verifications.
+              <p className="mt-0.5 text-[12.5px] text-slate-500">
+                Eligibility verifications at a glance.
               </p>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <div className="inline-flex h-8 items-stretch overflow-hidden rounded-md border border-slate-200 bg-white shadow-[0_1px_0_rgba(15,23,42,0.03)]">
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 px-2.5 text-[12px] font-semibold text-slate-700 transition hover:bg-slate-50"
+                aria-label="Date filter"
+              >
+                <Calendar
+                  size={13}
+                  strokeWidth={2.25}
+                  className="text-slate-500"
+                />
+                <span className="tabular-nums tracking-tight">
+                  {clientDateLabel || "Today"}
+                </span>
+                <ChevronDown
+                  size={12}
+                  strokeWidth={2.5}
+                  className="text-slate-400"
+                />
+              </button>
+              <span
+                className="w-px self-stretch bg-slate-200"
+                aria-hidden
+              />
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 px-2.5 text-[12px] font-semibold text-slate-700 transition hover:bg-slate-50"
+                onClick={() => exportUpcomingCsv(sortedRows, readRowById)}
+              >
+                <Download
+                  size={13}
+                  strokeWidth={2.25}
+                  className="text-slate-500"
+                />
+                <span>Export</span>
+              </button>
+            </div>
             <button
               type="button"
-              className="lift-on-hover inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-medium text-slate-600 shadow-sm hover:border-slate-300 hover:bg-slate-50"
-              aria-label="Date filter"
-            >
-              <Calendar size={15} className="text-slate-500" />
-              <span>{clientDateLabel}</span>
-              <ChevronDown size={14} className="text-slate-400" />
-            </button>
-            <button
-              type="button"
-              className="lift-on-hover inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-medium text-slate-600 shadow-sm hover:border-slate-300 hover:bg-slate-50"
-              onClick={() => exportUpcomingCsv(filteredRows, readRowById)}
-            >
-              <Download size={15} className="text-slate-500" />
-              <span>Export Report</span>
-            </button>
-            <button
-              type="button"
-              className="btn-sheen lift-on-hover inline-flex h-9 items-center gap-1.5 rounded-lg bg-gradient-to-b from-indigo-500 to-indigo-600 px-3.5 text-[13px] font-semibold text-white shadow-sm shadow-indigo-300/50 ring-1 ring-inset ring-white/15 hover:from-indigo-500 hover:to-indigo-700 active:scale-[0.98]"
+              className="inline-flex h-8 items-center gap-1.5 rounded-md bg-[var(--accent-primary)] px-3 text-[12px] font-semibold tracking-tight text-white hover:bg-[var(--accent-primary-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-2"
               onClick={() => setPanelMode("form")}
             >
-              <Plus size={15} />
+              <Plus size={14} strokeWidth={2.5} />
               <span>New Check</span>
             </button>
           </div>
         </section>
 
         {banner ? (
-          <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-[12.5px] text-red-700">
             {banner}
           </div>
         ) : null}
 
-        <section className="mb-6 grid gap-4 md:grid-cols-3">
-          <div className="card lift-on-hover flex flex-col p-5">
-            <div className="flex items-start gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50">
-                <ShieldCheck size={17} className="text-emerald-600" strokeWidth={2.2} />
+        <section className="mb-5 grid gap-3 md:grid-cols-3">
+          <div className="card flex flex-col p-4">
+            <div className="flex items-start gap-2.5">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--success-bg)]">
+                <ShieldCheck
+                  size={15}
+                  className="text-[var(--accent-lime)]"
+                  strokeWidth={2.2}
+                />
               </div>
               <div className="flex flex-1 items-start justify-between">
                 <div>
-                  <div className="text-[32px] font-bold leading-none tabular-nums tracking-tight text-slate-900">{kpi.rate}%</div>
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Verification Success Rate</div>
-                  <div className="mt-0.5 text-[12px] text-slate-500">Last 7 days</div>
+                  <div className="text-[26px] font-bold leading-none tabular-nums tracking-tight text-slate-900">
+                    {kpi.rate}%
+                  </div>
+                  <div className="mt-1 text-[10.5px] font-semibold uppercase tracking-[0.07em] text-slate-500">
+                    Verification Success
+                  </div>
+                  <div className="mt-0.5 text-[11.5px] text-slate-400">
+                    Last 7 days
+                  </div>
                 </div>
                 <MiniSparkline
                   values={kpi.rateSeries.length ? kpi.rateSeries : [0]}
-                  strokeColor="#10B981"
-                  width={80}
-              height={36}
-              fillOpacity={0.1}
+                  strokeColor="#5CC82C"
+                  width={72}
+                  height={30}
+                  fillOpacity={0.1}
                 />
               </div>
             </div>
-            <div className="flex items-center gap-1.5 border-t border-slate-100 pt-3 text-[11px] font-semibold">
-              <span>{kpi.deltaRate >= 0 ? "↑" : "↓"} {Math.abs(kpi.deltaRate)}%</span>
+            <div className="mt-3 flex items-center gap-1.5 border-t border-slate-100 pt-2.5 text-[11px] font-semibold text-slate-600">
+              <span>
+                {kpi.deltaRate >= 0 ? "↑" : "↓"} {Math.abs(kpi.deltaRate)}%
+              </span>
               <span className="font-normal text-slate-400">vs prior week</span>
             </div>
           </div>
 
-          <div className="card lift-on-hover flex flex-col p-5">
-            <div className="flex items-start gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50">
-                <Users size={17} className="text-blue-600" strokeWidth={2.2} />
+          <div className="card flex flex-col p-4">
+            <div className="flex items-start gap-2.5">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--accent-primary-soft)]">
+                <Users size={15} className="text-[var(--accent-primary)]" strokeWidth={2.2} />
               </div>
               <div className="flex flex-1 items-start justify-between">
                 <div>
-                  <div className="text-[32px] font-bold leading-none tabular-nums tracking-tight text-slate-900">{kpi.verifiedToday}</div>
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Patients Verified Today</div>
-                  <div className="mt-0.5 min-h-[1.25rem] text-[12px] text-slate-500">
+                  <div className="text-[26px] font-bold leading-none tabular-nums tracking-tight text-slate-900">
+                    {kpi.verifiedToday}
+                  </div>
+                  <div className="mt-1 text-[10.5px] font-semibold uppercase tracking-[0.07em] text-slate-500">
+                    Verified Today
+                  </div>
+                  <div className="mt-0.5 min-h-[1.1rem] text-[11.5px] text-slate-400">
                     {clientAsOfTime ? `As of ${clientAsOfTime}` : "\u00a0"}
                   </div>
                 </div>
                 <MiniSparkline
                   values={kpi.verifiedSeries.length ? kpi.verifiedSeries : [0]}
-                  strokeColor="#3B82F6"
-                  width={80}
-              height={36}
-              fillOpacity={0.1}
+                  strokeColor="#1880F0"
+                  width={72}
+                  height={30}
+                  fillOpacity={0.1}
                 />
               </div>
             </div>
-            <div className="flex items-center gap-1.5 border-t border-slate-100 pt-3 text-[11px] font-semibold">
-              <span>{kpi.deltaVerifiedDay >= 0 ? "↑" : "↓"} {Math.abs(kpi.deltaVerifiedDay)}</span>
+            <div className="mt-3 flex items-center gap-1.5 border-t border-slate-100 pt-2.5 text-[11px] font-semibold text-slate-600">
+              <span>
+                {kpi.deltaVerifiedDay >= 0 ? "↑" : "↓"}{" "}
+                {Math.abs(kpi.deltaVerifiedDay)}
+              </span>
               <span className="font-normal text-slate-400">vs yesterday</span>
             </div>
           </div>
 
-          <div className="card lift-on-hover flex flex-col p-5">
-            <div className="flex items-start gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-50">
-                <AlertTriangle size={17} className="text-amber-600" strokeWidth={2.2} />
+          <div className="card flex flex-col p-4">
+            <div className="flex items-start gap-2.5">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50">
+                <AlertTriangle
+                  size={15}
+                  className="text-amber-600"
+                  strokeWidth={2.2}
+                />
               </div>
               <div className="flex-1">
-                <div className="text-[32px] font-bold leading-none tabular-nums tracking-tight text-slate-900">{kpi.attention}</div>
-                <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Needs Attention</div>
-                <div className="mt-0.5 text-[12px] text-slate-500">Low confidence or errors</div>
+                <div className="text-[26px] font-bold leading-none tabular-nums tracking-tight text-slate-900">
+                  {kpi.attention}
+                </div>
+                <div className="mt-1 text-[10.5px] font-semibold uppercase tracking-[0.07em] text-slate-500">
+                  Needs Attention
+                </div>
+                <div className="mt-0.5 text-[11.5px] text-slate-400">
+                  Low confidence or errors
+                </div>
               </div>
             </div>
             <button
               type="button"
-              className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 transition hover:text-amber-700"
+              className="mt-3 inline-flex items-center gap-1 border-t border-slate-100 pt-2.5 text-[11px] font-semibold text-amber-600 transition hover:text-amber-700"
               onClick={() => setFilter("attention")}
             >
               View all <ChevronRight size={12} />
@@ -1542,55 +1934,108 @@ export default function EligibilityDashboard() {
           </div>
         </section>
 
-        <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <section className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_300px]">
           <div className="card overflow-hidden">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-gradient-to-b from-slate-50/80 to-slate-50/40 px-5 py-3.5">
-              <div className="flex items-center gap-2.5">
-                <Calendar size={17} className="text-indigo-600" strokeWidth={2} />
-                <h2 className="text-[14px] font-semibold text-slate-900">Upcoming Patients</h2>
+            <div className="flex flex-wrap items-center justify-between gap-2.5 border-b border-slate-100 bg-slate-50/50 px-4 py-3">
+              <div className="flex items-center gap-2">
+                <Calendar
+                  size={15}
+                  className="text-[var(--accent-primary)]"
+                  strokeWidth={2}
+                />
+                <h2 className="text-[13.5px] font-semibold text-slate-900">
+                  Upcoming Patients
+                </h2>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <div className="relative min-w-[180px]">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                  <Search
+                    className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
+                    size={14}
+                  />
                   <input
-                    className="h-9 w-full rounded-lg border border-slate-200 bg-slate-50 pl-8 pr-3 text-[13px] text-slate-800 outline-none focus:border-indigo-400"
+                    className="h-8 w-full rounded-md border border-slate-200 bg-white pl-8 pr-3 text-[12.5px] text-slate-800 outline-none focus:border-[var(--accent-primary)]"
                     placeholder="Search patient or member ID…"
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
                   />
                 </div>
                 <select
-                  className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-slate-700 outline-none focus:border-indigo-400"
+                  className="h-8 rounded-md border border-slate-200 bg-white px-2.5 text-[12.5px] text-slate-700 outline-none focus:border-[var(--accent-primary)]"
                   value={filter}
-                  onChange={(event) => setFilter(event.target.value as FilterValue)}
+                  onChange={(event) =>
+                    setFilter(event.target.value as FilterValue)
+                  }
                 >
                   <option value="all">All</option>
                   <option value="verified">Verified</option>
                   <option value="inactive">Inactive</option>
                   <option value="attention">Needs attention</option>
                 </select>
-                <button
-                  type="button"
-                  className="text-[12px] font-semibold text-indigo-600 hover:text-indigo-700"
-                >
-                  View all patients
-                </button>
-                {refreshing && !loading ? (
-                  <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Syncing</span>
-                ) : null}
+                {(query || filter !== "all") && (
+                  <button
+                    type="button"
+                    className="text-[12px] font-semibold text-[var(--accent-primary)] hover:text-[var(--accent-primary-hover)]"
+                    onClick={() => {
+                      setQuery("");
+                      setFilter("all");
+                    }}
+                  >
+                    Clear filters
+                  </button>
+                )}
               </div>
             </div>
 
-            <div className="overflow-x-auto">
+            <div className="max-h-[min(62vh,720px)] overflow-auto">
               <table className="w-full border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-100">
-                    {["Patient", "Payer", "Plan", "Deductible", "Annual Max", "Status", ""].map((header, idx) => (
+                <thead className="sticky top-0 z-10 bg-white shadow-[inset_0_-1px_0_0_#e2e8f0]">
+                  <tr>
+                    {(
+                      [
+                        { key: "patient", label: "Patient", sortable: true },
+                        { key: "payer", label: "Payer", sortable: true },
+                        { key: "plan", label: "Plan", sortable: false },
+                        {
+                          key: "deductible",
+                          label: "Deductible",
+                          sortable: false,
+                        },
+                        {
+                          key: "annual",
+                          label: "Annual Max",
+                          sortable: false,
+                        },
+                        { key: "status", label: "Status", sortable: true },
+                        { key: "actions", label: "", sortable: false },
+                      ] as const
+                    ).map((col) => (
                       <th
-                        key={`${header}-${idx}`}
-                        className="px-5 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400"
+                        key={col.key}
+                        className="px-3.5 py-2 text-left text-[10.5px] font-bold uppercase tracking-[0.07em] text-slate-600"
                       >
-                        {header}
+                        {col.sortable ? (
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1 text-slate-600 transition hover:text-slate-900"
+                            onClick={() =>
+                              toggleSort(col.key as SortColumn)
+                            }
+                          >
+                            {col.label}
+                            {sortColumn === col.key ? (
+                              sortDir === "asc" ? (
+                                <ArrowUp size={11} strokeWidth={2.5} />
+                              ) : (
+                                <ArrowDown size={11} strokeWidth={2.5} />
+                              )
+                            ) : (
+                              <ArrowUpDown size={11} className="opacity-60" strokeWidth={2.25} />
+                            )}
+                          </button>
+                        ) : (
+                          col.label
+                        )}
                       </th>
                     ))}
                   </tr>
@@ -1598,25 +2043,77 @@ export default function EligibilityDashboard() {
                 <tbody>
                   {loading ? (
                     <tr>
-                      <td colSpan={7} className="px-4 py-10 text-center text-[14px] text-slate-500">
-                        Loading eligibility checks…
+                      <td
+                        colSpan={7}
+                        className="px-4 py-10 text-center text-[13px] text-slate-500"
+                      >
+                        <span className="inline-flex items-center gap-2">
+                          <Loader2 size={15} className="animate-spin" />
+                          Loading eligibility checks…
+                        </span>
                       </td>
                     </tr>
-                  ) : filteredRows.length === 0 ? (
+                  ) : sortedRows.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-4 py-10 text-center text-[14px] text-slate-500">
-                        No patients match this view.
+                      <td colSpan={7} className="px-4 py-10 text-center">
+                        {rowsInDateRange.length === 0 ? (
+                          <>
+                            <p className="text-[13.5px] font-medium text-slate-700">
+                              No upcoming patients yet
+                            </p>
+                            <p className="mt-1 text-[12.5px] text-slate-500">
+                              New checks from OpenDental or manual entry will
+                              show up here.
+                            </p>
+                            <button
+                              type="button"
+                              className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-md bg-[var(--accent-primary)] px-3 text-[12.5px] font-semibold text-white hover:bg-[var(--accent-primary-hover)]"
+                              onClick={() => setPanelMode("form")}
+                            >
+                              <Plus size={14} />
+                              New Check
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-[13.5px] font-medium text-slate-700">
+                              No patients match this view
+                            </p>
+                            <p className="mt-1 text-[12.5px] text-slate-500">
+                              {query
+                                ? `Nothing found for “${query.trim()}”.`
+                                : `No patients in “${filter === "attention" ? "Needs attention" : filter}”.`}{" "}
+                              Try clearing filters or widening the date range.
+                            </p>
+                            <button
+                              type="button"
+                              className="mt-3 text-[12.5px] font-semibold text-[var(--accent-primary)] hover:text-[var(--accent-primary-hover)]"
+                              onClick={() => {
+                                setQuery("");
+                                setFilter("all");
+                              }}
+                            >
+                              Clear filters
+                            </button>
+                          </>
+                        )}
                       </td>
                     </tr>
                   ) : (
-                    filteredRows.map((row, rowIdx) => {
+                    sortedRows.map((row, rowIdx) => {
                       const readRow = readRowById.get(row.request.id);
-                      const status = readRow ? statusFromReadModel(readRow.status_label) : deriveStatus(row);
-                      const isWorking = status === "Queued" || status === "Processing" || status === "Retrying";
+                      const status = readRow
+                        ? statusFromReadModel(readRow.status_label)
+                        : deriveStatus(row);
+                      const isWorking =
+                        status === "Queued" ||
+                        status === "Processing" ||
+                        status === "Retrying";
                       const showRecheck = needsHumanAttention(status);
                       const pill = dentaiStatusPill(readRow, row);
                       const PillIcon = pill.Icon;
-                      const payerLabel = readRow?.payer_label ?? row.request.primary_payer_id;
+                      const payerLabel =
+                        readRow?.payer_label ?? row.request.primary_payer_id;
                       return (
                         <tr
                           key={row.request.id}
@@ -1626,42 +2123,70 @@ export default function EligibilityDashboard() {
                           style={{ ["--i" as string]: Math.min(rowIdx, 24) }}
                           onClick={() => openDetails(row)}
                         >
-                          <td className="px-5 py-4">
-                            <div className="flex items-center gap-3">
-                              <PatientAvatar firstName={row.request.first_name} lastName={row.request.last_name} />
+                          <td className="px-3.5 py-2.5">
+                            <div className="flex items-center gap-2.5">
+                              <PatientAvatar
+                                firstName={row.request.first_name}
+                                lastName={row.request.last_name}
+                              />
                               <div>
-                                <div className="text-[13.5px] font-semibold text-slate-900">
-                                  {row.request.first_name} {row.request.last_name}
+                                <div className="text-[13px] font-semibold text-slate-900">
+                                  {row.request.first_name}{" "}
+                                  {row.request.last_name}
                                 </div>
-                                <div className="text-[11.5px] text-slate-500">DOB: {formatDob(row.request.dob)}</div>
+                                <div className="text-[11px] text-slate-500">
+                                  DOB: {formatDob(row.request.dob)}
+                                  {readRow?.appointment_date ||
+                                  row.request.appointment_date
+                                    ? ` · Appt ${readRow?.appointment_date ?? row.request.appointment_date}`
+                                    : ""}
+                                </div>
                               </div>
                             </div>
                           </td>
-                          <td className="px-5 py-4">
+                          <td className="px-3.5 py-2.5">
                             <PayerLogo label={payerLabel} />
                           </td>
-                          <td className="px-5 py-4">
-                            <div className="text-[13px] font-medium text-slate-900">{row.request.plan_id || "—"}</div>
-                            <div className="text-[11.5px] text-slate-500">Plan ID: {row.request.subscriber_id}</div>
-                          </td>
-                          <td className="px-5 py-4">
-                            <div className="num text-[13px] font-semibold text-slate-900">
-                              {formatCurrency(row.check?.deductible_remaining ?? row.check?.deductible_total)}
+                          <td className="px-3.5 py-2.5">
+                            <div className="text-[12.5px] font-medium text-slate-900">
+                              {row.request.plan_id || "—"}
                             </div>
-                            <div className="text-[11.5px] text-slate-500">Individual</div>
-                          </td>
-                          <td className="px-5 py-4">
-                            <div className="num text-[13px] font-semibold text-slate-900">
-                              {formatCurrency(row.check?.annual_max_remaining ?? row.check?.annual_max_total)}
+                            <div className="text-[11px] text-slate-500">
+                              Plan ID: {row.request.subscriber_id}
                             </div>
-                            <div className="text-[11.5px] text-slate-500">Per Individual</div>
                           </td>
-                          <td className="px-5 py-4">
+                          <td className="px-3.5 py-2.5">
+                            <div className="num text-[12.5px] font-semibold text-slate-900">
+                              {formatCurrency(
+                                row.check?.deductible_remaining ??
+                                  row.check?.deductible_total,
+                              )}
+                            </div>
+                            <div className="text-[11px] text-slate-500">
+                              Individual
+                            </div>
+                          </td>
+                          <td className="px-3.5 py-2.5">
+                            <div className="num text-[12.5px] font-semibold text-slate-900">
+                              {formatCurrency(
+                                row.check?.annual_max_remaining ??
+                                  row.check?.annual_max_total,
+                              )}
+                            </div>
+                            <div className="text-[11px] text-slate-500">
+                              Per Individual
+                            </div>
+                          </td>
+                          <td className="px-3.5 py-2.5">
                             <span
-                              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 transition-shadow duration-200 group-hover:shadow-sm ${pill.wrap}`}
+                              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 transition-shadow duration-200 group-hover:shadow-sm ${pill.wrap}`}
                             >
                               {pill.spinning ? (
-                                <PillIcon size={11} className={pill.iconClass} strokeWidth={2.5} />
+                                <PillIcon
+                                  size={11}
+                                  className={pill.iconClass}
+                                  strokeWidth={2.5}
+                                />
                               ) : (
                                 <span
                                   className={`relative h-[7px] w-[7px] shrink-0 rounded-full ${pill.dot} ${
@@ -1669,10 +2194,12 @@ export default function EligibilityDashboard() {
                                   }`}
                                 />
                               )}
-                              <span className="text-[12px] font-medium tracking-tight">{pill.title}</span>
+                              <span className="text-[11.5px] font-medium tracking-tight">
+                                {pill.title}
+                              </span>
                             </span>
                           </td>
-                          <td className="px-3 py-4 text-right">
+                          <td className="px-2 py-2.5 text-right">
                             {status === "Retrying" ? (
                               <span className="text-[11px] text-slate-600">
                                 Next {countdown(row.request.next_retry_at)}
@@ -1682,7 +2209,7 @@ export default function EligibilityDashboard() {
                                 {showRecheck ? (
                                   <button
                                     type="button"
-                                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 opacity-0 transition group-hover:opacity-100 hover:bg-indigo-50 hover:text-indigo-600"
+                                    className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 opacity-0 transition group-hover:opacity-100 hover:bg-[var(--accent-primary-soft)] hover:text-[var(--accent-primary)]"
                                     title="Run re-check"
                                     aria-label="Run re-check"
                                     onClick={(event) => {
@@ -1690,12 +2217,12 @@ export default function EligibilityDashboard() {
                                       void rerun(row);
                                     }}
                                   >
-                                    <RotateCw size={14} />
+                                    <RotateCw size={13} />
                                   </button>
                                 ) : null}
                                 <button
                                   type="button"
-                                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
                                   title="Details"
                                   aria-label="Details"
                                   onClick={(event) => {
@@ -1703,7 +2230,7 @@ export default function EligibilityDashboard() {
                                     openDetails(row);
                                   }}
                                 >
-                                  <ChevronRight size={16} />
+                                  <ChevronRight size={15} />
                                 </button>
                               </div>
                             )}
@@ -1715,11 +2242,11 @@ export default function EligibilityDashboard() {
                 </tbody>
               </table>
             </div>
-            <div className="border-t border-slate-100 bg-slate-50/40 px-5 py-3.5 text-center">
-              <div className="text-[12.5px] font-medium text-slate-600">
-                {filteredRows.length} of {rowsInDateRange.length} patients
+            <div className="border-t border-slate-100 bg-slate-50/40 px-4 py-2.5 text-center">
+              <div className="text-[12px] font-medium text-slate-600">
+                {sortedRows.length} of {rowsInDateRange.length} patients
               </div>
-              <div className="mt-0.5 text-[12px] text-slate-500">
+              <div className="mt-0.5 text-[11.5px] text-slate-500">
                 Showing patients with upcoming appointments
               </div>
             </div>
@@ -1757,13 +2284,20 @@ export default function EligibilityDashboard() {
             ) : null}
 
             {panelMode === "form" ? (
-              <form className="flex h-full flex-col px-6 pb-6 pt-16" onSubmit={submitRequest}>
-                <h3 className="text-[22px] font-semibold tracking-tight text-slate-900">Run eligibility check</h3>
+              <form
+                className="flex h-full flex-col px-6 pb-6 pt-16"
+                onSubmit={submitRequest}
+              >
+                <h3 className="text-[22px] font-semibold tracking-tight text-slate-900">
+                  Run eligibility check
+                </h3>
                 <p className="mt-2 text-[13px] leading-snug text-slate-500">
-                  Creates a queued request in Supabase. The agent picks it up and runs the eligibility workflow.
+                  Creates a queued request in Supabase. The agent picks it up
+                  and runs the eligibility workflow.
                 </p>
                 <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] leading-snug text-slate-600">
-                  Use the Stedi trading partner service ID for payer ID. CDT codes can be comma-separated or one per line.
+                  Use the Stedi trading partner service ID for payer ID. CDT
+                  codes can be comma-separated or one per line.
                 </div>
                 <div className="mt-6 space-y-3">
                   {[
@@ -1776,24 +2310,37 @@ export default function EligibilityDashboard() {
                     ["cdt_codes", "CDT codes"],
                   ].map(([key, label]) => (
                     <label key={key} className="block">
-                      <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">{label}</span>
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                        {label}
+                      </span>
                       <input
                         required={!["plan_id", "cdt_codes"].includes(key)}
                         type={key === "dob" ? "date" : "text"}
                         className="mt-1 h-10 w-full rounded-[4px] border border-slate-200 px-3 text-[14px] font-normal text-slate-800 outline-none focus:border-indigo-400"
                         value={form[key as keyof FormState]}
-                        onChange={(event) => setForm((prev) => ({ ...prev, [key]: event.target.value }))}
+                        onChange={(event) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            [key]: event.target.value,
+                          }))
+                        }
                       />
                     </label>
                   ))}
                   <div className="grid grid-cols-2 gap-3">
                     <label className="block">
-                      <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Priority</span>
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                        Priority
+                      </span>
                       <select
                         className="mt-1 h-10 w-full rounded-[4px] border border-slate-200 bg-white px-3 text-[14px] font-normal text-slate-800 outline-none focus:border-indigo-400"
                         value={form.priority}
                         onChange={(event) =>
-                          setForm((prev) => ({ ...prev, priority: event.target.value as FormState["priority"] }))
+                          setForm((prev) => ({
+                            ...prev,
+                            priority: event.target
+                              .value as FormState["priority"],
+                          }))
                         }
                       >
                         <option value="low">Low</option>
@@ -1809,18 +2356,30 @@ export default function EligibilityDashboard() {
                         type="date"
                         className="mt-1 h-10 w-full rounded-[4px] border border-slate-200 px-3 text-[14px] font-normal text-slate-800 outline-none focus:border-indigo-400"
                         value={form.appointment_date}
-                        onChange={(event) => setForm((prev) => ({ ...prev, appointment_date: event.target.value }))}
+                        onChange={(event) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            appointment_date: event.target.value,
+                          }))
+                        }
                       />
                     </label>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <label className="block">
-                      <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Time</span>
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                        Time
+                      </span>
                       <input
                         type="time"
                         className="mt-1 h-10 w-full rounded-[4px] border border-slate-200 px-3 text-[14px] font-normal text-slate-800 outline-none focus:border-indigo-400"
                         value={form.appointment_time}
-                        onChange={(event) => setForm((prev) => ({ ...prev, appointment_time: event.target.value }))}
+                        onChange={(event) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            appointment_time: event.target.value,
+                          }))
+                        }
                       />
                     </label>
                     <label className="block">
@@ -1831,7 +2390,12 @@ export default function EligibilityDashboard() {
                         className="mt-1 h-10 w-full rounded-[4px] border border-slate-200 px-3 text-[14px] font-normal text-slate-800 outline-none focus:border-indigo-400"
                         placeholder="Dr. Smith"
                         value={form.provider_name}
-                        onChange={(event) => setForm((prev) => ({ ...prev, provider_name: event.target.value }))}
+                        onChange={(event) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            provider_name: event.target.value,
+                          }))
+                        }
                       />
                     </label>
                   </div>
@@ -1845,12 +2409,20 @@ export default function EligibilityDashboard() {
                       step="1"
                       className="mt-1 h-10 w-full rounded-[4px] border border-slate-200 px-3 text-[14px] font-normal text-slate-800 outline-none focus:border-indigo-400"
                       value={form.estimated_claim_value}
-                      onChange={(event) => setForm((prev) => ({ ...prev, estimated_claim_value: event.target.value }))}
+                      onChange={(event) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          estimated_claim_value: event.target.value,
+                        }))
+                      }
                     />
                   </label>
                   {parsedCdtCodes.length ? (
                     <div className="rounded-[4px] border border-slate-200 bg-white px-3 py-2 text-[12px] text-slate-500">
-                      Parsed CDT codes: <span className="mono text-slate-700">{parsedCdtCodes.join(", ")}</span>
+                      Parsed CDT codes:{" "}
+                      <span className="mono text-slate-700">
+                        {parsedCdtCodes.join(", ")}
+                      </span>
                     </div>
                   ) : null}
                   <label className="block">
@@ -1860,12 +2432,17 @@ export default function EligibilityDashboard() {
                     <input
                       className="mt-1 h-10 w-full rounded-[4px] border border-slate-200 px-3 text-[14px] font-normal text-slate-800 outline-none focus:border-indigo-400"
                       value={form.secondary_payer_id}
-                      onChange={(event) => setForm((prev) => ({ ...prev, secondary_payer_id: event.target.value }))}
+                      onChange={(event) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          secondary_payer_id: event.target.value,
+                        }))
+                      }
                     />
                   </label>
                 </div>
                 <button
-                  className="btn-sheen lift-on-hover mt-auto w-full rounded-[4px] bg-gradient-to-b from-indigo-500 to-indigo-600 py-3 text-[14px] font-normal text-white ring-1 ring-inset ring-white/15 hover:from-indigo-500 hover:to-indigo-700 disabled:opacity-60"
+                  className="btn-sheen lift-on-hover mt-auto w-full rounded-[4px] bg-[var(--accent-primary)] py-3 text-[14px] font-normal text-white ring-1 ring-inset ring-white/15 hover:bg-[var(--accent-primary-hover)] disabled:opacity-60"
                   disabled={submitting}
                 >
                   {submitting ? "Queueing..." : "Queue Check"}
@@ -1884,7 +2461,9 @@ export default function EligibilityDashboard() {
                   </button>
                   <div className="flex items-center gap-2">
                     {(() => {
-                      const status = selectedReadRow?.status_label ?? deriveStatus(selectedRow);
+                      const status =
+                        selectedReadRow?.status_label ??
+                        deriveStatus(selectedRow);
                       return (
                         <span
                           className={`inline-flex rounded-md border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] ${statusClass(
@@ -1897,10 +2476,13 @@ export default function EligibilityDashboard() {
                     })()}
                     <span
                       className={`inline-flex rounded-md border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] ${priorityClass(
-                        selectedReadRow?.priority ?? selectedRow.request.priority,
+                        selectedReadRow?.priority ??
+                          selectedRow.request.priority,
                       )}`}
                     >
-                      {selectedReadRow?.priority ?? selectedRow.request.priority ?? "medium"}
+                      {selectedReadRow?.priority ??
+                        selectedRow.request.priority ??
+                        "medium"}
                     </span>
                     <button
                       onClick={() => setPanelMode(null)}
@@ -1916,7 +2498,9 @@ export default function EligibilityDashboard() {
                   {/* Identity row */}
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                     <div className="card p-4">
-                      <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400">Patient</div>
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400">
+                        Patient
+                      </div>
                       <div className="mt-2 flex items-center gap-2.5">
                         <PatientAvatar
                           firstName={selectedRow.request.first_name}
@@ -1925,26 +2509,42 @@ export default function EligibilityDashboard() {
                         />
                         <div className="min-w-0">
                           <div className="truncate text-[15px] font-semibold tracking-[-0.01em] text-slate-900">
-                            {selectedRow.request.first_name} {selectedRow.request.last_name}
+                            {selectedRow.request.first_name}{" "}
+                            {selectedRow.request.last_name}
                           </div>
-                          <div className="text-[11px] text-slate-500">DOB {formatShortDate(selectedRow.request.dob)}</div>
+                          <div className="text-[11px] text-slate-500">
+                            DOB {formatShortDate(selectedRow.request.dob)}
+                          </div>
                         </div>
                       </div>
-                      <div className="mono mt-2 text-[11px] text-slate-500">ID: {selectedRow.request.subscriber_id}</div>
+                      <div className="mono mt-2 text-[11px] text-slate-500">
+                        ID: {selectedRow.request.subscriber_id}
+                      </div>
                     </div>
 
                     <div className="card p-4">
-                      <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400">Payer</div>
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400">
+                        Payer
+                      </div>
                       <div className="mt-2">
-                        <PayerLogo label={selectedRow.check?.payer_id || selectedRow.request.primary_payer_id} />
+                        <PayerLogo
+                          label={
+                            selectedRow.check?.payer_id ||
+                            selectedRow.request.primary_payer_id
+                          }
+                        />
                       </div>
                       <div className="mono mt-2 text-[11px] text-slate-500">
-                        Payer ID: {selectedRow.check?.payer_id || selectedRow.request.primary_payer_id}
+                        Payer ID:{" "}
+                        {selectedRow.check?.payer_id ||
+                          selectedRow.request.primary_payer_id}
                       </div>
                     </div>
 
                     <div className="card p-4">
-                      <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400">Status</div>
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400">
+                        Status
+                      </div>
                       {(() => {
                         const active = selectedRow.check?.is_active === true;
                         const inactive = selectedRow.check?.is_active === false;
@@ -1960,18 +2560,31 @@ export default function EligibilityDashboard() {
                                       : "bg-slate-100 text-slate-500"
                                 }`}
                               >
-                                {active ? <Check size={15} strokeWidth={3} /> : <AlertTriangle size={14} />}
+                                {active ? (
+                                  <Check size={15} strokeWidth={3} />
+                                ) : (
+                                  <AlertTriangle size={14} />
+                                )}
                               </span>
                               <span
                                 className={`text-[16px] font-semibold ${
-                                  active ? "text-emerald-600" : inactive ? "text-red-600" : "text-slate-700"
+                                  active
+                                    ? "text-emerald-600"
+                                    : inactive
+                                      ? "text-red-600"
+                                      : "text-slate-700"
                                 }`}
                               >
-                                {active ? "Active" : inactive ? "Inactive" : "Pending"}
+                                {active
+                                  ? "Active"
+                                  : inactive
+                                    ? "Inactive"
+                                    : "Pending"}
                               </span>
                             </div>
                             <div className="mt-2 text-[11px] text-slate-500">
-                              As of {formatShortDate(selectedRow.check?.checked_at)}
+                              As of{" "}
+                              {formatShortDate(selectedRow.check?.checked_at)}
                             </div>
                           </>
                         );
@@ -1980,16 +2593,21 @@ export default function EligibilityDashboard() {
                   </div>
 
                   {/* AI Summary banner */}
-                  <div className="relative overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50/90 via-white to-violet-50/80 p-5 shadow-sm">
-                    <div className="pointer-events-none absolute -right-5 -top-5 text-indigo-100" aria-hidden>
+                  <div className="relative overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50/90 via-white to-slate-50 p-5 shadow-sm">
+                    <div
+                      className="pointer-events-none absolute -right-5 -top-5 text-indigo-100"
+                      aria-hidden
+                    >
                       <BrainCircuit size={120} strokeWidth={1} />
                     </div>
                     <div className="relative">
                       <div className="mb-2 flex items-center gap-2">
-                        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-sm">
+                        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--accent-primary)] text-white shadow-sm">
                           <Sparkles size={15} />
                         </span>
-                        <span className="text-[13px] font-semibold text-slate-800">AI Summary</span>
+                        <span className="text-[13px] font-semibold text-slate-800">
+                          AI Summary
+                        </span>
                         <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100/70 px-2 py-0.5 text-[10px] font-semibold text-indigo-600">
                           <Cpu size={10} /> Powered by AI
                         </span>
@@ -1998,7 +2616,11 @@ export default function EligibilityDashboard() {
                         {buildAiSummary(
                           selectedRow,
                           serviceLabelFor(selectedRow.request.cdt_codes?.[0]),
-                          estimatedPatientPortion(selectedRow, selectedReadRow, estimates),
+                          estimatedPatientPortion(
+                            selectedRow,
+                            selectedReadRow,
+                            estimates,
+                          ),
                         )}
                       </p>
                     </div>
@@ -2009,70 +2631,135 @@ export default function EligibilityDashboard() {
                     {/* Benefits Overview */}
                     <div className="card p-5">
                       <div className="mb-4 flex items-center gap-2">
-                        <ShieldCheck size={16} className="text-indigo-600" strokeWidth={2} />
-                        <h4 className="text-[13px] font-semibold text-slate-900">Benefits Overview</h4>
+                        <ShieldCheck
+                          size={16}
+                          className="text-indigo-600"
+                          strokeWidth={2}
+                        />
+                        <h4 className="text-[13px] font-semibold text-slate-900">
+                          Benefits Overview
+                        </h4>
                       </div>
                       <div className="flex items-start justify-around gap-2">
                         <div className="flex flex-col items-center">
-                          <div className="mb-2 text-[11px] font-medium text-slate-500">Annual Max</div>
+                          <div className="mb-2 text-[11px] font-medium text-slate-500">
+                            Annual Max
+                          </div>
                           <RadialDonut
-                            value={pctOf(selectedRow.check?.annual_max_remaining, selectedRow.check?.annual_max_total)}
-                            color="#6366f1"
+                            value={pctOf(
+                              selectedRow.check?.annual_max_remaining,
+                              selectedRow.check?.annual_max_total,
+                            )}
+                            color="#1880f0"
                             centerValue={`${pctOf(selectedRow.check?.annual_max_remaining, selectedRow.check?.annual_max_total)}%`}
                             centerLabel="Remaining"
                           />
                           <div className="mt-2 text-center text-[13px] font-semibold text-slate-900">
-                            {formatCurrency(selectedRow.check?.annual_max_remaining)}
-                            <span className="font-normal text-slate-400"> / {formatCurrency(selectedRow.check?.annual_max_total)}</span>
+                            {formatCurrency(
+                              selectedRow.check?.annual_max_remaining,
+                            )}
+                            <span className="font-normal text-slate-400">
+                              {" "}
+                              /{" "}
+                              {formatCurrency(
+                                selectedRow.check?.annual_max_total,
+                              )}
+                            </span>
                           </div>
                         </div>
                         <div className="flex flex-col items-center">
-                          <div className="mb-2 text-[11px] font-medium text-slate-500">Deductible</div>
+                          <div className="mb-2 text-[11px] font-medium text-slate-500">
+                            Deductible
+                          </div>
                           <RadialDonut
-                            value={pctOf(selectedRow.check?.deductible_remaining, selectedRow.check?.deductible_total)}
+                            value={pctOf(
+                              selectedRow.check?.deductible_remaining,
+                              selectedRow.check?.deductible_total,
+                            )}
                             color="#10b981"
                             centerValue={`${pctOf(selectedRow.check?.deductible_remaining, selectedRow.check?.deductible_total)}%`}
                             centerLabel="Remaining"
                           />
                           <div className="mt-2 text-center text-[13px] font-semibold text-slate-900">
-                            {formatCurrency(selectedRow.check?.deductible_remaining)}
-                            <span className="font-normal text-slate-400"> / {formatCurrency(selectedRow.check?.deductible_total)}</span>
+                            {formatCurrency(
+                              selectedRow.check?.deductible_remaining,
+                            )}
+                            <span className="font-normal text-slate-400">
+                              {" "}
+                              /{" "}
+                              {formatCurrency(
+                                selectedRow.check?.deductible_total,
+                              )}
+                            </span>
                           </div>
                         </div>
                       </div>
                       <div className="mt-4 flex items-center gap-1.5 rounded-lg bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
-                        <ShieldCheck size={12} className="shrink-0 text-slate-400" />
-                        Benefits are {selectedRow.check?.in_network === false ? "out-of-network" : "in-network"} based on{" "}
-                        {selectedRow.request.plan_id || "plan"}.
+                        <ShieldCheck
+                          size={12}
+                          className="shrink-0 text-slate-400"
+                        />
+                        Benefits are{" "}
+                        {selectedRow.check?.in_network === false
+                          ? "out-of-network"
+                          : "in-network"}{" "}
+                        based on {selectedRow.request.plan_id || "plan"}.
                       </div>
                     </div>
 
                     {/* Trust Layer */}
                     <div className="card p-5">
                       <div className="mb-2 flex items-center gap-2">
-                        <ScanLine size={16} className="text-indigo-600" strokeWidth={2} />
-                        <h4 className="text-[13px] font-semibold text-slate-900">Trust Layer</h4>
+                        <ScanLine
+                          size={16}
+                          className="text-indigo-600"
+                          strokeWidth={2}
+                        />
+                        <h4 className="text-[13px] font-semibold text-slate-900">
+                          Trust Layer
+                        </h4>
                       </div>
                       <div className="flex flex-col items-center">
-                        <div className="text-[11px] font-medium text-slate-500">Confidence Score</div>
+                        <div className="text-[11px] font-medium text-slate-500">
+                          Confidence Score
+                        </div>
                         <ConfidenceGauge value={confidenceScore(selectedRow)} />
                       </div>
                       <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
-                        <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">Sources</div>
+                        <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+                          Sources
+                        </div>
                         {dataSources(selectedReadRow).map((source) => (
-                          <div key={source} className="flex items-center gap-2 text-[12px] text-slate-700">
-                            <FileText size={13} className="shrink-0 text-slate-400" />
+                          <div
+                            key={source}
+                            className="flex items-center gap-2 text-[12px] text-slate-700"
+                          >
+                            <FileText
+                              size={13}
+                              className="shrink-0 text-slate-400"
+                            />
                             <span className="truncate">{source}</span>
-                            <Check size={13} className="ml-auto shrink-0 text-emerald-500" />
+                            <Check
+                              size={13}
+                              className="ml-auto shrink-0 text-emerald-500"
+                            />
                           </div>
                         ))}
                         <div className="flex items-center gap-2 text-[11px] text-slate-500">
-                          <Clock size={12} className="shrink-0 text-slate-400" />
-                          Retrieved {formatDateTime(selectedRow.check?.checked_at)}
+                          <Clock
+                            size={12}
+                            className="shrink-0 text-slate-400"
+                          />
+                          Retrieved{" "}
+                          {formatDateTime(selectedRow.check?.checked_at)}
                         </div>
                         <div className="flex items-center gap-2 text-[11px] text-slate-500">
-                          <Database size={12} className="shrink-0 text-slate-400" />
-                          Routing: {selectedRow.check?.routing_status || "\u2014"}
+                          <Database
+                            size={12}
+                            className="shrink-0 text-slate-400"
+                          />
+                          Routing:{" "}
+                          {selectedRow.check?.routing_status || "\u2014"}
                         </div>
                       </div>
                     </div>
@@ -2080,21 +2767,38 @@ export default function EligibilityDashboard() {
                     {/* Recommended Action */}
                     <div className="card flex flex-col p-5">
                       <div className="mb-3 flex items-center gap-2">
-                        <Sparkles size={16} className="text-indigo-600" strokeWidth={2} />
-                        <h4 className="text-[13px] font-semibold text-slate-900">Recommended Action</h4>
+                        <Sparkles
+                          size={16}
+                          className="text-indigo-600"
+                          strokeWidth={2}
+                        />
+                        <h4 className="text-[13px] font-semibold text-slate-900">
+                          Recommended Action
+                        </h4>
                       </div>
                       {(() => {
-                        const portion = estimatedPatientPortion(selectedRow, selectedReadRow, estimates);
+                        const portion = estimatedPatientPortion(
+                          selectedRow,
+                          selectedReadRow,
+                          estimates,
+                        );
                         return (
-                          <div className="flex flex-1 flex-col items-center justify-center rounded-xl bg-gradient-to-b from-indigo-50/70 to-violet-50/50 px-4 py-5 text-center">
-                            <div className="text-[11px] font-medium text-slate-500">Collect</div>
-                            <div className="my-1 text-[34px] font-bold leading-none tracking-tight text-indigo-600">
-                              {portion != null ? formatCurrency(portion) : "\u2014"}
+                          <div className="flex flex-1 flex-col items-center justify-center rounded-xl bg-gradient-to-b from-indigo-50/70 to-slate-50/50 px-4 py-5 text-center">
+                            <div className="text-[11px] font-medium text-slate-500">
+                              Collect
                             </div>
-                            <div className="text-[11px] text-slate-500">Patient Portion (Estimated)</div>
-                            <button className="btn-sheen lift-on-hover mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-b from-indigo-500 to-indigo-600 py-2.5 text-[13px] font-semibold text-white ring-1 ring-inset ring-white/15 hover:from-indigo-500 hover:to-indigo-700">
+                            <div className="my-1 text-[34px] font-bold leading-none tracking-tight text-indigo-600">
+                              {portion != null
+                                ? formatCurrency(portion)
+                                : "\u2014"}
+                            </div>
+                            <div className="text-[11px] text-slate-500">
+                              Patient Portion (Estimated)
+                            </div>
+                            <button className="btn-sheen lift-on-hover mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--accent-primary)] py-2.5 text-[13px] font-semibold text-white ring-1 ring-inset ring-white/15 hover:bg-[var(--accent-primary-hover)]">
                               <CreditCard size={15} />
-                              Collect {portion != null ? formatCurrency(portion) : ""}
+                              Collect{" "}
+                              {portion != null ? formatCurrency(portion) : ""}
                             </button>
                             <button className="mt-2 inline-flex items-center gap-1.5 text-[12px] font-medium text-indigo-600 hover:text-indigo-700">
                               <FileText size={13} />
@@ -2117,7 +2821,9 @@ export default function EligibilityDashboard() {
                       {
                         icon: Stethoscope,
                         label: "Service",
-                        value: serviceLabelFor(selectedRow.request.cdt_codes?.[0]) ?? "\u2014",
+                        value:
+                          serviceLabelFor(selectedRow.request.cdt_codes?.[0]) ??
+                          "\u2014",
                       },
                       {
                         icon: Network,
@@ -2137,13 +2843,18 @@ export default function EligibilityDashboard() {
                     ].map((cell) => {
                       const Icon = cell.icon;
                       return (
-                        <div key={cell.label} className="flex items-center gap-2.5 bg-white px-4 py-3.5">
+                        <div
+                          key={cell.label}
+                          className="flex items-center gap-2.5 bg-white px-4 py-3.5"
+                        >
                           <Icon size={16} className="shrink-0 text-slate-400" />
                           <div className="min-w-0">
                             <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">
                               {cell.label}
                             </div>
-                            <div className="truncate text-[12.5px] font-medium text-slate-800">{cell.value}</div>
+                            <div className="truncate text-[12.5px] font-medium text-slate-800">
+                              {cell.value}
+                            </div>
                           </div>
                         </div>
                       );
@@ -2154,8 +2865,14 @@ export default function EligibilityDashboard() {
                   {estimates.length ? (
                     <div className="card p-5">
                       <div className="mb-3 flex items-center gap-2">
-                        <Stethoscope size={16} className="text-indigo-600" strokeWidth={2} />
-                        <h4 className="text-[13px] font-semibold text-slate-900">Procedure estimates</h4>
+                        <Stethoscope
+                          size={16}
+                          className="text-indigo-600"
+                          strokeWidth={2}
+                        />
+                        <h4 className="text-[13px] font-semibold text-slate-900">
+                          Procedure estimates
+                        </h4>
                       </div>
                       <div className="border-t border-slate-100">
                         {estimates.map((estimate) => (
@@ -2169,10 +2886,14 @@ export default function EligibilityDashboard() {
                             <div className="text-right text-[12px] font-medium">
                               <span
                                 className={
-                                  estimate.procedure_covered === false ? "text-red-600" : "text-emerald-600"
+                                  estimate.procedure_covered === false
+                                    ? "text-red-600"
+                                    : "text-emerald-600"
                                 }
                               >
-                                {estimate.procedure_covered === false ? "Not covered" : "Covered"}
+                                {estimate.procedure_covered === false
+                                  ? "Not covered"
+                                  : "Covered"}
                               </span>
                             </div>
                             <div className="mono w-16 text-right text-[12px] text-slate-500">
@@ -2187,19 +2908,34 @@ export default function EligibilityDashboard() {
                   {/* Processing timeline */}
                   <div className="card p-5">
                     <div className="mb-3 flex items-center gap-2">
-                      <Activity size={16} className="text-indigo-600" strokeWidth={2} />
-                      <h4 className="text-[13px] font-semibold text-slate-900">Processing timeline</h4>
+                      <Activity
+                        size={16}
+                        className="text-indigo-600"
+                        strokeWidth={2}
+                      />
+                      <h4 className="text-[13px] font-semibold text-slate-900">
+                        Processing timeline
+                      </h4>
                     </div>
                     <div className="max-h-40 space-y-1.5 overflow-y-auto border-t border-slate-100 pt-3">
                       {events.length ? (
                         events.map((event) => (
-                          <div key={event.id} className="flex items-baseline justify-between gap-2 text-[12px]">
-                            <span className="text-slate-700">{humanizeEventType(event.event_type)}</span>
-                            <span className="mono text-[10px] text-slate-500">{timeAgo(event.created_at)}</span>
+                          <div
+                            key={event.id}
+                            className="flex items-baseline justify-between gap-2 text-[12px]"
+                          >
+                            <span className="text-slate-700">
+                              {humanizeEventType(event.event_type)}
+                            </span>
+                            <span className="mono text-[10px] text-slate-500">
+                              {timeAgo(event.created_at)}
+                            </span>
                           </div>
                         ))
                       ) : (
-                        <div className="text-[12px] text-slate-500">No processing events yet.</div>
+                        <div className="text-[12px] text-slate-500">
+                          No processing events yet.
+                        </div>
                       )}
                     </div>
                   </div>
@@ -2221,47 +2957,92 @@ export default function EligibilityDashboard() {
                     return (
                       <div className="card p-5">
                         <div className="mb-3 flex items-center gap-2">
-                          <AlertTriangle size={16} className="text-amber-500" strokeWidth={2} />
-                          <h4 className="text-[13px] font-semibold text-slate-900">Diagnostics & notes</h4>
+                          <AlertTriangle
+                            size={16}
+                            className="text-amber-500"
+                            strokeWidth={2}
+                          />
+                          <h4 className="text-[13px] font-semibold text-slate-900">
+                            Diagnostics & notes
+                          </h4>
                         </div>
                         <div className="space-y-2 text-[12px] text-slate-500">
-                          {selectedRow.request.error_message ? <div>Error: {selectedRow.request.error_message}</div> : null}
-                          {selectedRow.request.error_code ? <div>Code: {selectedRow.request.error_code}</div> : null}
-                          {selectedRow.request.suggested_action ? <div>Action: {selectedRow.request.suggested_action}</div> : null}
-                          {selectedRow.request.failure_category ? <div>Category: {selectedRow.request.failure_category}</div> : null}
+                          {selectedRow.request.error_message ? (
+                            <div>
+                              Error: {selectedRow.request.error_message}
+                            </div>
+                          ) : null}
+                          {selectedRow.request.error_code ? (
+                            <div>Code: {selectedRow.request.error_code}</div>
+                          ) : null}
+                          {selectedRow.request.suggested_action ? (
+                            <div>
+                              Action: {selectedRow.request.suggested_action}
+                            </div>
+                          ) : null}
+                          {selectedRow.request.failure_category ? (
+                            <div>
+                              Category: {selectedRow.request.failure_category}
+                            </div>
+                          ) : null}
                           {selectedRow.request.agent_duration_ms ? (
-                            <div>Agent call: {selectedRow.request.agent_duration_ms}ms</div>
+                            <div>
+                              Agent call:{" "}
+                              {selectedRow.request.agent_duration_ms}ms
+                            </div>
                           ) : null}
                           {selectedRow.request.edge_duration_ms ? (
-                            <div>Edge function: {selectedRow.request.edge_duration_ms}ms</div>
+                            <div>
+                              Edge function:{" "}
+                              {selectedRow.request.edge_duration_ms}ms
+                            </div>
                           ) : null}
                           {selectedRow.check?.inactive_reason ? (
-                            <div>Inactive reason: {selectedRow.check.inactive_reason}</div>
+                            <div>
+                              Inactive reason:{" "}
+                              {selectedRow.check.inactive_reason}
+                            </div>
                           ) : null}
                           {selectedRow.check?.missing_fields?.length ? (
-                            <div>Missing: {selectedRow.check.missing_fields.join(", ")}</div>
+                            <div>
+                              Missing:{" "}
+                              {selectedRow.check.missing_fields.join(", ")}
+                            </div>
                           ) : null}
                           {selectedReadRow?.voice_session_status ? (
-                            <div className="mt-2 rounded-lg border border-blue-200 bg-blue-50 p-3 text-[12px] text-blue-900">
+                            <div className="mt-2 rounded-lg border border-indigo-200 bg-indigo-50 p-3 text-[12px] text-indigo-900">
                               <div className="flex items-center gap-1.5 font-medium">
                                 <Phone size={13} />
-                                Voice agent: {voiceSessionStatusLabel(selectedReadRow.voice_session_status)}
+                                Voice agent:{" "}
+                                {voiceSessionStatusLabel(
+                                  selectedReadRow.voice_session_status,
+                                )}
                               </div>
                               {selectedReadRow.voice_call_reference ? (
-                                <div className="mt-1">Call ref: {selectedReadRow.voice_call_reference}</div>
+                                <div className="mt-1">
+                                  Call ref:{" "}
+                                  {selectedReadRow.voice_call_reference}
+                                </div>
                               ) : null}
                               {selectedReadRow.voice_extracted_fields ? (
                                 <pre className="mt-2 max-h-28 overflow-auto rounded bg-white/70 p-2 text-[11px] text-slate-700">
-                                  {JSON.stringify(selectedReadRow.voice_extracted_fields, null, 2)}
+                                  {JSON.stringify(
+                                    selectedReadRow.voice_extracted_fields,
+                                    null,
+                                    2,
+                                  )}
                                 </pre>
                               ) : null}
-                              {selectedReadRow.voice_session_status === "pending_review" ? (
+                              {selectedReadRow.voice_session_status ===
+                              "pending_review" ? (
                                 <div className="mt-3 flex gap-2">
                                   <button
                                     type="button"
                                     disabled={voiceReviewBusy}
-                                    className="flex-1 rounded-lg bg-emerald-600 py-2 text-[13px] font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
-                                    onClick={() => void reviewVoiceSession("approve")}
+                                    className="flex-1 rounded-lg bg-[var(--accent-lime)] py-2 text-[13px] font-medium text-white hover:brightness-95 disabled:opacity-60"
+                                    onClick={() =>
+                                      void reviewVoiceSession("approve")
+                                    }
                                   >
                                     Approve voice results
                                   </button>
@@ -2269,20 +3050,32 @@ export default function EligibilityDashboard() {
                                     type="button"
                                     disabled={voiceReviewBusy}
                                     className="flex-1 rounded-lg border border-slate-300 py-2 text-[13px] font-medium text-slate-700 hover:bg-white disabled:opacity-60"
-                                    onClick={() => void reviewVoiceSession("reject")}
+                                    onClick={() =>
+                                      void reviewVoiceSession("reject")
+                                    }
                                   >
                                     Reject
                                   </button>
                                 </div>
                               ) : isStediVoiceComplete(selectedReadRow) ? (
-                                <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-[12px] font-medium text-emerald-800">
-                                  Eligibility complete — Stedi + voice verification filled all required fields.
+                                <div className="mt-2 rounded-lg border border-[var(--success-border)] bg-[var(--success-bg)] px-2 py-1.5 text-[12px] font-medium text-emerald-800">
+                                  Eligibility complete — Stedi + voice
+                                  verification filled all required fields.
                                 </div>
                               ) : null}
+                              <Link
+                                href="/voice"
+                                className="mt-2 inline-flex text-[11px] font-semibold text-indigo-600 hover:text-indigo-700"
+                              >
+                                Open Voice worklist →
+                              </Link>
                             </div>
                           ) : null}
                           {selectedRow.check?.integrity_warnings?.length ? (
-                            <div>Warnings: {selectedRow.check.integrity_warnings.join(", ")}</div>
+                            <div>
+                              Warnings:{" "}
+                              {selectedRow.check.integrity_warnings.join(", ")}
+                            </div>
                           ) : null}
                         </div>
                       </div>
@@ -2296,11 +3089,17 @@ export default function EligibilityDashboard() {
                         onClick={() => setShowRaw((prev) => !prev)}
                       >
                         <Database size={13} />
-                        {showRaw ? "Hide raw 271 response" : "Show raw 271 response"}
+                        {showRaw
+                          ? "Hide raw 271 response"
+                          : "Show raw 271 response"}
                       </button>
                       {showRaw ? (
                         <pre className="mt-3 max-h-64 overflow-auto rounded-lg bg-slate-900 p-3 text-[11px] text-white">
-                          {JSON.stringify(selectedRow.check.raw_response, null, 2)}
+                          {JSON.stringify(
+                            selectedRow.check.raw_response,
+                            null,
+                            2,
+                          )}
                         </pre>
                       ) : null}
                     </div>
@@ -2308,7 +3107,9 @@ export default function EligibilityDashboard() {
 
                   {/* Actions */}
                   <div className="flex gap-2 pt-1">
-                    {["failed", "needs_attention", "retrying"].includes(selectedRow.request.status) ? (
+                    {["failed", "needs_attention", "retrying"].includes(
+                      selectedRow.request.status,
+                    ) ? (
                       <button
                         className="flex-1 rounded-lg border border-indigo-300 py-2.5 text-[13px] font-semibold text-indigo-600 transition hover:border-indigo-500 hover:bg-indigo-50"
                         onClick={() => void retryFailed(selectedRow)}
@@ -2316,7 +3117,7 @@ export default function EligibilityDashboard() {
                         Retry failed check
                       </button>
                     ) : null}
-                    <button className="btn-sheen lift-on-hover flex-1 rounded-lg bg-gradient-to-b from-indigo-500 to-indigo-600 py-2.5 text-[13px] font-semibold text-white ring-1 ring-inset ring-white/15 hover:from-indigo-500 hover:to-indigo-700">
+                    <button className="btn-sheen lift-on-hover flex-1 rounded-lg bg-[var(--accent-primary)] py-2.5 text-[13px] font-semibold text-white ring-1 ring-inset ring-white/15 hover:bg-[var(--accent-primary-hover)]">
                       Submit claim
                     </button>
                   </div>

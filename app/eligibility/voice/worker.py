@@ -1,4 +1,4 @@
-"""Twilio outbound call worker for payer voice verification."""
+"""Outbound call worker for payer voice verification (Bland primary, Twilio fallback)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from urllib.parse import urljoin
 import httpx
 
 from app.eligibility.config import EligibilitySettings
-from app.eligibility.db import insert_eligibility_request_event
+from app.eligibility.db import get_eligibility_agent_settings, insert_eligibility_request_event
 from app.eligibility.voice.db import (
     fetch_payer_voice_config,
     fetch_queued_sessions,
@@ -20,6 +20,7 @@ from app.eligibility.voice.db import (
 )
 from app.eligibility.voice.bland import bland_configured, initiate_bland_call
 from app.eligibility.voice.extract import extract_fields_from_transcript
+from app.eligibility.voice.queue import voice_infra_ready
 from app.eligibility.voice.reconcile import complete_voice_session_reconciliation
 from app.security.phi import scrub_for_log
 
@@ -85,15 +86,22 @@ def initiate_twilio_call(session: dict[str, Any], settings: EligibilitySettings)
 
 
 def run_voice_sweep(settings: EligibilitySettings) -> dict[str, Any]:
-    """Pick queued sessions and initiate Twilio calls (or demo auto-complete)."""
-    if not getattr(settings, "voice_verification_worker_enabled", False):
+    """Pick queued sessions and initiate Bland (or Twilio) calls."""
+    worker_on = settings.voice_verification_worker_enabled or (
+        settings.voice_verification_enabled and bland_configured(settings)
+    )
+    if not worker_on:
         return {"skipped": "worker_disabled", "started": 0}
+    if not getattr(settings, "voice_verification_enabled", False):
+        return {"skipped": "voice_stack_disabled", "started": 0}
+    if not voice_infra_ready(settings):
+        return {"skipped": "voice_provider_not_configured", "started": 0}
 
     supabase = get_supabase_client(settings)
     batch = min(int(settings.voice_verification_batch_size), 20)
     sessions = fetch_queued_sessions(supabase, limit=batch)
 
-    provider = (settings.voice_call_provider or "twilio").strip().lower()
+    provider = (settings.voice_call_provider or "bland").strip().lower()
     use_bland = provider == "bland" and bland_configured(settings)
 
     if not use_bland and not _twilio_configured(settings):
@@ -117,10 +125,20 @@ def run_voice_sweep(settings: EligibilitySettings) -> dict[str, Any]:
         return {"skipped": "twilio_not_configured", "started": 0}
     started = 0
     errors = 0
+    skipped_disabled = 0
 
     for session in sessions:
         session_id = session.get("id")
         if not session_id:
+            continue
+        practice_id = session.get("practice_id")
+        agent_settings = get_eligibility_agent_settings(
+            supabase,
+            practice_id=str(practice_id) if practice_id else None,
+            settings=settings,
+        )
+        if agent_settings is None or agent_settings.get("voice_verification_enabled") is False:
+            skipped_disabled += 1
             continue
         try:
             provider_name = "bland" if use_bland else "twilio"
@@ -177,7 +195,12 @@ def run_voice_sweep(settings: EligibilitySettings) -> dict[str, Any]:
                     {"session_id": str(session_id), "error": str(exc)[:200]},
                 )
 
-    return {"started": started, "errors": errors, "considered": len(sessions)}
+    return {
+        "started": started,
+        "errors": errors,
+        "considered": len(sessions),
+        "skipped_disabled": skipped_disabled,
+    }
 
 
 def process_call_completion(
@@ -231,12 +254,22 @@ def process_call_completion(
     )
 
 
+def _leased_voice_sweep(settings: EligibilitySettings) -> dict[str, Any]:
+    from app.config import get_settings as get_app_settings
+    from app.db.leases import LEASE_VOICE_WORKER, try_lease
+
+    with try_lease(get_app_settings(), LEASE_VOICE_WORKER) as acquired:
+        if not acquired:
+            return {"skipped": "lease_held_elsewhere", "started": 0}
+        return run_voice_sweep(settings)
+
+
 async def _voice_loop(settings: EligibilitySettings) -> None:
     interval = max(10.0, float(settings.voice_verification_worker_interval_seconds))
     logger.info("voice verification worker started (interval=%ss)", interval)
     while True:
         try:
-            summary = await asyncio.to_thread(run_voice_sweep, settings)
+            summary = await asyncio.to_thread(_leased_voice_sweep, settings)
             if summary.get("started") or summary.get("errors") or summary.get("demo_completed"):
                 logger.warning("voice verification sweep: %s", summary)
         except asyncio.CancelledError:

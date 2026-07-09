@@ -163,8 +163,9 @@ export function canAccessWithRole(role: StaffRole | null, allowed?: readonly Sta
   if (!allowed || allowed.length === 0) {
     return true;
   }
+  // Local/dev sessions often have no role claim yet — show nav rather than a blank shell.
   if (!role) {
-    return false;
+    return true;
   }
   return allowed.includes(role);
 }

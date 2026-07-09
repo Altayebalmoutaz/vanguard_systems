@@ -12,12 +12,14 @@ from psycopg.types.json import Jsonb
 
 from app.config import Settings
 from app.db.connection import get_neon_dsn, neon_connection
+from app.db.json_safe import json_safe
 
 logger = logging.getLogger(__name__)
 
 RUN_TYPE_FULL_RCM_PIPELINE = "full_rcm_pipeline"
 RUN_TYPE_ELIGIBILITY_REQUEST = "eligibility_request"
 RUN_TYPE_OPENDENTAL_WRITEBACK = "opendental_writeback"
+RUN_TYPE_OPENDENTAL_POLL = "opendental_poll"
 
 
 class PipelineNotConfiguredError(RuntimeError):
@@ -27,6 +29,41 @@ class PipelineNotConfiguredError(RuntimeError):
 def _require_neon(settings: Settings) -> None:
     if not get_neon_dsn(settings):
         raise PipelineNotConfiguredError("NEON_DATABASE_URL is required for pipeline_runs")
+
+
+def enqueue_pipeline_run_on(
+    conn: Any,
+    *,
+    practice_id: str,
+    run_type: str,
+    payload: dict[str, Any],
+    idempotency_key: str | None = None,
+    max_attempts: int = 3,
+) -> UUID:
+    """Insert a pipeline job on an already-open connection (caller owns commit).
+
+    Lets callers enqueue atomically with their own writes (e.g. the eligibility
+    request insert), so a failed enqueue rolls back the whole transaction instead
+    of orphaning a ``queued`` row that no worker will ever pick up.
+    """
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """
+            insert into platform.pipeline_runs (
+              practice_id, run_type, payload, idempotency_key, max_attempts
+            )
+            values (%s, %s, %s, %s, %s)
+            on conflict (practice_id, idempotency_key)
+              where idempotency_key is not null
+            do update set updated_at = now()
+            returning id
+            """,
+            (practice_id, run_type, Jsonb(json_safe(payload)), idempotency_key, max_attempts),
+        )
+        row = cur.fetchone()
+    if not row or not row.get("id"):
+        raise RuntimeError("pipeline_runs insert returned no id")
+    return UUID(str(row["id"]))
 
 
 def create_pipeline_run(
@@ -41,25 +78,16 @@ def create_pipeline_run(
     """Enqueue a durable pipeline job."""
     _require_neon(settings)
     with neon_connection(settings, practice_id=practice_id) as conn:
-        with conn.cursor(row_factory=dict_row) as cur:
-            cur.execute(
-                """
-                insert into platform.pipeline_runs (
-                  practice_id, run_type, payload, idempotency_key, max_attempts
-                )
-                values (%s, %s, %s, %s, %s)
-                on conflict (practice_id, idempotency_key)
-                  where idempotency_key is not null
-                do update set updated_at = now()
-                returning id
-                """,
-                (practice_id, run_type, Jsonb(payload), idempotency_key, max_attempts),
-            )
-            row = cur.fetchone()
+        run_id = enqueue_pipeline_run_on(
+            conn,
+            practice_id=practice_id,
+            run_type=run_type,
+            payload=payload,
+            idempotency_key=idempotency_key,
+            max_attempts=max_attempts,
+        )
         conn.commit()
-    if not row or not row.get("id"):
-        raise RuntimeError("pipeline_runs insert returned no id")
-    return UUID(str(row["id"]))
+    return run_id
 
 
 def get_pipeline_run(
@@ -69,19 +97,54 @@ def get_pipeline_run(
     practice_id: str,
 ) -> dict[str, Any] | None:
     _require_neon(settings)
-    with neon_connection(settings, practice_id=practice_id) as conn:
-        with conn.cursor(row_factory=dict_row) as cur:
-            cur.execute(
-                """
-                select *
-                from platform.pipeline_runs
-                where id = %s and practice_id = %s
-                limit 1
-                """,
-                (run_id, practice_id),
-            )
-            row = cur.fetchone()
+    with (
+        neon_connection(settings, practice_id=practice_id) as conn,
+        conn.cursor(row_factory=dict_row) as cur,
+    ):
+        cur.execute(
+            """
+            select *
+            from platform.pipeline_runs
+            where id = %s and practice_id = %s
+            limit 1
+            """,
+            (run_id, practice_id),
+        )
+        row = cur.fetchone()
     return dict(row) if row else None
+
+
+def list_pipeline_runs(
+    settings: Settings,
+    *,
+    practice_id: str,
+    run_types: list[str] | None = None,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    """Recent pipeline runs for a practice (dashboard visibility)."""
+    _require_neon(settings)
+    where = "practice_id = %s"
+    params: list[Any] = [practice_id]
+    if run_types:
+        where += " and run_type = any(%s)"
+        params.append(list(run_types))
+    params.append(max(1, min(int(limit), 200)))
+    with (
+        neon_connection(settings, practice_id=practice_id) as conn,
+        conn.cursor(row_factory=dict_row) as cur,
+    ):
+        cur.execute(
+            f"""
+            select *
+            from platform.pipeline_runs
+            where {where}
+            order by created_at desc
+            limit %s
+            """,
+            params,
+        )
+        rows = cur.fetchall()
+    return [serialize_pipeline_run(dict(row)) for row in rows]
 
 
 def claim_pipeline_runs(
@@ -145,7 +208,7 @@ def complete_pipeline_run(
                     updated_at = now()
                 where id = %s and practice_id = %s
                 """,
-                (Jsonb(result), run_id, practice_id),
+                (Jsonb(json_safe(result)), run_id, practice_id),
             )
         conn.commit()
 

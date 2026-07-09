@@ -1,11 +1,19 @@
 from functools import lru_cache
+from typing import Self
 
-from pydantic import Field
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from app.database_url import resolve_database_url
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        populate_by_name=True,
+    )
 
     app_name: str = "dental-rcm-agents"
     environment: str = "development"
@@ -15,6 +23,10 @@ class Settings(BaseSettings):
     # Prefer service role on the server (bypasses RLS). If unset, anon key is used (must match your RLS policies).
     supabase_service_role_key: str | None = None
     supabase_anon_key: str | None = None
+    # Database password from Supabase Dashboard → Settings → Database (not your Google login).
+    supabase_db_password: str | None = Field(default=None, validation_alias="SUPABASE_DB_PASSWORD")
+    # IPv4 session pooler host, e.g. aws-1-eu-west-1.pooler.supabase.com (copy from Dashboard).
+    supabase_pooler_host: str | None = Field(default=None, validation_alias="SUPABASE_POOLER_HOST")
 
     # OpenRouter (OpenAI-compatible chat completions)
     openrouter_api_key: str | None = None
@@ -51,8 +63,12 @@ class Settings(BaseSettings):
     supabase_jwt_secret: str | None = None
     # Comma-separated list of allowed static API keys (server-to-server).
     internal_api_keys: str = ""
-    # PHI-plane Postgres. Used by auth RBAC today; broader app data access lands in Phase 2.
-    neon_database_url: str | None = None
+    # Canonical psycopg DSN for the application Postgres (Supabase Postgres for the
+    # Supabase-only pilot). `NEON_DATABASE_URL` is kept as a back-compat alias.
+    neon_database_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("DATABASE_URL", "NEON_DATABASE_URL"),
+    )
     # When true, JWT callers must resolve to at least one platform.user_practice_roles row.
     require_rbac: bool = False
 
@@ -71,6 +87,18 @@ class Settings(BaseSettings):
         default="",
         validation_alias="PILOT_DEFAULT_PRACTICE_ID",
     )
+
+    @model_validator(mode="after")
+    def _resolve_database_dsn(self) -> Self:
+        resolved = resolve_database_url(
+            database_url=self.neon_database_url,
+            supabase_url=self.supabase_url,
+            supabase_db_password=self.supabase_db_password,
+            supabase_pooler_host=self.supabase_pooler_host,
+        )
+        if resolved:
+            object.__setattr__(self, "neon_database_url", resolved)
+        return self
 
     @property
     def internal_api_keys_set(self) -> frozenset[str]:

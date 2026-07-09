@@ -65,6 +65,32 @@ class DashboardStatusLabelTests(unittest.TestCase):
             has_check=True,
         )
         self.assertEqual(label, "Needs Attention")
+    def test_verified_when_only_informational_integrity_warnings(self) -> None:
+        label = compute_status_label(
+            request_status="completed",
+            is_active=True,
+            response_complete=True,
+            missing_fields=[],
+            integrity_warnings=[
+                "layer3_clamp:deductible",
+                "important_field_null:annual_max",
+            ],
+            routing_status="CLEARED",
+            has_check=True,
+        )
+        self.assertEqual(label, "Verified")
+
+    def test_needs_attention_when_blocking_integrity_warning(self) -> None:
+        label = compute_status_label(
+            request_status="completed",
+            is_active=True,
+            response_complete=True,
+            missing_fields=[],
+            integrity_warnings=["layer3_clamp:deductible", "stale_benefit_year"],
+            routing_status="CLEARED",
+            has_check=True,
+        )
+        self.assertEqual(label, "Needs Attention")
 
 
 class DashboardRouteTests(unittest.TestCase):

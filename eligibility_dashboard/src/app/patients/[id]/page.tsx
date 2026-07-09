@@ -51,7 +51,7 @@ export default function Patient360Page() {
       : "Patient";
 
   return (
-    <main className="ml-[64px] min-h-screen overflow-y-auto px-7 pb-14 pt-7">
+    <main className="ml-[60px] min-h-screen overflow-y-auto px-6 pb-12 pt-6">
       <div className="mb-4">
         <Link href="/eligibility" className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-slate-500 hover:text-indigo-600">
           <ArrowLeft size={14} />

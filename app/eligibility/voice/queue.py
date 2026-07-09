@@ -14,6 +14,7 @@ from app.eligibility.voice.db import (
     get_supabase_client,
     insert_verification_session,
 )
+from app.eligibility.voice.bland import bland_configured
 from app.eligibility.voice.gate import (
     canonical_voice_escalation_eligible,
     routing_status_voice_eligible,
@@ -22,12 +23,33 @@ from app.eligibility.voice.gate import (
 logger = logging.getLogger(__name__)
 
 
+def _twilio_infra_ready(settings: EligibilitySettings) -> bool:
+    return bool(
+        (settings.twilio_account_sid or "").strip()
+        and (settings.twilio_auth_token or "").strip()
+        and (settings.twilio_from_number or "").strip()
+        and (settings.twilio_webhook_base_url or "").strip()
+    )
+
+
+def voice_infra_ready(settings: EligibilitySettings) -> bool:
+    """True when the configured call provider has credentials + webhook URL."""
+    provider = (settings.voice_call_provider or "bland").strip().lower()
+    if provider == "bland":
+        return bland_configured(settings)
+    if provider == "twilio":
+        return _twilio_infra_ready(settings)
+    return False
+
+
 def _voice_enabled(settings: EligibilitySettings, agent_settings: dict[str, Any] | None) -> bool:
-    env_on = bool(getattr(settings, "voice_verification_enabled", False))
-    if not env_on:
+    """Runtime on/off is the dashboard toggle; env supplies deploy-time stack + credentials."""
+    if not getattr(settings, "voice_verification_enabled", False):
+        return False
+    if not voice_infra_ready(settings):
         return False
     if agent_settings is None:
-        return True
+        return False
     return agent_settings.get("voice_verification_enabled") is not False
 
 
@@ -56,7 +78,11 @@ def queue_voice_verification(
     """
     s = settings or get_settings()
     supabase = get_supabase_client(s)
-    agent_settings = get_eligibility_agent_settings(supabase)
+    agent_settings = get_eligibility_agent_settings(
+        supabase,
+        practice_id=practice_id,
+        settings=s,
+    )
 
     if not force and not _voice_enabled(s, agent_settings):
         return {"queued": False, "skip_reason": "voice_verification_disabled"}
@@ -90,9 +116,9 @@ def queue_voice_verification(
             "session_id": existing.get("id"),
         }
 
-    provider = (s.voice_call_provider or "twilio").strip().lower()
+    provider = (s.voice_call_provider or "bland").strip().lower()
     if provider not in ("twilio", "bland"):
-        provider = "twilio"
+        provider = "bland"
 
     session_id = insert_verification_session(
         supabase,
@@ -143,7 +169,12 @@ def maybe_auto_queue_voice_verification(
     """Called after primary Stedi pipeline when auto-queue is enabled."""
     s = settings or get_settings()
     supabase = get_supabase_client(s)
-    agent_settings = get_eligibility_agent_settings(supabase)
+    practice = getattr(request, "practice_id", None)
+    agent_settings = get_eligibility_agent_settings(
+        supabase,
+        practice_id=str(practice) if practice else None,
+        settings=s,
+    )
 
     if not _voice_enabled(s, agent_settings):
         return {"queued": False, "skip_reason": "voice_verification_disabled"}

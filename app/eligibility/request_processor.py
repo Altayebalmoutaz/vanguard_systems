@@ -239,16 +239,51 @@ def process_eligibility_request(
                 "secondary_check_id": secondary_check_id,
             },
         )
-        return {
+        # Writeback is best-effort after a successful check: never let enqueue
+        # failures (e.g. Jsonb datetime) overwrite a completed eligibility result.
+        writeback: dict[str, Any] | None = None
+        try:
+            from app.integrations.opendental.post_check import maybe_enqueue_od_writeback
+
+            writeback = maybe_enqueue_od_writeback(
+                app_settings,
+                practice_id=practice_id,
+                request_id=request_id,
+                row=row,
+                result=result,
+            )
+        except Exception as wb_exc:
+            from app.security.phi import scrub_for_log
+
+            logger.exception(
+                "OD writeback enqueue failed after successful eligibility request_id=%s",
+                request_id,
+            )
+            insert_eligibility_request_event(
+                supabase,
+                request_id,
+                "opendental_writeback_enqueue_failed",
+                {"error": scrub_for_log(str(wb_exc))[:300]},
+                practice_id=practice_id,
+                settings=app_settings,
+            )
+        out: dict[str, Any] = {
             **result,
             "request_id": str(request_id),
             "primary_check_id": primary_check_id,
             "secondary_check_id": secondary_check_id,
             "terminal_status": "completed",
         }
+        if writeback:
+            out["opendental_writeback"] = writeback
+        return out
     except Exception as exc:
         agent_duration_ms = int((time.monotonic() - agent_started) * 1000)
-        message = str(exc)
+        # Exception text can echo request PHI (names, DOBs, member ids); scrub
+        # before it is persisted to error_message / request events / audit logs.
+        from app.security.phi import scrub_for_log
+
+        message = scrub_for_log(str(exc))
         category = classify_failure(message, agent_http_status)
         action = actionable_error(message, agent_http_status)
         max_attempts = int(row.get("max_attempts") or 0) or 3

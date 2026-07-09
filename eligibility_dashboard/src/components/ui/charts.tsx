@@ -4,7 +4,7 @@ export function BarChart({
   data,
   height = 180,
   formatValue = (v) => String(v),
-  accent = "#6366f1",
+  accent = "#1880f0",
 }: {
   data: BarDatum[];
   height?: number;
@@ -17,8 +17,13 @@ export function BarChart({
       {data.map((d) => {
         const pct = Math.max(4, (d.value / max) * 100);
         return (
-          <div key={d.label} className="group flex h-full flex-1 flex-col items-center justify-end gap-2">
-            <div className="text-[12px] font-semibold tabular-nums text-slate-700">{formatValue(d.value)}</div>
+          <div
+            key={d.label}
+            className="group flex h-full flex-1 flex-col items-center justify-end gap-2"
+          >
+            <div className="text-[12px] font-semibold tabular-nums text-slate-700">
+              {formatValue(d.value)}
+            </div>
             <div className="flex w-full flex-1 items-end">
               <div
                 className="w-full rounded-t-md transition-all duration-500 ease-[cubic-bezier(0.2,0.8,0.2,1)]"
@@ -28,7 +33,9 @@ export function BarChart({
                 }}
               />
             </div>
-            <div className="line-clamp-1 max-w-full text-center text-[10.5px] font-medium text-slate-500">{d.label}</div>
+            <div className="line-clamp-1 max-w-full text-center text-[10.5px] font-medium text-slate-500">
+              {d.label}
+            </div>
           </div>
         );
       })}
@@ -58,8 +65,20 @@ export function DonutChart({
 
   return (
     <div className="flex items-center gap-6">
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0 -rotate-90">
-        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="#eef1f6" strokeWidth={thickness} />
+      <svg
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        className="shrink-0 -rotate-90"
+      >
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke="#eef1f6"
+          strokeWidth={thickness}
+        />
         {segments.map((s) => {
           const len = (s.value / total) * circumference;
           const dash = `${len} ${circumference - len}`;
@@ -84,16 +103,25 @@ export function DonutChart({
       <div className="min-w-0">
         {centerLabel ? (
           <div className="mb-3">
-            <div className="text-[26px] font-bold leading-none tracking-tight text-slate-900">{centerLabel}</div>
-            {centerSub ? <div className="text-[12px] text-slate-500">{centerSub}</div> : null}
+            <div className="text-[26px] font-bold leading-none tracking-tight text-slate-900">
+              {centerLabel}
+            </div>
+            {centerSub ? (
+              <div className="text-[12px] text-slate-500">{centerSub}</div>
+            ) : null}
           </div>
         ) : null}
         <ul className="space-y-1.5">
           {segments.map((s) => (
             <li key={s.label} className="flex items-center gap-2 text-[12.5px]">
-              <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: s.color }} />
+              <span
+                className="h-2.5 w-2.5 shrink-0 rounded-sm"
+                style={{ background: s.color }}
+              />
               <span className="text-slate-600">{s.label}</span>
-              <span className="ml-auto font-semibold tabular-nums text-slate-900">{s.value}</span>
+              <span className="ml-auto font-semibold tabular-nums text-slate-900">
+                {s.value}
+              </span>
             </li>
           ))}
         </ul>
@@ -120,13 +148,17 @@ export function FunnelChart({
         const conv = Math.round((s.count / first) * 100);
         return (
           <div key={s.label} className="flex items-center gap-3">
-            <div className="w-28 shrink-0 text-right text-[12px] font-medium text-slate-600">{s.label}</div>
+            <div className="w-28 shrink-0 text-right text-[12px] font-medium text-slate-600">
+              {s.label}
+            </div>
             <div className="relative h-9 flex-1 overflow-hidden rounded-lg bg-slate-50">
               <div
-                className="flex h-full items-center rounded-lg bg-gradient-to-r from-indigo-500 to-violet-500 px-3 transition-all duration-700 ease-[cubic-bezier(0.2,0.8,0.2,1)]"
+                className="flex h-full items-center rounded-lg bg-[var(--accent-primary)] px-3 transition-all duration-700 ease-[cubic-bezier(0.2,0.8,0.2,1)]"
                 style={{ width: `${width}%`, opacity: 1 - i * 0.12 }}
               >
-                <span className="text-[12px] font-semibold tabular-nums text-white">{s.count}</span>
+                <span className="text-[12px] font-semibold tabular-nums text-white">
+                  {s.count}
+                </span>
               </div>
             </div>
             <div className="w-24 shrink-0 text-[11px] text-slate-500">

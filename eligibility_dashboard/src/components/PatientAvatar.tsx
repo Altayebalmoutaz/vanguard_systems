@@ -6,18 +6,18 @@ function initials(first: string, last: string): string {
 
 // Tasteful palette — restrained, professional. Two-stop gradients per pair.
 const PALETTE: Array<[string, string]> = [
-  ["#6366f1", "#8b5cf6"], // indigo → violet
-  ["#0ea5e9", "#22d3ee"], // sky → cyan
-  ["#10b981", "#14b8a6"], // emerald → teal
-  ["#f59e0b", "#f97316"], // amber → orange
-  ["#ec4899", "#f43f5e"], // pink → rose
-  ["#3b82f6", "#6366f1"], // blue → indigo
-  ["#8b5cf6", "#d946ef"], // violet → fuchsia
-  ["#14b8a6", "#0ea5e9"], // teal → sky
-  ["#f43f5e", "#f59e0b"], // rose → amber
-  ["#06b6d4", "#3b82f6"], // cyan → blue
-  ["#84cc16", "#10b981"], // lime → emerald
-  ["#a855f7", "#6366f1"], // purple → indigo
+  ["#1880f0", "#0f6ad6"], // ezFi blue
+  ["#0ea5e9", "#0284c7"], // sky
+  ["#5cc82c", "#3f9a1c"], // ezFi lime
+  ["#f59e0b", "#d97706"], // amber
+  ["#0f6ad6", "#0c56b0"], // deep blue
+  ["#3b82f6", "#1880f0"], // blue → brand
+  ["#14b8a6", "#0d9488"], // teal
+  ["#64748b", "#475569"], // slate
+  ["#06b6d4", "#0891b2"], // cyan
+  ["#84cc16", "#5cc82c"], // lime
+  ["#2563eb", "#1880f0"], // royal → brand
+  ["#0c56b0", "#133c75"], // navy
 ];
 
 function hashName(s: string): number {

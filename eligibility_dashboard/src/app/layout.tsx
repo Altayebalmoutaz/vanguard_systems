@@ -16,9 +16,9 @@ const sourceCodePro = Source_Code_Pro({
 });
 
 export const metadata: Metadata = {
-  title: "Vanguard MD | Revenue Cycle Platform",
+  title: "ezFi | Eligibility Agent",
   description:
-    "AI-powered revenue cycle management: eligibility, coding, prior authorization, claims, and denials in one platform.",
+    "AI-powered dental eligibility verification: queue, multi-modal checks, OpenDental sync, and exception review.",
 };
 
 export default function RootLayout({

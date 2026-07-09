@@ -69,7 +69,7 @@ export function ConfidenceGauge({
   const cy = size / 2;
   // Top semicircle, drawn left → right (clockwise) so the sweep tracks 0→100%.
   const arc = `M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`;
-  const color = pct >= 90 ? "#10b981" : pct >= 70 ? "#6366f1" : pct >= 50 ? "#f59e0b" : "#ef4444";
+  const color = pct >= 90 ? "#10b981" : pct >= 70 ? "#1880f0" : pct >= 50 ? "#f59e0b" : "#ef4444";
   const height = cy + thickness / 2 + 2;
 
   return (

@@ -63,6 +63,53 @@ class OpenDentalClient:
             replay_dir=settings.opendental_replay_dir or None,
         )
 
+    @classmethod
+    def from_connection(
+        cls,
+        connection: dict[str, object],
+        *,
+        settings: EligibilitySettings,
+    ) -> OpenDentalClient:
+        """Build a per-clinic client from an ``rcm.opendental_connections`` row.
+
+        The Developer key is our single global secret; the clinic Customer key is
+        resolved from the env var named by ``customer_key_ref`` (falling back to
+        the global ``OPENDENTAL_CUSTOMER_KEY`` for single-clinic setups).
+        """
+        from app.integrations.opendental.connections_store import resolve_customer_key
+
+        customer_key = resolve_customer_key(
+            str(connection.get("customer_key_ref") or "") or None,
+            fallback=settings.opendental_customer_key,
+        )
+        if not customer_key:
+            raise OpenDentalConfigError(
+                f"No OpenDental customer key configured for practice "
+                f"{connection.get('practice_id')!r} (customer_key_ref="
+                f"{connection.get('customer_key_ref')!r})"
+            )
+        return cls(
+            base_url=str(connection.get("base_url") or "") or settings.opendental_base_url,
+            developer_key=settings.opendental_developer_key,
+            customer_key=customer_key,
+            timeout_seconds=settings.opendental_timeout_seconds,
+        )
+
+    def check_connection(self) -> dict[str, object]:
+        """Lightweight connectivity/auth probe (used by the dashboard Test button)."""
+        try:
+            # /covcats is small, read-only, and requires valid keys.
+            payload = self._read_fixture("covcats") if self.replay_dir else self._get_json("/covcats")
+            count = len(payload) if isinstance(payload, list) else None
+            return {"ok": True, "covcats_count": count}
+        except OpenDentalAPIError as exc:
+            detail = (exc.body or "").strip() or str(exc)
+            if len(detail) > 400:
+                detail = detail[:400] + "…"
+            return {"ok": False, "status_code": exc.status_code, "error": detail}
+        except Exception as exc:  # network/DNS/TLS failures
+            return {"ok": False, "status_code": None, "error": f"{type(exc).__name__}: {exc}"}
+
     def _headers(self) -> dict[str, str]:
         return {
             "Authorization": f"ODFHIR {self.developer_key}/{self.customer_key}",

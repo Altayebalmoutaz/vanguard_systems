@@ -25,6 +25,23 @@ logger = logging.getLogger(__name__)
 CLEARED_ROUTING_STATUSES = frozenset({"CLEARED", "APPROVED"})
 
 
+_INFORMATIONAL_INTEGRITY_WARNING_PREFIXES = (
+    "layer3_clamp:",
+    "important_field_null:",
+)
+
+
+def status_blocking_integrity_warnings(warnings: list[str] | None) -> list[str]:
+    if not warnings:
+        return []
+    return [
+        str(w)
+        for w in warnings
+        if w
+        and not any(str(w).startswith(prefix) for prefix in _INFORMATIONAL_INTEGRITY_WARNING_PREFIXES)
+    ]
+
+
 class DashboardRequestNotFoundError(LookupError):
     """Eligibility request id was not found for the active practice."""
 
@@ -111,7 +128,7 @@ def compute_status_label(
     if not has_check or response_complete is False:
         return "Needs Attention"
     missing_count = len(missing_fields or [])
-    warning_count = len(integrity_warnings or [])
+    warning_count = len(status_blocking_integrity_warnings(integrity_warnings))
     if missing_count > 0 or warning_count > 0:
         return "Needs Attention"
     if routing_status and routing_status not in CLEARED_ROUTING_STATUSES:
@@ -138,7 +155,7 @@ def compute_status_detail(row: dict[str, Any]) -> str | None:
     if len(missing_fields) > 0:
         return "Missing normalized eligibility fields"
     integrity_warnings = row.get("integrity_warnings") or []
-    if len(integrity_warnings) > 0:
+    if len(status_blocking_integrity_warnings(integrity_warnings)) > 0:
         return "Integrity warnings require review"
     routing_status = row.get("routing_status")
     if routing_status and routing_status not in CLEARED_ROUTING_STATUSES:
@@ -304,6 +321,7 @@ def get_eligibility_agent_settings_row(
             cur.execute(
                 """
                 select practice_id, auto_check_enabled, auto_retry_enabled,
+                       voice_verification_enabled, voice_verification_auto_queue,
                        last_sync_at, next_retry_at, updated_at
                 from rcm.eligibility_agent_settings
                 where practice_id = %s
@@ -318,10 +336,54 @@ def get_eligibility_agent_settings_row(
         "practice_id": practice_id,
         "auto_check_enabled": True,
         "auto_retry_enabled": True,
+        "voice_verification_enabled": False,
+        "voice_verification_auto_queue": True,
         "last_sync_at": None,
         "next_retry_at": None,
         "updated_at": None,
     }
+
+
+_ELIGIBILITY_AGENT_SETTINGS_UPDATABLE = frozenset({
+    "voice_verification_enabled",
+    "voice_verification_auto_queue",
+    "auto_check_enabled",
+    "auto_retry_enabled",
+})
+
+
+def update_eligibility_agent_settings(
+    settings: Settings,
+    *,
+    practice_id: str,
+    updates: dict[str, Any],
+) -> dict[str, Any]:
+    _require_neon(settings)
+    fields = {k: v for k, v in updates.items() if k in _ELIGIBILITY_AGENT_SETTINGS_UPDATABLE}
+    if not fields:
+        return get_eligibility_agent_settings_row(settings, practice_id=practice_id)
+    cols = ["practice_id", *fields.keys()]
+    placeholders = ", ".join(f"%({c})s" for c in cols)
+    set_sql = ", ".join(f"{c} = excluded.{c}" for c in fields.keys())
+    sql = f"""
+        insert into rcm.eligibility_agent_settings ({", ".join(cols)})
+        values ({placeholders})
+        on conflict (practice_id) do update set {set_sql}, updated_at = now()
+        returning practice_id, auto_check_enabled, auto_retry_enabled,
+                  voice_verification_enabled, voice_verification_auto_queue,
+                  last_sync_at, next_retry_at, updated_at
+    """
+    params = {"practice_id": practice_id, **fields}
+    with neon_connection(settings, practice_id=practice_id) as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(sql, params)
+            row = cur.fetchone()
+        conn.commit()
+    if not row:
+        raise RuntimeError("eligibility_agent_settings upsert returned no data")
+    return _serialize_row(dict(row))
+
+
 
 
 def _get_request_primary_check_id(

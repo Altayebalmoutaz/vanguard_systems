@@ -169,14 +169,19 @@ def call_stedi(
     headers = {"Authorization": f"Key {s.stedi_api_key}", "Content-Type": "application/json"}
     if s.stedi_test_header:
         headers["stedi-test"] = "true"
+    from app.observability.metrics import inc as metric_inc
+
     last_exc: StediAPIError | None = None
     max_retries = max(1, int(s.stedi_max_retries))
     for attempt in range(max_retries):
         try:
             started = time.monotonic()
+            metric_inc("stedi_requests_total")
             with httpx.Client(timeout=float(s.stedi_timeout_seconds)) as client:
                 r = client.post(url, json=payload, headers=headers)
             elapsed_ms = int((time.monotonic() - started) * 1000)
+            if r.status_code >= 400:
+                metric_inc("stedi_errors_total", {"status": str(r.status_code)})
             if r.status_code == 429 or r.status_code >= 500:
                 last_exc = StediAPIError(
                     f"Stedi HTTP {r.status_code}", status_code=r.status_code, body=r.text[:2000]
@@ -224,6 +229,7 @@ def call_stedi(
         except StediAPIError:
             raise
         except httpx.HTTPError as e:
+            metric_inc("stedi_errors_total", {"status": "transport"})
             last_exc = StediAPIError(str(e), status_code=None, body=None)
             if attempt < max_retries - 1:
                 wait = _retry_sleep_seconds(attempt, s)

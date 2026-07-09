@@ -17,8 +17,10 @@ from app.eligibility.retry_worker import start_retry_worker
 from app.eligibility.voice.worker import start_voice_worker
 from app.integrations.opendental.poller import start_appointment_poller
 from app.logging_config import CorrelationIdMiddleware, configure_logging, init_sentry
+from app.observability.metrics import router as metrics_router
 from app.pipeline.worker import start_pipeline_worker
-from app.startup_guards import validate_production_auth
+from app.realtime.bus import start_realtime_listener
+from app.startup_guards import validate_production_readiness
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +45,7 @@ async def lifespan(app: FastAPI):
             "OPENDENTAL_WRITEBACK_ENABLED is set but shadow mode suppresses all writes"
         )
     if eligibility_settings.opendental_auto_poll_enabled:
-        poller_task = start_appointment_poller(run_from_opendental, eligibility_settings)
+        poller_task = start_appointment_poller(eligibility_settings)
         logger.warning(
             "OpenDental auto-poll enabled (interval=%ss, window_days=%s)",
             eligibility_settings.opendental_auto_poll_interval_seconds,
@@ -58,10 +60,16 @@ async def lifespan(app: FastAPI):
             eligibility_settings.eligibility_retry_batch_size,
         )
     voice_task = None
-    if eligibility_settings.voice_verification_worker_enabled:
+    from app.eligibility.voice.bland import bland_configured
+
+    voice_worker_on = eligibility_settings.voice_verification_worker_enabled or (
+        eligibility_settings.voice_verification_enabled and bland_configured(eligibility_settings)
+    )
+    if voice_worker_on:
         voice_task = start_voice_worker(eligibility_settings)
         logger.warning(
-            "Voice verification worker enabled (interval=%ss, batch=%s)",
+            "Voice verification worker enabled (provider=%s, interval=%ss, batch=%s)",
+            eligibility_settings.voice_call_provider or "bland",
             eligibility_settings.voice_verification_worker_interval_seconds,
             eligibility_settings.voice_verification_batch_size,
         )
@@ -74,8 +82,16 @@ async def lifespan(app: FastAPI):
             app_settings.pipeline_worker_batch_size,
             app_settings.confidence_hitl_threshold,
         )
+    realtime_task = None
+    from app.db.connection import get_neon_dsn
+
+    if get_neon_dsn(app_settings):
+        realtime_task = start_realtime_listener(app_settings)
+        logger.info("Realtime LISTEN/NOTIFY listener enabled (channel=rcm_events)")
     background_tasks = [
-        t for t in (poller_task, retry_task, voice_task, pipeline_task) if t is not None
+        t
+        for t in (poller_task, retry_task, voice_task, pipeline_task, realtime_task)
+        if t is not None
     ]
     try:
         yield
@@ -95,7 +111,7 @@ def create_app() -> FastAPI:
         app_name=settings.app_name,
         environment=settings.environment,
     )
-    validate_production_auth(settings)
+    validate_production_readiness(settings)
     app = FastAPI(title=settings.app_name, lifespan=lifespan)
     app.add_middleware(CorrelationIdMiddleware)
 
@@ -112,6 +128,9 @@ def create_app() -> FastAPI:
     app.include_router(rcm.router, dependencies=auth)
     app.include_router(dashboard.router, dependencies=auth)
     app.include_router(agents.router, dependencies=auth)
+    # Prometheus scrape endpoint; authenticate the scraper with an INTERNAL_API_KEYS
+    # entry via X-API-Key.
+    app.include_router(metrics_router, dependencies=auth)
     app.include_router(auth_routes.router)
 
     # Eligibility sub-app has its own ELIGIBILITY_AGENT_API_KEY bearer guard and

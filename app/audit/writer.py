@@ -10,6 +10,7 @@ from psycopg.types.json import Jsonb
 
 from app.config import Settings
 from app.db.connection import get_neon_dsn, neon_connection
+from app.db.json_safe import json_safe
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +45,7 @@ def write_audit_log(
                         entity_id,
                         action,
                         performed_by,
-                        Jsonb(metadata or {}),
+                        Jsonb(json_safe(metadata or {})),
                     ),
                 )
             conn.commit()

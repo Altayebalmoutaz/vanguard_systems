@@ -1,13 +1,21 @@
 """Environment configuration for the Eligibility Agent service."""
 
 from functools import lru_cache
+from typing import Self
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from app.database_url import resolve_database_url
 
 
 class EligibilitySettings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        populate_by_name=True,
+    )
 
     stedi_api_key: str = Field(default="", validation_alias="STEDI_API_KEY")
     stedi_base_url: str = Field(
@@ -46,7 +54,25 @@ class EligibilitySettings(BaseSettings):
         default="",
         validation_alias=AliasChoices("SUPABASE_KEY", "SUPABASE_SERVICE_ROLE_KEY"),
     )
-    neon_database_url: str = Field(default="", validation_alias="NEON_DATABASE_URL")
+    supabase_db_password: str = Field(default="", validation_alias="SUPABASE_DB_PASSWORD")
+    supabase_pooler_host: str = Field(default="", validation_alias="SUPABASE_POOLER_HOST")
+    # Canonical psycopg DSN (Supabase Postgres for the Supabase-only pilot).
+    neon_database_url: str = Field(
+        default="",
+        validation_alias=AliasChoices("DATABASE_URL", "NEON_DATABASE_URL"),
+    )
+
+    @model_validator(mode="after")
+    def _resolve_database_dsn(self) -> Self:
+        resolved = resolve_database_url(
+            database_url=self.neon_database_url or None,
+            supabase_url=self.supabase_url or None,
+            supabase_db_password=self.supabase_db_password or None,
+            supabase_pooler_host=self.supabase_pooler_host or None,
+        )
+        if resolved:
+            object.__setattr__(self, "neon_database_url", resolved)
+        return self
 
     # Mock defaults for local/Stedi sandbox; set PROVIDER_* in .env for production.
     provider_npi: str = Field(default="1999999984", validation_alias="PROVIDER_NPI")
@@ -174,10 +200,11 @@ class EligibilitySettings(BaseSettings):
         validation_alias="ELIGIBILITY_RETRY_BATCH_SIZE",
     )
 
-    # Voice payer verification (Twilio fallback for incomplete 271)
+    # Voice payer verification (Bland.ai primary; Twilio scripted fallback)
     voice_verification_enabled: bool = Field(
         default=False,
         validation_alias="VOICE_VERIFICATION_ENABLED",
+        description="Deploy-time voice stack gate. When true, dashboard toggles control runtime on/off.",
     )
     voice_verification_worker_enabled: bool = Field(
         default=False,
@@ -194,7 +221,10 @@ class EligibilitySettings(BaseSettings):
     twilio_account_sid: str = Field(default="", validation_alias="TWILIO_ACCOUNT_SID")
     twilio_auth_token: str = Field(default="", validation_alias="TWILIO_AUTH_TOKEN")
     twilio_from_number: str = Field(default="", validation_alias="TWILIO_FROM_NUMBER")
-    twilio_webhook_base_url: str = Field(default="", validation_alias="TWILIO_WEBHOOK_BASE_URL")
+    twilio_webhook_base_url: str = Field(
+        default="",
+        validation_alias=AliasChoices("VOICE_WEBHOOK_BASE_URL", "TWILIO_WEBHOOK_BASE_URL"),
+    )
     voice_openai_api_key: str = Field(
         default="",
         validation_alias=AliasChoices("VOICE_OPENAI_API_KEY", "OPENAI_API_KEY"),
@@ -212,7 +242,7 @@ class EligibilitySettings(BaseSettings):
         validation_alias="VOICE_DEMO_TRANSCRIPT",
     )
     voice_call_provider: str = Field(
-        default="twilio",
+        default="bland",
         validation_alias="VOICE_CALL_PROVIDER",
     )
     bland_api_key: str = Field(default="", validation_alias="BLAND_API_KEY")
@@ -241,7 +271,8 @@ class EligibilitySettings(BaseSettings):
 
     @property
     def opendental_writeback_allowed(self) -> bool:
-        return self.opendental_writeback_enabled and not self.pilot_shadow_mode
+        """Global kill-switch only; per-clinic writeback is controlled on the dashboard."""
+        return not self.pilot_shadow_mode
 
 
 @lru_cache

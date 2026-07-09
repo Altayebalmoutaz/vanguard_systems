@@ -15,11 +15,24 @@ def _settings(window_days: int = 0) -> SimpleNamespace:
         opendental_auto_poll_date_window_days=window_days,
         opendental_auto_poll_cdt_codes="D1110",
         opendental_auto_poll_interval_seconds=60.0,
+        pilot_shadow_mode=False,
     )
 
 
-def _run_once(monkeypatch, *, appointments, checked_today, seen):  # type: ignore[no-untyped-def]
-    calls: list[int] = []
+def _connection(*, window_days: int = 0) -> dict:
+    return {
+        "practice_id": "clinic_a",
+        "base_url": "http://localhost:30222/api/v1",
+        "customer_key_ref": "OD_KEY",
+        "poll_window_days": window_days,
+        "cdt_codes": "D1110",
+        "writeback_enabled": True,
+        "writeback_full": False,
+    }
+
+
+def _run_once(monkeypatch, *, appointments, checked_today, queued_today, seen):  # type: ignore[no-untyped-def]
+    enqueued: list[int] = []
 
     def fake_fetch(*, base_url, headers, on_date, timeout):  # type: ignore[no-untyped-def]
         return list(appointments)
@@ -27,52 +40,83 @@ def _run_once(monkeypatch, *, appointments, checked_today, seen):  # type: ignor
     def fake_checked(pat_num):  # type: ignore[no-untyped-def]
         return pat_num in checked_today
 
-    def fake_runner(*, pat_num, **kwargs):  # type: ignore[no-untyped-def]
-        calls.append(pat_num)
-        return {"primary": {"routing": {"status": "CLEARED"}}}
+    def fake_queued(settings, *, practice_id, pat_num):  # type: ignore[no-untyped-def]
+        return pat_num in queued_today
+
+    def fake_enqueue(app_settings, *, practice_id, pat_num, connection, client, cdt_codes, trigger_event):  # type: ignore[no-untyped-def]
+        enqueued.append(pat_num)
+        return {"id": f"req-{pat_num}"}
+
+    class FakeClient:
+        developer_key = "dev"
+        customer_key = "cust"
+        base_url = "http://localhost:30222/api/v1"
 
     monkeypatch.setattr(poller, "fetch_appointments", fake_fetch)
     monkeypatch.setattr(poller, "_checked_today", fake_checked)
+    monkeypatch.setattr(poller, "od_request_exists_today", fake_queued)
+    monkeypatch.setattr(poller, "enqueue_od_eligibility_check", fake_enqueue)
+    monkeypatch.setattr(poller.OpenDentalClient, "from_connection", lambda *a, **k: FakeClient())
+    monkeypatch.setattr(poller, "record_poll_result", lambda *a, **k: None)
 
-    asyncio.run(poller._poll_once(fake_runner, _settings(), seen=seen, cdt_codes=["D1110"]))
-    return calls
+    poller.run_connection_poll(
+        _settings(),
+        SimpleNamespace(),
+        _connection(),
+        seen=seen,
+    )
+    return enqueued
 
 
 def test_poller_processes_new_patient_once(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     seen: set[int] = set()
-    calls = _run_once(
+    enqueued = _run_once(
         monkeypatch,
         appointments=[{"AptNum": 1, "PatNum": 24}, {"AptNum": 2, "PatNum": 24}],
         checked_today=set(),
+        queued_today=set(),
         seen=seen,
     )
-    # Same patient on two appointments -> processed exactly once; recorded in seen.
-    assert calls == [24]
+    assert enqueued == [24]
     assert 24 in seen
 
 
 def test_poller_skips_patient_checked_today(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     seen: set[int] = set()
-    calls = _run_once(
+    enqueued = _run_once(
         monkeypatch,
         appointments=[{"AptNum": 1, "PatNum": 24}],
         checked_today={24},
+        queued_today=set(),
         seen=seen,
     )
-    # DB says already verified today -> skip the run but mark seen for the fast path.
-    assert calls == []
+    assert enqueued == []
     assert 24 in seen
 
 
 def test_poller_skips_already_seen(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     seen: set[int] = {24}
-    calls = _run_once(
+    enqueued = _run_once(
         monkeypatch,
         appointments=[{"AptNum": 1, "PatNum": 24}],
         checked_today=set(),
+        queued_today=set(),
         seen=seen,
     )
-    assert calls == []
+    assert enqueued == []
+
+
+def test_poller_skips_when_request_queued_today(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    seen: set[int] = set()
+    enqueued = _run_once(
+        monkeypatch,
+        appointments=[{"AptNum": 1, "PatNum": 24}],
+        checked_today=set(),
+        queued_today={24},
+        seen=seen,
+    )
+    assert enqueued == []
+    assert 24 in seen
 
 
 def test_parent_app_lifespan_starts_poller_when_enabled(monkeypatch) -> None:  # type: ignore[no-untyped-def]
@@ -87,7 +131,7 @@ def test_parent_app_lifespan_starts_poller_when_enabled(monkeypatch) -> None:  #
 
     started: dict[str, bool] = {}
 
-    def fake_start(runner, settings):  # type: ignore[no-untyped-def]
+    def fake_start(settings):  # type: ignore[no-untyped-def]
         started["called"] = True
         return asyncio.ensure_future(_sleep_forever())
 
@@ -118,7 +162,7 @@ def test_parent_app_lifespan_skips_poller_when_disabled(monkeypatch) -> None:  #
 
     started: dict[str, bool] = {}
 
-    def fake_start(runner, settings):  # type: ignore[no-untyped-def]
+    def fake_start(settings):  # type: ignore[no-untyped-def]
         started["called"] = True
         return asyncio.ensure_future(asyncio.sleep(0))
 

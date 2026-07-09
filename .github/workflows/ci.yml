@@ -128,6 +128,50 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ""
           FASTAPI_BASE_URL: ""
 
+  docker-image:
+    # Build (always) and push (main only) the backend image to GHCR. Deploys stay
+    # a gated manual step for the pilot: point the runtime at the pushed tag and
+    # run `python scripts/apply_neon_migrations.py` before rolling it out.
+    name: Backend Docker image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: backend
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/backend
+          tags: |
+            type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build (and push on main)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   supply-chain:
     # HIPAA / vendor-risk gate: every build produces a CycloneDX SBOM for the
     # whole repo (Python + npm) and runs two complementary CVE scanners:

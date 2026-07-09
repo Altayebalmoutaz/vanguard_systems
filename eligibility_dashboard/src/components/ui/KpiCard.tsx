@@ -10,7 +10,11 @@ export type KpiCardProps = {
   iconColor?: string;
   spark?: { values: number[]; color: string };
   delta?: { value: string; positive: boolean; label: string };
-  footerAction?: { label: string; onClick: () => void; tone?: "indigo" | "amber" };
+  footerAction?: {
+    label: string;
+    onClick: () => void;
+    tone?: "indigo" | "amber";
+  };
 };
 
 export function KpiCard({
@@ -27,23 +31,41 @@ export function KpiCard({
   return (
     <div className="card lift-on-hover flex flex-col p-5">
       <div className="flex items-start gap-3">
-        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${iconBg}`}>
+        <div
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${iconBg}`}
+        >
           <Icon size={17} className={iconColor} strokeWidth={2.2} />
         </div>
         <div className="flex flex-1 items-start justify-between">
           <div>
-            <div className="text-[32px] font-bold leading-none tabular-nums tracking-tight text-slate-900">{value}</div>
-            <div className="mt-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">{label}</div>
-            {sublabel ? <div className="mt-0.5 text-[12px] text-slate-500">{sublabel}</div> : null}
+            <div className="text-[32px] font-bold leading-none tabular-nums tracking-tight text-slate-900">
+              {value}
+            </div>
+            <div className="mt-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+              {label}
+            </div>
+            {sublabel ? (
+              <div className="mt-0.5 text-[12px] text-slate-500">
+                {sublabel}
+              </div>
+            ) : null}
           </div>
           {spark ? (
-            <MiniSparkline values={spark.values.length ? spark.values : [0]} strokeColor={spark.color} width={80} height={36} fillOpacity={0.1} />
+            <MiniSparkline
+              values={spark.values.length ? spark.values : [0]}
+              strokeColor={spark.color}
+              width={80}
+              height={36}
+              fillOpacity={0.1}
+            />
           ) : null}
         </div>
       </div>
       {delta ? (
         <div className="mt-3 flex items-center gap-1.5 border-t border-slate-100 pt-3 text-[11px] font-semibold">
-          <span className={delta.positive ? "text-emerald-600" : "text-red-500"}>
+          <span
+            className={delta.positive ? "text-emerald-600" : "text-red-500"}
+          >
             {delta.positive ? "↑" : "↓"} {delta.value}
           </span>
           <span className="font-normal text-slate-400">{delta.label}</span>
@@ -54,7 +76,9 @@ export function KpiCard({
           type="button"
           onClick={footerAction.onClick}
           className={`mt-3 inline-flex items-center gap-1 text-[11px] font-semibold transition ${
-            footerAction.tone === "amber" ? "text-amber-600 hover:text-amber-700" : "text-indigo-600 hover:text-indigo-700"
+            footerAction.tone === "amber"
+              ? "text-amber-600 hover:text-amber-700"
+              : "text-indigo-600 hover:text-indigo-700"
           }`}
         >
           {footerAction.label} →

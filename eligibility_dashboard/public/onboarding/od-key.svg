@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="420" viewBox="0 0 640 420" fill="none">
+  <rect width="640" height="420" rx="24" fill="#F8FAFC"/>
+  <rect x="90" y="80" width="460" height="260" rx="16" fill="#fff" stroke="#E2E8F0"/>
+  <text x="120" y="130" fill="#0F172A" font-family="Arial, sans-serif" font-size="18" font-weight="700">Paste clinic key</text>
+  <text x="120" y="158" fill="#64748B" font-family="Arial, sans-serif" font-size="13">Copy from ezFi — Add Key in OpenDental</text>
+  <rect x="120" y="190" width="320" height="48" rx="10" fill="#F8FAFC" stroke="#CBD5E1"/>
+  <text x="140" y="220" fill="#334155" font-family="Consolas, monospace" font-size="14">""""""""""""""""</text>
+  <rect x="456" y="190" width="64" height="48" rx="10" fill="#1880F0"/>
+  <text x="470" y="220" fill="#fff" font-family="Arial, sans-serif" font-size="13" font-weight="700">Copy</text>
+  <rect x="120" y="260" width="200" height="36" rx="8" fill="#F0FBE8" stroke="#C6EFB0"/>
+  <text x="150" y="283" fill="#3F7A1C" font-family="Arial, sans-serif" font-size="13" font-weight="600">Ready to paste</text>
+</svg>

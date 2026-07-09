@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import re
+import time
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
@@ -19,6 +21,30 @@ _MODULE_HREF = {
     "Claims": "/claims",
     "Denials": "/denials",
 }
+
+
+# region agent log
+def _agent_debug_log(hypothesis_id: str, message: str, data: dict[str, Any]) -> None:
+    try:
+        with open("debug-c16f79.log", "a", encoding="utf-8") as fh:
+            fh.write(
+                json.dumps(
+                    {
+                        "sessionId": "c16f79",
+                        "runId": "initial",
+                        "hypothesisId": hypothesis_id,
+                        "location": "app/dashboard/rcm_store.py",
+                        "message": message,
+                        "data": data,
+                        "timestamp": int(time.time() * 1000),
+                    },
+                    default=str,
+                )
+                + "\n"
+            )
+    except Exception:
+        pass
+# endregion
 
 
 def _require_neon(settings: Settings) -> None:
@@ -151,7 +177,7 @@ def list_coding_cases(
         join patient.encounters e on e.id = d.encounter_id and e.practice_id = d.practice_id
         join patient.patients p on p.id = e.patient_id and p.practice_id = d.practice_id
         left join patient.providers pr on pr.id = e.provider_id and pr.practice_id = d.practice_id
-        where d.practice_id = %s and (%s is null or d.status = %s)
+        where d.practice_id = %s and (%s::text is null or d.status = %s::text)
         order by d.created_at desc
         limit %s
     """
@@ -251,7 +277,7 @@ def list_prior_auth_cases(
         from rcm.agent_runs ar
         left join patient.patients p on p.id = ar.patient_id and p.practice_id = ar.practice_id
         where ar.practice_id = %s and ar.agent = 'prior_auth'
-          and (%s is null or ar.status = %s)
+          and (%s::text is null or ar.status = %s::text)
         order by ar.created_at desc
         limit %s
     """
@@ -329,7 +355,7 @@ def list_claim_cases(
                c.compliance_flags, c.created_at, p.name as patient_name, p.dob, p.payer
         from rcm.claims c
         left join patient.patients p on p.id = c.patient_id and p.practice_id = c.practice_id
-        where c.practice_id = %s and (%s is null or c.status = %s)
+        where c.practice_id = %s and (%s::text is null or c.status = %s::text)
         order by c.created_at desc
         limit %s
     """
@@ -401,7 +427,7 @@ def list_denial_cases(
         from rcm.denied_claims dc
         left join rcm.claims c on c.id::text = dc.claim_reference and c.practice_id = dc.practice_id
         left join patient.patients p on p.id = c.patient_id and p.practice_id = dc.practice_id
-        where dc.practice_id = %s and (%s is null or dc.status = %s)
+        where dc.practice_id = %s and (%s::text is null or dc.status = %s::text)
         order by dc.created_at desc
         limit %s
     """
@@ -596,6 +622,8 @@ def get_dashboard_overview(
     practice_id: str,
 ) -> dict[str, Any]:
     _require_neon(settings)
+    started = time.perf_counter()
+    _agent_debug_log("H10,H11", "overview store start", {"practiceId": practice_id})
     counts_sql = """
         select
           (select count(*) from rcm.eligibility_requests er
@@ -617,13 +645,40 @@ def get_dashboard_overview(
         with conn.cursor(row_factory=dict_row) as cur:
             cur.execute(counts_sql, (practice_id,) * 6)
             counts = dict(cur.fetchone() or {})
+    after_counts = time.perf_counter()
+    _agent_debug_log(
+        "H10,H11",
+        "overview counts complete",
+        {"practiceId": practice_id, "elapsedMs": round((after_counts - started) * 1000)},
+    )
 
     submitted = int(counts.get("claims_submitted_30d") or 0)
     denials = int(counts.get("denials_30d") or 0)
     denial_rate = round((denials / max(submitted + denials, 1)) * 100, 1)
     clean_claim_rate = round(max(0.0, 100.0 - denial_rate), 1)
     analytics = get_dashboard_analytics(settings, practice_id=practice_id)
+    after_analytics = time.perf_counter()
+    _agent_debug_log(
+        "H10,H11",
+        "overview analytics complete",
+        {
+            "practiceId": practice_id,
+            "stepElapsedMs": round((after_analytics - after_counts) * 1000),
+            "totalElapsedMs": round((after_analytics - started) * 1000),
+        },
+    )
     worklist = list_dashboard_worklist(settings, practice_id=practice_id)
+    after_worklist = time.perf_counter()
+    _agent_debug_log(
+        "H10,H11",
+        "overview worklist complete",
+        {
+            "practiceId": practice_id,
+            "stepElapsedMs": round((after_worklist - after_analytics) * 1000),
+            "totalElapsedMs": round((after_worklist - started) * 1000),
+            "worklistCount": len(worklist),
+        },
+    )
     return {
         "practice_id": practice_id,
         "worklist": worklist,

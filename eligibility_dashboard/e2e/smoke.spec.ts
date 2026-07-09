@@ -6,30 +6,25 @@ test.describe("dashboard smoke", () => {
     await expect(page.getByText("Staff sign-in")).toBeVisible();
   });
 
-  test("home dashboard shell loads", async ({ page }) => {
+  test("home eligibility dashboard loads", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByText(/Your revenue cycle at a glance/i)).toBeVisible({
+    await expect(
+      page.getByText(/what.?s happening with your eligibility verifications/i),
+    ).toBeVisible({
       timeout: 15_000,
     });
   });
 
-  test("coding module loads", async ({ page }) => {
-    await page.goto("/coding");
-    await expect(page.getByRole("heading", { name: /medical coding/i })).toBeVisible({
+  test("opendental page loads", async ({ page }) => {
+    await page.goto("/opendental");
+    await expect(page.getByRole("heading", { name: /OpenDental/i })).toBeVisible({
       timeout: 15_000,
     });
   });
 
-  test("HITL inbox loads", async ({ page }) => {
-    await page.goto("/hitl");
-    await expect(page.getByRole("heading", { name: /HITL Inbox/i })).toBeVisible({
-      timeout: 15_000,
-    });
-  });
-
-  test("claims module loads", async ({ page }) => {
-    await page.goto("/claims");
-    await expect(page.getByRole("heading", { name: "Claims", exact: true })).toBeVisible({
+  test("voice page loads", async ({ page }) => {
+    await page.goto("/voice");
+    await expect(page.getByRole("heading", { name: /Voice Agent/i })).toBeVisible({
       timeout: 15_000,
     });
   });

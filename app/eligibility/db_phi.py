@@ -1,28 +1,60 @@
 """
-PHI-plane eligibility persistence (checks, estimates, audit, request queue).
+PHI eligibility persistence (checks, estimates, audit, request queue).
 
-Neon is the PHI writer/reader when ``NEON_DATABASE_URL`` is configured; otherwise
-falls back to Supabase for local dev without a Neon branch.
+The direct-Postgres (psycopg) path is the single production code path: when
+``DATABASE_URL`` (legacy alias ``NEON_DATABASE_URL``) is configured — for the
+Supabase-only pilot it points at the Supabase Postgres — all reads/writes go
+through :mod:`app.db.connection`. The Supabase PostgREST branches below survive
+only for local dev / unit tests without a DSN; the production startup guard
+(:mod:`app.startup_guards`) requires the DSN, so they can never run in prod.
 """
 
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
+import json
+import time
+from datetime import UTC, date, datetime
 from typing import Any
 from uuid import UUID
 
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
-from supabase import Client
 
-from app.config import Settings, get_settings as get_app_settings
+from app.config import Settings
+from app.config import get_settings as get_app_settings
 from app.db.connection import get_neon_dsn, neon_connection
+from app.db.json_safe import json_safe
 from app.db.phi_store import require_practice_id_for_neon
 from app.eligibility.config import EligibilitySettings
 from app.eligibility.sanitize import scrub_detail_for_storage
+from supabase import Client
 
 logger = logging.getLogger(__name__)
+
+
+# region agent log
+def _agent_debug_log(hypothesis_id: str, message: str, data: dict[str, Any]) -> None:
+    try:
+        with open("debug-c16f79.log", "a", encoding="utf-8") as fh:
+            fh.write(
+                json.dumps(
+                    {
+                        "sessionId": "c16f79",
+                        "runId": "post-fix",
+                        "hypothesisId": hypothesis_id,
+                        "location": "app/eligibility/db_phi.py",
+                        "message": message,
+                        "data": data,
+                        "timestamp": int(time.time() * 1000),
+                    },
+                    default=str,
+                )
+                + "\n"
+            )
+    except Exception:
+        pass
+# endregion
 
 _JSONB_KEYS = frozenset(
     {
@@ -39,14 +71,21 @@ def _resolve_settings(settings: Settings | EligibilitySettings | None) -> Settin
         return get_app_settings()
     if isinstance(settings, Settings):
         return settings
-    neon = (getattr(settings, "neon_database_url", None) or "").strip()
+    neon_value = getattr(settings, "neon_database_url", None)
+    neon = neon_value.strip() if isinstance(neon_value, str) else ""
     if neon:
         return Settings(
             neon_database_url=neon,
             supabase_url=settings.supabase_url or None,
             supabase_service_role_key=settings.supabase_key or None,
         )
-    return get_app_settings()
+    supabase_url = getattr(settings, "supabase_url", None)
+    supabase_key = getattr(settings, "supabase_key", None)
+    return Settings(
+        neon_database_url="",
+        supabase_url=supabase_url if isinstance(supabase_url, str) else None,
+        supabase_service_role_key=supabase_key if isinstance(supabase_key, str) else None,
+    )
 
 
 def _use_neon(settings: Settings | EligibilitySettings | None) -> bool:
@@ -87,13 +126,18 @@ def _serialize_row(row: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _json_safe(value: Any) -> Any:
+    """Recursively coerce values for psycopg Jsonb (no datetime/date/UUID objects)."""
+    return json_safe(value)
+
+
 def _prepare_insert_payload(row: dict[str, Any], *, practice_id: str) -> dict[str, Any]:
     payload = dict(row)
     payload["practice_id"] = practice_id
     prepared: dict[str, Any] = {}
     for key, value in payload.items():
         if key in _JSONB_KEYS:
-            prepared[key] = Jsonb(value if value is not None else {})
+            prepared[key] = Jsonb(_json_safe(value if value is not None else {}))
         elif key in ("patient_id", "eligibility_check_id", "request_id") and value is not None:
             prepared[key] = UUID(str(value))
         else:
@@ -154,10 +198,9 @@ def _neon_fetchone(
         settings,
         practice_id=practice_id,
         bypass_rls=bypass_rls,
-    ) as conn:
-        with conn.cursor(row_factory=dict_row) as cur:
-            cur.execute(sql, params)
-            row = cur.fetchone()
+    ) as conn, conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(sql, params)
+        row = cur.fetchone()
     return _serialize_row(dict(row)) if row else None
 
 
@@ -173,10 +216,9 @@ def _neon_fetchall(
         settings,
         practice_id=practice_id,
         bypass_rls=bypass_rls,
-    ) as conn:
-        with conn.cursor(row_factory=dict_row) as cur:
-            cur.execute(sql, params)
-            rows = cur.fetchall()
+    ) as conn, conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(sql, params)
+        rows = cur.fetchall()
     return [_serialize_row(dict(r)) for r in rows]
 
 
@@ -804,16 +846,19 @@ def _insert_eligibility_request_event_supabase(
     request_id: str | UUID,
     event_type: str,
     detail: dict[str, Any] | None = None,
+    *,
+    practice_id: str | None = None,
 ) -> None:
+    row = {
+        "request_id": str(request_id),
+        "event_type": event_type,
+        "detail": detail or {},
+    }
+    if practice_id:
+        row["practice_id"] = practice_id
     (
         supabase.table("eligibility_request_events")
-        .insert(
-            {
-                "request_id": str(request_id),
-                "event_type": event_type,
-                "detail": detail or {},
-            }
-        )
+        .insert(row)
         .execute()
     )
 
@@ -829,6 +874,19 @@ def insert_eligibility_request_event(
 ) -> None:
     s = _resolve_settings(settings)
     pid = _require_neon_practice_id(s, practice_id=practice_id)
+    # region agent log
+    _agent_debug_log(
+        "H14,H15",
+        "eligibility request event branch",
+        {
+            "requestId": str(request_id),
+            "eventType": event_type,
+            "hasPracticeId": bool(pid),
+            "usesDirectPostgres": _use_neon(s),
+            "settingsType": type(settings).__name__ if settings is not None else None,
+        },
+    )
+    # endregion
     if _use_neon(s):
         _insert_eligibility_request_event_neon(
             s,
@@ -838,7 +896,13 @@ def insert_eligibility_request_event(
             detail=detail,
         )
         return
-    _insert_eligibility_request_event_supabase(supabase, request_id, event_type, detail)
+    _insert_eligibility_request_event_supabase(
+        supabase,
+        request_id,
+        event_type,
+        detail,
+        practice_id=pid or None,
+    )
 
 
 def fetch_eligibility_request_row(
@@ -909,7 +973,7 @@ def complete_eligibility_request_processing(
             "status_reason": "Eligibility agent completed",
             "primary_check_id": UUID(str(primary_check_id)) if primary_check_id else None,
             "secondary_check_id": UUID(str(secondary_check_id)) if secondary_check_id else None,
-            "output_json": Jsonb(output_json),
+            "output_json": Jsonb(_json_safe(output_json)),
             "error_message": None,
             "error_code": None,
             "suggested_action": None,

@@ -24,7 +24,10 @@ export function SlideOver({
   if (!open) return null;
 
   return (
-    <div className="fade-in fixed inset-0 z-40 bg-slate-900/25 backdrop-blur-sm" onClick={onClose}>
+    <div
+      className="fade-in fixed inset-0 z-40 bg-slate-900/25 backdrop-blur-sm"
+      onClick={onClose}
+    >
       <aside
         className="slide-in-right absolute right-0 top-0 flex h-full flex-col overflow-y-auto border-l border-slate-200 bg-white shadow-[-12px_0px_32px_-12px_rgba(15,23,42,0.18)]"
         style={{ animationDuration: "0.32s", width }}
