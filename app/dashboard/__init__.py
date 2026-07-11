@@ -1,1 +1,1 @@
-"""Dashboard BFF data access (Neon PHI plane)."""
+"""Dashboard BFF data access (application Postgres / Supabase)."""

@@ -60,7 +60,7 @@ class DashboardHitlTaskConflictError(ValueError):
 
 def _require_neon(settings: Settings) -> None:
     if not get_neon_dsn(settings):
-        raise NeonNotConfiguredError("NEON_DATABASE_URL is not configured")
+        raise NeonNotConfiguredError("DATABASE_URL is not configured")
 
 
 def _serialize_value(value: Any) -> Any:

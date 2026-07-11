@@ -1,4 +1,4 @@
-"""Smoke-test Neon PHI schema: table inventory, RLS, constraints, helper RPC."""
+"""Smoke-test application Postgres schema: tables, RLS, constraints, helper RPC."""
 
 from __future__ import annotations
 
@@ -9,6 +9,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 import psycopg
+
+from app.database_url import resolve_database_url
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -44,9 +46,16 @@ PRACTICE_B = "smoke_practice_b"
 
 def main() -> None:
     load_dotenv(REPO_ROOT / ".env")
-    url = os.getenv("NEON_DATABASE_URL")
+    url = resolve_database_url(
+        database_url=os.getenv("DATABASE_URL") or os.getenv("NEON_DATABASE_URL"),
+        supabase_url=os.getenv("SUPABASE_URL"),
+        supabase_db_password=os.getenv("SUPABASE_DB_PASSWORD"),
+        supabase_pooler_host=os.getenv("SUPABASE_POOLER_HOST"),
+    )
     if not url:
-        raise SystemExit("NEON_DATABASE_URL is not set in .env")
+        raise SystemExit(
+            "DATABASE_URL (or legacy NEON_DATABASE_URL) is not set in .env"
+        )
 
     failures: list[str] = []
 
@@ -100,7 +109,7 @@ def main() -> None:
             if is_superuser or bypasses_rls:
                 print(
                     "note: connect role bypasses RLS — skipping live enforcement test "
-                    "(create a non-bypass app role for production; see neon/migrations/README.md)"
+                    "(create a non-bypass app role for production; see schema/migrations/README.md)"
                 )
             else:
                 cur.execute("savepoint rls_block_test")

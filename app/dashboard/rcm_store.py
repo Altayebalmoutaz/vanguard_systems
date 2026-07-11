@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import json
 import re
-import time
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
@@ -23,33 +21,9 @@ _MODULE_HREF = {
 }
 
 
-# region agent log
-def _agent_debug_log(hypothesis_id: str, message: str, data: dict[str, Any]) -> None:
-    try:
-        with open("debug-c16f79.log", "a", encoding="utf-8") as fh:
-            fh.write(
-                json.dumps(
-                    {
-                        "sessionId": "c16f79",
-                        "runId": "initial",
-                        "hypothesisId": hypothesis_id,
-                        "location": "app/dashboard/rcm_store.py",
-                        "message": message,
-                        "data": data,
-                        "timestamp": int(time.time() * 1000),
-                    },
-                    default=str,
-                )
-                + "\n"
-            )
-    except Exception:
-        pass
-# endregion
-
-
 def _require_neon(settings: Settings) -> None:
     if not get_neon_dsn(settings):
-        raise NeonNotConfiguredError("NEON_DATABASE_URL is not configured")
+        raise NeonNotConfiguredError("DATABASE_URL is not configured")
 
 
 def _as_list(value: Any) -> list[Any]:
@@ -622,8 +596,6 @@ def get_dashboard_overview(
     practice_id: str,
 ) -> dict[str, Any]:
     _require_neon(settings)
-    started = time.perf_counter()
-    _agent_debug_log("H10,H11", "overview store start", {"practiceId": practice_id})
     counts_sql = """
         select
           (select count(*) from rcm.eligibility_requests er
@@ -645,40 +617,13 @@ def get_dashboard_overview(
         with conn.cursor(row_factory=dict_row) as cur:
             cur.execute(counts_sql, (practice_id,) * 6)
             counts = dict(cur.fetchone() or {})
-    after_counts = time.perf_counter()
-    _agent_debug_log(
-        "H10,H11",
-        "overview counts complete",
-        {"practiceId": practice_id, "elapsedMs": round((after_counts - started) * 1000)},
-    )
 
     submitted = int(counts.get("claims_submitted_30d") or 0)
     denials = int(counts.get("denials_30d") or 0)
     denial_rate = round((denials / max(submitted + denials, 1)) * 100, 1)
     clean_claim_rate = round(max(0.0, 100.0 - denial_rate), 1)
     analytics = get_dashboard_analytics(settings, practice_id=practice_id)
-    after_analytics = time.perf_counter()
-    _agent_debug_log(
-        "H10,H11",
-        "overview analytics complete",
-        {
-            "practiceId": practice_id,
-            "stepElapsedMs": round((after_analytics - after_counts) * 1000),
-            "totalElapsedMs": round((after_analytics - started) * 1000),
-        },
-    )
     worklist = list_dashboard_worklist(settings, practice_id=practice_id)
-    after_worklist = time.perf_counter()
-    _agent_debug_log(
-        "H10,H11",
-        "overview worklist complete",
-        {
-            "practiceId": practice_id,
-            "stepElapsedMs": round((after_worklist - after_analytics) * 1000),
-            "totalElapsedMs": round((after_worklist - started) * 1000),
-            "worklistCount": len(worklist),
-        },
-    )
     return {
         "practice_id": practice_id,
         "worklist": worklist,

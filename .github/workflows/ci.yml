@@ -131,7 +131,7 @@ jobs:
   docker-image:
     # Build (always) and push (main only) the backend image to GHCR. Deploys stay
     # a gated manual step for the pilot: point the runtime at the pushed tag and
-    # run `python scripts/apply_neon_migrations.py` before rolling it out.
+    # run `python scripts/apply_schema_migrations.py` before rolling it out.
     name: Backend Docker image
     runs-on: ubuntu-latest
     timeout-minutes: 30

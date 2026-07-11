@@ -56,16 +56,13 @@ supabase migration repair --status applied  000   # the baseline
 
 Never reset history on production until the branch diff is clean.
 
-## Two-plane split (Neon PHI + Supabase reference)
+## Application schema (Supabase Postgres)
 
-Table-level plane classification for the baseline schema lives in
-[`docs/phi-plane-table-inventory.md`](../docs/phi-plane-table-inventory.md).
-Forward Supabase migrations (`045_+`) must not add PHI-shaped columns — see
-that doc §3 and the execution plan Phase 0.4 CI guardrail.
+App DDL lives in [`schema/migrations/`](../schema/migrations/) (apply with
+`python scripts/apply_schema_migrations.py`). See
+[`schema/migrations/README.md`](../schema/migrations/README.md).
 
-Neon DDL lives in [`neon/migrations/`](../neon/migrations/) (`001`–`004`, apply in order).
-See [`neon/migrations/README.md`](../neon/migrations/README.md) for apply instructions and
-session GUC conventions.
+> Formerly `neon/migrations/` — renamed; pilot DB is Supabase, not Neon.
 
 ## Forward convention (every new migration)
 
@@ -83,8 +80,8 @@ session GUC conventions.
    that recreates the object.
 7. **CI PHI guard** — forward migrations are scanned by
    `python scripts/check_supabase_migrations_phi_columns.py` (also in GitHub Actions).
-   Do not add PHI-plane tables or forbidden column names to Supabase; use
-   `neon/migrations/` instead.
+   Do not add PHI-plane tables or forbidden column names here; use
+   `schema/migrations/` instead.
 
 ## Checklist before opening a PR
 

@@ -1,18 +1,14 @@
-"""Application Postgres connections (Supabase Postgres for the Supabase-only pilot).
+"""Application Postgres connection helpers (Supabase for the pilot).
 
-Historically this module targeted a dedicated Neon PHI plane. The pilot now runs on a
-single Supabase Postgres; ``DATABASE_URL`` is the canonical DSN and
-``NEON_DATABASE_URL`` remains a back-compat alias (see ``app.config.Settings``).
-The ``neon_*`` symbol names are kept to avoid churn across the codebase.
+``DATABASE_URL`` is the canonical DSN. ``NEON_DATABASE_URL`` remains a legacy
+alias. Symbol names ``neon_*`` / ``NeonNotConfiguredError`` are kept as
+back-compat aliases; prefer ``database_*`` / ``DatabaseNotConfiguredError``.
 """
 
 from __future__ import annotations
 
 from collections.abc import Generator
 from contextlib import contextmanager
-import json
-import time
-from urllib.parse import urlparse
 
 import psycopg
 from psycopg import Connection
@@ -21,71 +17,34 @@ from app.config import Settings
 from app.db.tenancy import set_tenant_gucs
 
 
-class NeonNotConfiguredError(RuntimeError):
+class DatabaseNotConfiguredError(RuntimeError):
     """Raised when Postgres is required but ``DATABASE_URL`` is unset."""
 
 
-# Forward-looking alias; new code should prefer this name.
-DatabaseNotConfiguredError = NeonNotConfiguredError
+# Legacy alias — prefer DatabaseNotConfiguredError in new code.
+NeonNotConfiguredError = DatabaseNotConfiguredError
 
 
-# region agent log
-def _agent_debug_log(hypothesis_id: str, message: str, data: dict) -> None:
-    try:
-        with open("debug-c16f79.log", "a", encoding="utf-8") as fh:
-            fh.write(
-                json.dumps(
-                    {
-                        "sessionId": "c16f79",
-                        "runId": "initial",
-                        "hypothesisId": hypothesis_id,
-                        "location": "app/db/connection.py",
-                        "message": message,
-                        "data": data,
-                        "timestamp": int(time.time() * 1000),
-                    },
-                    default=str,
-                )
-                + "\n"
-            )
-    except Exception:
-        pass
-
-
-def _safe_dsn_info(dsn: str | None) -> dict:
-    if not dsn:
-        return {"configured": False}
-    try:
-        parsed = urlparse(dsn)
-        return {
-            "configured": True,
-            "scheme": parsed.scheme,
-            "host": parsed.hostname,
-            "port": parsed.port,
-            "username": parsed.username,
-            "hasPassword": bool(parsed.password),
-            "queryKeys": sorted(k for k in parsed.query.split("&") if k),
-        }
-    except Exception as exc:
-        return {"configured": True, "parseError": type(exc).__name__}
-# endregion
-
-
-def get_neon_dsn(settings: Settings) -> str | None:
+def get_database_dsn(settings: Settings) -> str | None:
     url = (settings.neon_database_url or "").strip()
     return url or None
 
 
-def require_neon_dsn(settings: Settings) -> str:
-    dsn = get_neon_dsn(settings)
-    # region agent log
-    _agent_debug_log("H4", "database dsn resolved", _safe_dsn_info(dsn))
-    # endregion
+# Legacy alias — prefer get_database_dsn.
+get_neon_dsn = get_database_dsn
+
+
+def require_database_dsn(settings: Settings) -> str:
+    dsn = get_database_dsn(settings)
     if not dsn:
-        raise NeonNotConfiguredError(
+        raise DatabaseNotConfiguredError(
             "DATABASE_URL (or legacy NEON_DATABASE_URL) is not configured"
         )
     return dsn
+
+
+# Legacy alias — prefer require_database_dsn.
+require_neon_dsn = require_database_dsn
 
 
 def apply_tenant_context(
@@ -100,51 +59,19 @@ def apply_tenant_context(
 
 
 @contextmanager
-def neon_connection(
+def database_connection(
     settings: Settings,
     *,
     practice_id: str | None = None,
     bypass_rls: bool = False,
 ) -> Generator[Connection, None, None]:
     """Open a Postgres connection; optionally bind ``app.practice_id`` for RLS."""
-    dsn = require_neon_dsn(settings)
-    # region agent log
-    _agent_debug_log(
-        "H4,H5",
-        "database connect attempt",
-        {**_safe_dsn_info(dsn), "practiceId": practice_id, "bypassRls": bypass_rls},
-    )
-    # endregion
-    try:
-        with psycopg.connect(dsn) as conn:
-            # region agent log
-            _agent_debug_log(
-                "H5",
-                "database connect success",
-                {"practiceId": practice_id, "bypassRls": bypass_rls},
-            )
-            # endregion
-            if practice_id is not None:
-                apply_tenant_context(conn, practice_id=practice_id, bypass_rls=bypass_rls)
-                # region agent log
-                _agent_debug_log("H5", "tenant context applied", {"practiceId": practice_id})
-                # endregion
-            yield conn
-    except Exception as exc:
-        # region agent log
-        _agent_debug_log(
-            "H5",
-            "database connect/query failed",
-            {
-                **_safe_dsn_info(dsn),
-                "practiceId": practice_id,
-                "errorType": type(exc).__name__,
-                "errorMessage": str(exc)[:500],
-            },
-        )
-        # endregion
-        raise
+    dsn = require_database_dsn(settings)
+    with psycopg.connect(dsn) as conn:
+        if practice_id is not None:
+            apply_tenant_context(conn, practice_id=practice_id, bypass_rls=bypass_rls)
+        yield conn
 
 
-# Forward-looking alias; new code should prefer this name.
-db_connection = neon_connection
+# Legacy alias — prefer database_connection.
+neon_connection = database_connection
