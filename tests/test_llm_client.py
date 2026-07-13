@@ -67,7 +67,9 @@ def test_openrouter_raises_after_max_retries() -> None:
 
 @respx.mock
 def test_openrouter_non_retryable_4xx_raises_immediately() -> None:
-    route = respx.post(OPENROUTER_URL).mock(return_value=httpx.Response(401, json={"error": "auth"}))
+    route = respx.post(OPENROUTER_URL).mock(
+        return_value=httpx.Response(401, json={"error": "auth"})
+    )
     with pytest.raises(httpx.HTTPStatusError):
         openrouter_chat_completion(
             api_key="bad-key",

@@ -9,7 +9,11 @@ from typing import Any
 from uuid import UUID
 
 from app.eligibility.config import EligibilitySettings, get_settings
-from app.eligibility.db import get_supabase, insert_eligibility_check, insert_eligibility_request_event
+from app.eligibility.db import (
+    get_supabase,
+    insert_eligibility_check,
+    insert_eligibility_request_event,
+)
 from app.eligibility.integrity import validate_completeness
 from app.eligibility.router import route
 from app.eligibility.services import canonical_to_row
@@ -245,5 +249,7 @@ def _check_row_to_canonical(row: dict[str, Any]) -> dict[str, Any]:
         "integrity_warnings": list(row.get("integrity_warnings") or []),
         "normalization_version": row.get("normalization_version") or "1.0",
         "procedure_details": [],
-        "raw_response": row.get("raw_response") if isinstance(row.get("raw_response"), dict) else {},
+        "raw_response": row.get("raw_response")
+        if isinstance(row.get("raw_response"), dict)
+        else {},
     }

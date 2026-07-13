@@ -9,7 +9,8 @@ from uuid import UUID
 from app.audit.writer import write_audit_log
 from app.config import get_settings
 from app.db.connection import get_neon_dsn
-from app.eligibility.config import EligibilitySettings, get_settings as get_eligibility_settings
+from app.eligibility.config import EligibilitySettings
+from app.eligibility.config import get_settings as get_eligibility_settings
 from app.eligibility.db import get_supabase, insert_audit_log
 from app.eligibility.sanitize import scrub_for_log
 

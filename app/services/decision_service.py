@@ -12,17 +12,17 @@ from fastapi import HTTPException
 from postgrest.types import ReturnMethod
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
-from supabase import Client
 
 from app.agents.coding_agent import run_coding_agent
 from app.audit.writer import write_audit_log
-from app.pilot.shadow import record_coding_review_shadow
 from app.config import Settings, get_settings
 from app.db.connection import get_neon_dsn, neon_connection
 from app.integrations.supabase_client import create_supabase
+from app.pilot.shadow import record_coding_review_shadow
 from app.schemas.coding import CodingAgentRequest
 from app.security.phi import scrub_for_log
 from app.workflow.rcm_tasks import create_hitl_task_from_coding_decision
+from supabase import Client
 
 logger = logging.getLogger(__name__)
 
@@ -86,10 +86,12 @@ def _fetch_encounter_neon(
           and e.practice_id = %s
         limit 1
     """
-    with neon_connection(settings, practice_id=practice_id) as conn:
-        with conn.cursor(row_factory=dict_row) as cur:
-            cur.execute(query, (encounter_id, practice_id))
-            row = cur.fetchone()
+    with (
+        neon_connection(settings, practice_id=practice_id) as conn,
+        conn.cursor(row_factory=dict_row) as cur,
+    ):
+        cur.execute(query, (encounter_id, practice_id))
+        row = cur.fetchone()
     if not row:
         return None
     encounter = dict(row)
@@ -104,9 +106,7 @@ def _fetch_encounter_supabase(
     *,
     practice_id: str | None,
 ) -> dict[str, Any] | None:
-    encounter_query = (
-        supabase.table("encounters").select("*").eq("id", encounter_id).limit(1)
-    )
+    encounter_query = supabase.table("encounters").select("*").eq("id", encounter_id).limit(1)
     if practice_id:
         encounter_query = encounter_query.eq("practice_id", practice_id)
     encounter_resp = encounter_query.execute()
@@ -128,20 +128,22 @@ def _latest_decision_id_neon(
     practice_id: str,
 ) -> Any:
     try:
-        with neon_connection(settings, practice_id=practice_id) as conn:
-            with conn.cursor(row_factory=dict_row) as cur:
-                cur.execute(
-                    """
-                    select id
-                    from agents.agent_decisions
-                    where encounter_id = %s
-                      and practice_id = %s
-                    order by created_at desc
-                    limit 1
-                    """,
-                    (encounter_id, practice_id),
-                )
-                row = cur.fetchone()
+        with (
+            neon_connection(settings, practice_id=practice_id) as conn,
+            conn.cursor(row_factory=dict_row) as cur,
+        ):
+            cur.execute(
+                """
+                select id
+                from agents.agent_decisions
+                where encounter_id = %s
+                  and practice_id = %s
+                order by created_at desc
+                limit 1
+                """,
+                (encounter_id, practice_id),
+            )
+            row = cur.fetchone()
         return row["id"] if row else None
     except Exception as exc:
         logger.warning(
@@ -245,9 +247,7 @@ def run_agent_for_encounter(
         encounter = _fetch_encounter_neon(settings, encounter_id, practice_id=practice_id)
     else:
         supabase = _get_supabase_for_reference(settings)
-        encounter = _fetch_encounter_supabase(
-            supabase, encounter_id, practice_id=practice_id
-        )
+        encounter = _fetch_encounter_supabase(supabase, encounter_id, practice_id=practice_id)
 
     if not encounter:
         raise HTTPException(status_code=404, detail="Encounter not found")
@@ -277,11 +277,11 @@ def run_agent_for_encounter(
     }
 
     if get_neon_dsn(settings):
-        new_id = _insert_decision_neon(settings, practice_id=practice_id, decision_payload=decision_payload)
+        new_id = _insert_decision_neon(
+            settings, practice_id=practice_id, decision_payload=decision_payload
+        )
         if new_id is None:
-            new_id = _latest_decision_id_neon(
-                settings, encounter_id, practice_id=practice_id
-            )
+            new_id = _latest_decision_id_neon(settings, encounter_id, practice_id=practice_id)
     else:
         db = supabase
         insert_res = (
@@ -420,7 +420,9 @@ def review_decision(
     if status == "approved":
         encounter_id = decision_rows[0].get("encounter_id")
         if encounter_id:
-            encounter_update = db.table("encounters").update({"status": "coded"}).eq("id", encounter_id)
+            encounter_update = (
+                db.table("encounters").update({"status": "coded"}).eq("id", encounter_id)
+            )
             if practice_id:
                 encounter_update = encounter_update.eq("practice_id", practice_id)
             encounter_update.execute()

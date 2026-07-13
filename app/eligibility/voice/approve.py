@@ -73,7 +73,9 @@ def approve_voice_verification_session(
             cdt_codes = list(session.get("cdt_codes") or [])
             merge_ucr_fallback_into_fee_schedule(fee, payer_id, cdt_codes, s)
             for code in cdt_codes:
-                if code and code not in [p.get("cdt_code") for p in canonical.get("procedure_details") or []]:
+                if code and code not in [
+                    p.get("cdt_code") for p in canonical.get("procedure_details") or []
+                ]:
                     canonical.setdefault("procedure_details", []).append(
                         {"cdt_code": code, "procedure_covered": True}
                     )

@@ -15,9 +15,9 @@ from psycopg.types.json import Jsonb
 from app.audit.access import audit_phi_read
 from app.audit.writer import write_audit_log
 from app.config import Settings
-from app.pilot.shadow import record_hitl_resolve_shadow
 from app.db.connection import NeonNotConfiguredError, get_neon_dsn, neon_connection
 from app.integrations.agent_runs import list_agent_runs_for_patient
+from app.pilot.shadow import record_hitl_resolve_shadow
 from app.workflow.rcm_tasks import HITL_STATUS_APPROVED, HITL_STATUS_PENDING, HITL_STATUS_REJECTED
 
 logger = logging.getLogger(__name__)
@@ -38,7 +38,9 @@ def status_blocking_integrity_warnings(warnings: list[str] | None) -> list[str]:
         str(w)
         for w in warnings
         if w
-        and not any(str(w).startswith(prefix) for prefix in _INFORMATIONAL_INTEGRITY_WARNING_PREFIXES)
+        and not any(
+            str(w).startswith(prefix) for prefix in _INFORMATIONAL_INTEGRITY_WARNING_PREFIXES
+        )
     ]
 
 
@@ -144,9 +146,7 @@ def compute_status_detail(row: dict[str, Any]) -> str | None:
         reason = row.get("status_reason")
         return str(reason) if reason else request_status
     if request_status == "failed":
-        return (
-            str(row.get("error_message") or row.get("status_reason") or "Processing failed")
-        )
+        return str(row.get("error_message") or row.get("status_reason") or "Processing failed")
     if row.get("is_active") is False:
         return str(row.get("inactive_reason") or "Coverage inactive")
     if row.get("response_complete") is False:
@@ -303,10 +303,12 @@ def list_eligibility_queue(
     limit: int = 75,
 ) -> list[dict[str, Any]]:
     _require_neon(settings)
-    with neon_connection(settings, practice_id=practice_id) as conn:
-        with conn.cursor(row_factory=dict_row) as cur:
-            cur.execute(_QUEUE_SQL, (practice_id, limit))
-            rows = cur.fetchall()
+    with (
+        neon_connection(settings, practice_id=practice_id) as conn,
+        conn.cursor(row_factory=dict_row) as cur,
+    ):
+        cur.execute(_QUEUE_SQL, (practice_id, limit))
+        rows = cur.fetchall()
     return [_shape_dashboard_row(dict(row)) for row in rows]
 
 
@@ -316,20 +318,22 @@ def get_eligibility_agent_settings_row(
     practice_id: str,
 ) -> dict[str, Any]:
     _require_neon(settings)
-    with neon_connection(settings, practice_id=practice_id) as conn:
-        with conn.cursor(row_factory=dict_row) as cur:
-            cur.execute(
-                """
-                select practice_id, auto_check_enabled, auto_retry_enabled,
-                       voice_verification_enabled, voice_verification_auto_queue,
-                       last_sync_at, next_retry_at, updated_at
-                from rcm.eligibility_agent_settings
-                where practice_id = %s
-                limit 1
-                """,
-                (practice_id,),
-            )
-            row = cur.fetchone()
+    with (
+        neon_connection(settings, practice_id=practice_id) as conn,
+        conn.cursor(row_factory=dict_row) as cur,
+    ):
+        cur.execute(
+            """
+            select practice_id, auto_check_enabled, auto_retry_enabled,
+                   voice_verification_enabled, voice_verification_auto_queue,
+                   last_sync_at, next_retry_at, updated_at
+            from rcm.eligibility_agent_settings
+            where practice_id = %s
+            limit 1
+            """,
+            (practice_id,),
+        )
+        row = cur.fetchone()
     if row:
         return _serialize_row(dict(row))
     return {
@@ -344,12 +348,14 @@ def get_eligibility_agent_settings_row(
     }
 
 
-_ELIGIBILITY_AGENT_SETTINGS_UPDATABLE = frozenset({
-    "voice_verification_enabled",
-    "voice_verification_auto_queue",
-    "auto_check_enabled",
-    "auto_retry_enabled",
-})
+_ELIGIBILITY_AGENT_SETTINGS_UPDATABLE = frozenset(
+    {
+        "voice_verification_enabled",
+        "voice_verification_auto_queue",
+        "auto_check_enabled",
+        "auto_retry_enabled",
+    }
+)
 
 
 def update_eligibility_agent_settings(
@@ -364,7 +370,7 @@ def update_eligibility_agent_settings(
         return get_eligibility_agent_settings_row(settings, practice_id=practice_id)
     cols = ["practice_id", *fields.keys()]
     placeholders = ", ".join(f"%({c})s" for c in cols)
-    set_sql = ", ".join(f"{c} = excluded.{c}" for c in fields.keys())
+    set_sql = ", ".join(f"{c} = excluded.{c}" for c in fields)
     sql = f"""
         insert into rcm.eligibility_agent_settings ({", ".join(cols)})
         values ({placeholders})
@@ -384,26 +390,26 @@ def update_eligibility_agent_settings(
     return _serialize_row(dict(row))
 
 
-
-
 def _get_request_primary_check_id(
     settings: Settings,
     *,
     practice_id: str,
     request_id: UUID,
 ) -> UUID | None:
-    with neon_connection(settings, practice_id=practice_id) as conn:
-        with conn.cursor(row_factory=dict_row) as cur:
-            cur.execute(
-                """
-                select primary_check_id
-                from rcm.eligibility_requests
-                where practice_id = %s and id = %s
-                limit 1
-                """,
-                (practice_id, request_id),
-            )
-            row = cur.fetchone()
+    with (
+        neon_connection(settings, practice_id=practice_id) as conn,
+        conn.cursor(row_factory=dict_row) as cur,
+    ):
+        cur.execute(
+            """
+            select primary_check_id
+            from rcm.eligibility_requests
+            where practice_id = %s and id = %s
+            limit 1
+            """,
+            (practice_id, request_id),
+        )
+        row = cur.fetchone()
     if not row:
         raise DashboardRequestNotFoundError(f"Eligibility request not found: {request_id}")
     primary_check_id = row.get("primary_check_id")
@@ -424,19 +430,21 @@ def list_procedure_estimates_for_request(
     )
     if check_id is None:
         return []
-    with neon_connection(settings, practice_id=practice_id) as conn:
-        with conn.cursor(row_factory=dict_row) as cur:
-            cur.execute(
-                """
-                select *
-                from rcm.procedure_estimates
-                where practice_id = %s
-                  and eligibility_check_id = %s
-                order by created_at asc
-                """,
-                (practice_id, check_id),
-            )
-            rows = cur.fetchall()
+    with (
+        neon_connection(settings, practice_id=practice_id) as conn,
+        conn.cursor(row_factory=dict_row) as cur,
+    ):
+        cur.execute(
+            """
+            select *
+            from rcm.procedure_estimates
+            where practice_id = %s
+              and eligibility_check_id = %s
+            order by created_at asc
+            """,
+            (practice_id, check_id),
+        )
+        rows = cur.fetchall()
     return [_serialize_row(dict(row)) for row in rows]
 
 
@@ -449,20 +457,22 @@ def list_eligibility_request_events(
 ) -> list[dict[str, Any]]:
     _require_neon(settings)
     _get_request_primary_check_id(settings, practice_id=practice_id, request_id=request_id)
-    with neon_connection(settings, practice_id=practice_id) as conn:
-        with conn.cursor(row_factory=dict_row) as cur:
-            cur.execute(
-                """
-                select id, request_id, event_type, detail, created_at
-                from rcm.eligibility_request_events
-                where practice_id = %s
-                  and request_id = %s
-                order by created_at desc
-                limit %s
-                """,
-                (practice_id, request_id, limit),
-            )
-            rows = cur.fetchall()
+    with (
+        neon_connection(settings, practice_id=practice_id) as conn,
+        conn.cursor(row_factory=dict_row) as cur,
+    ):
+        cur.execute(
+            """
+            select id, request_id, event_type, detail, created_at
+            from rcm.eligibility_request_events
+            where practice_id = %s
+              and request_id = %s
+            order by created_at desc
+            limit %s
+            """,
+            (practice_id, request_id, limit),
+        )
+        rows = cur.fetchall()
     return [_serialize_row(dict(row)) for row in rows]
 
 
@@ -473,19 +483,21 @@ def list_eligibility_activity(
     limit: int = 25,
 ) -> list[dict[str, Any]]:
     _require_neon(settings)
-    with neon_connection(settings, practice_id=practice_id) as conn:
-        with conn.cursor(row_factory=dict_row) as cur:
-            cur.execute(
-                """
-                select id, request_id, event_type, detail, created_at
-                from rcm.eligibility_request_events
-                where practice_id = %s
-                order by created_at desc
-                limit %s
-                """,
-                (practice_id, limit),
-            )
-            rows = cur.fetchall()
+    with (
+        neon_connection(settings, practice_id=practice_id) as conn,
+        conn.cursor(row_factory=dict_row) as cur,
+    ):
+        cur.execute(
+            """
+            select id, request_id, event_type, detail, created_at
+            from rcm.eligibility_request_events
+            where practice_id = %s
+            order by created_at desc
+            limit %s
+            """,
+            (practice_id, limit),
+        )
+        rows = cur.fetchall()
     return [_serialize_row(dict(row)) for row in rows]
 
 
@@ -568,20 +580,22 @@ def list_hitl_tasks(
     limit: int = 100,
 ) -> list[dict[str, Any]]:
     _require_neon(settings)
-    with neon_connection(settings, practice_id=practice_id) as conn:
-        with conn.cursor(row_factory=dict_row) as cur:
-            cur.execute(
-                """
-                select *
-                from agents.rcm_tasks
-                where practice_id = %s
-                  and status = %s
-                order by created_at desc
-                limit %s
-                """,
-                (practice_id, status, limit),
-            )
-            rows = cur.fetchall()
+    with (
+        neon_connection(settings, practice_id=practice_id) as conn,
+        conn.cursor(row_factory=dict_row) as cur,
+    ):
+        cur.execute(
+            """
+            select *
+            from agents.rcm_tasks
+            where practice_id = %s
+              and status = %s
+            order by created_at desc
+            limit %s
+            """,
+            (practice_id, status, limit),
+        )
+        rows = cur.fetchall()
     return [_serialize_row(dict(row)) for row in rows]
 
 
@@ -592,18 +606,20 @@ def get_hitl_task(
     task_id: UUID,
 ) -> dict[str, Any]:
     _require_neon(settings)
-    with neon_connection(settings, practice_id=practice_id) as conn:
-        with conn.cursor(row_factory=dict_row) as cur:
-            cur.execute(
-                """
-                select *
-                from agents.rcm_tasks
-                where practice_id = %s and id = %s
-                limit 1
-                """,
-                (practice_id, task_id),
-            )
-            row = cur.fetchone()
+    with (
+        neon_connection(settings, practice_id=practice_id) as conn,
+        conn.cursor(row_factory=dict_row) as cur,
+    ):
+        cur.execute(
+            """
+            select *
+            from agents.rcm_tasks
+            where practice_id = %s and id = %s
+            limit 1
+            """,
+            (practice_id, task_id),
+        )
+        row = cur.fetchone()
     if not row:
         raise DashboardHitlTaskNotFoundError(f"HITL task not found: {task_id}")
     return _serialize_row(dict(row))
@@ -650,15 +666,10 @@ def resolve_hitl_task(
                 raise DashboardHitlTaskConflictError("task_not_pending")
 
             ai_codes = task.get("ai_codes") or []
-            if isinstance(ai_codes, list):
-                default_codes = [str(code) for code in ai_codes]
-            else:
-                default_codes = []
+            default_codes = [str(code) for code in ai_codes] if isinstance(ai_codes, list) else []
 
             codes_for_acceptance = (
-                [str(code) for code in edited_codes]
-                if edited_codes
-                else default_codes
+                [str(code) for code in edited_codes] if edited_codes else default_codes
             )
 
             cur.execute(
@@ -803,31 +814,33 @@ def get_patient_360(
     performed_by: str = "dashboard_bff",
 ) -> dict[str, Any]:
     _require_neon(settings)
-    with neon_connection(settings, practice_id=practice_id) as conn:
-        with conn.cursor(row_factory=dict_row) as cur:
-            cur.execute(
-                """
-                select *
-                from patient.patients
-                where practice_id = %s and id = %s
-                limit 1
-                """,
-                (practice_id, patient_id),
-            )
-            patient = cur.fetchone()
-            if not patient:
-                raise DashboardPatientNotFoundError(f"Patient not found: {patient_id}")
-            cur.execute(
-                """
-                select *
-                from rcm.eligibility_checks
-                where practice_id = %s and patient_id = %s
-                order by checked_at desc
-                limit 1
-                """,
-                (practice_id, patient_id),
-            )
-            latest_check = cur.fetchone()
+    with (
+        neon_connection(settings, practice_id=practice_id) as conn,
+        conn.cursor(row_factory=dict_row) as cur,
+    ):
+        cur.execute(
+            """
+            select *
+            from patient.patients
+            where practice_id = %s and id = %s
+            limit 1
+            """,
+            (practice_id, patient_id),
+        )
+        patient = cur.fetchone()
+        if not patient:
+            raise DashboardPatientNotFoundError(f"Patient not found: {patient_id}")
+        cur.execute(
+            """
+            select *
+            from rcm.eligibility_checks
+            where practice_id = %s and patient_id = %s
+            order by checked_at desc
+            limit 1
+            """,
+            (practice_id, patient_id),
+        )
+        latest_check = cur.fetchone()
     agent_runs = list_agent_runs_for_patient(
         settings,
         patient_id,

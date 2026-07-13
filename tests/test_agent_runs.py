@@ -7,7 +7,11 @@ from unittest.mock import MagicMock, patch
 from uuid import UUID
 
 from app.config import Settings
-from app.integrations.agent_runs import AGENT_PRIOR_AUTH, insert_agent_run, list_agent_runs_for_patient
+from app.integrations.agent_runs import (
+    AGENT_PRIOR_AUTH,
+    insert_agent_run,
+    list_agent_runs_for_patient,
+)
 
 
 class AgentRunsRoutingTests(unittest.TestCase):

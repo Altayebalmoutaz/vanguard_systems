@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -38,7 +38,11 @@ def persist_claim_draft(
     draft_status = str(claim_draft.get("status") or CLAIM_STATUS_DRAFT)
     blockers = claim_draft.get("blockers") if isinstance(claim_draft.get("blockers"), list) else []
     details = claim_draft.get("details") if isinstance(claim_draft.get("details"), dict) else {}
-    claim_payload = claim_draft.get("claim_payload") if isinstance(claim_draft.get("claim_payload"), dict) else {}
+    claim_payload = (
+        claim_draft.get("claim_payload")
+        if isinstance(claim_draft.get("claim_payload"), dict)
+        else {}
+    )
 
     cdt_lines = {
         "cdt_codes": details.get("cdt_codes") or coding.get("cdt_codes") or [],
@@ -71,7 +75,7 @@ def persist_claim_draft(
                         str(prior_auth.get("status") or "pending_review"),
                         Jsonb(blockers),
                         str(prior_auth.get("risk_reason") or ""),
-                        datetime.now(timezone.utc),
+                        datetime.now(UTC),
                     ),
                 )
                 row = cur.fetchone()

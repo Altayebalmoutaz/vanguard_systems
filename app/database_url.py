@@ -37,12 +37,6 @@ def resolve_database_url(
 
     pooler = (supabase_pooler_host or "").strip()
     if pooler:
-        return (
-            f"postgresql://postgres.{ref}:{encoded_pw}@{pooler}:5432/postgres"
-            "?sslmode=require"
-        )
+        return f"postgresql://postgres.{ref}:{encoded_pw}@{pooler}:5432/postgres?sslmode=require"
 
-    return (
-        f"postgresql://postgres:{encoded_pw}@db.{ref}.supabase.co:5432/postgres"
-        "?sslmode=require"
-    )
+    return f"postgresql://postgres:{encoded_pw}@db.{ref}.supabase.co:5432/postgres?sslmode=require"

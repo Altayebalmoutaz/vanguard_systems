@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import json
 import logging
-import time
 import traceback
 from typing import Any
 from uuid import UUID
 
 from app.agents.rcm_pipeline import run_full_rcm_pipeline
 from app.audit.writer import write_audit_log
-from app.config import Settings, get_settings as get_app_settings
+from app.config import Settings
+from app.config import get_settings as get_app_settings
 from app.eligibility.config import get_settings as get_eligibility_settings
 from app.eligibility.request_processor import (
     EligibilityRequestSkipped,
@@ -42,30 +42,6 @@ from app.schemas.claim import FullRcmPipelineRequest
 logger = logging.getLogger(__name__)
 
 
-# region agent log
-def _agent_debug_log(hypothesis_id: str, message: str, data: dict[str, Any]) -> None:
-    try:
-        with open("debug-c16f79.log", "a", encoding="utf-8") as fh:
-            fh.write(
-                json.dumps(
-                    {
-                        "sessionId": "c16f79",
-                        "runId": "post-fix",
-                        "hypothesisId": hypothesis_id,
-                        "location": "app/pipeline/executor.py",
-                        "message": message,
-                        "data": data,
-                        "timestamp": int(time.time() * 1000),
-                    },
-                    default=str,
-                )
-                + "\n"
-            )
-    except Exception:
-        pass
-# endregion
-
-
 def execute_pipeline_run(settings: Settings, run: dict[str, Any]) -> None:
     """Run one claimed pipeline job and persist terminal status."""
     run_id = UUID(str(run["id"]))
@@ -75,18 +51,6 @@ def execute_pipeline_run(settings: Settings, run: dict[str, Any]) -> None:
     if isinstance(payload, str):
         payload = json.loads(payload)
     locked_by = str(run.get("locked_by") or "pipeline_worker")
-    # region agent log
-    _agent_debug_log(
-        "H8,H12,H13",
-        "pipeline run execute start",
-        {
-            "runIdValue": str(run_id),
-            "practiceId": practice_id,
-            "runType": run_type,
-            "payloadKeys": sorted(payload.keys()),
-        },
-    )
-    # endregion
 
     write_audit_log(
         settings,
@@ -147,19 +111,6 @@ def execute_pipeline_run(settings: Settings, run: dict[str, Any]) -> None:
             raise ValueError(f"Unknown pipeline run_type: {run_type}")
 
         complete_pipeline_run(settings, run_id, practice_id=practice_id, result=result)
-        # region agent log
-        _agent_debug_log(
-            "H8,H12,H13",
-            "pipeline run execute success",
-            {
-                "runIdValue": str(run_id),
-                "practiceId": practice_id,
-                "runType": run_type,
-                "resultKeys": sorted(result.keys()) if isinstance(result, dict) else [],
-                "terminalStatus": result.get("terminal_status") if isinstance(result, dict) else None,
-            },
-        )
-        # endregion
         write_audit_log(
             settings,
             practice_id=practice_id,
@@ -199,19 +150,6 @@ def execute_pipeline_run(settings: Settings, run: dict[str, Any]) -> None:
 
         safe_error = scrub_for_log(str(exc))
         safe_trace = scrub_for_log(traceback.format_exc()[-500:])
-        # region agent log
-        _agent_debug_log(
-            "H12,H13",
-            "pipeline run execute failure",
-            {
-                "runIdValue": str(run_id),
-                "practiceId": practice_id,
-                "runType": run_type,
-                "errorType": type(exc).__name__,
-                "errorMessage": safe_error[:500],
-            },
-        )
-        # endregion
         fail_pipeline_run(
             settings,
             run_id,

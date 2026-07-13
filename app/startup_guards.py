@@ -75,7 +75,10 @@ def validate_production_eligibility_security() -> None:
                 "enabled in production with VOICE_CALL_PROVIDER=twilio (webhook signature "
                 "validation fails open without it)."
             ) from exc
-    if elig.voice_verification_enabled and (elig.voice_call_provider or "bland").strip().lower() == "bland":
+    if (
+        elig.voice_verification_enabled
+        and (elig.voice_call_provider or "bland").strip().lower() == "bland"
+    ):
         if not (elig.bland_api_key or "").strip():
             raise RuntimeError(
                 "BLAND_API_KEY must be set when VOICE_VERIFICATION_ENABLED and "

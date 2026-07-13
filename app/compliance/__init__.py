@@ -8,8 +8,8 @@ from app.compliance.deidentification import (
 )
 
 __all__ = [
-    "DeidentificationError",
     "DeidentificationETL",
+    "DeidentificationError",
     "deidentify_record",
     "validate_deidentified",
 ]

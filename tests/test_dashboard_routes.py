@@ -65,6 +65,7 @@ class DashboardStatusLabelTests(unittest.TestCase):
             has_check=True,
         )
         self.assertEqual(label, "Needs Attention")
+
     def test_verified_when_only_informational_integrity_warnings(self) -> None:
         label = compute_status_label(
             request_status="completed",

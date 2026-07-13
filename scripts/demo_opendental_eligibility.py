@@ -28,9 +28,17 @@ def _layer_status(notes: dict[str, object], key: str) -> str:
     if key == "benefits_grid":
         actions = block.get("actions") or []
         if isinstance(actions, list) and actions:
-            created = sum(1 for a in actions if isinstance(a, dict) and a.get("action") == "created")
-            updated = sum(1 for a in actions if isinstance(a, dict) and a.get("action") == "updated")
-            skipped = sum(1 for a in actions if isinstance(a, dict) and a.get("action") == "skipped_human_edit")
+            created = sum(
+                1 for a in actions if isinstance(a, dict) and a.get("action") == "created"
+            )
+            updated = sum(
+                1 for a in actions if isinstance(a, dict) and a.get("action") == "updated"
+            )
+            skipped = sum(
+                1
+                for a in actions
+                if isinstance(a, dict) and a.get("action") == "skipped_human_edit"
+            )
             return f"ok c={created} u={updated} skip={skipped}"
     return "ok"
 
@@ -45,7 +53,14 @@ def _row(result: dict) -> tuple[str, str, str, str, str]:
     notes = opd.get("write_back_notes") or {}
     layers = " | ".join(
         f"{_LAYER_LABELS[k]}={_layer_status(notes, k)}"
-        for k in ("insverifies", "benefit_notes", "subscriber_note", "commlog", "benefits_grid", "insadjust")
+        for k in (
+            "insverifies",
+            "benefit_notes",
+            "subscriber_note",
+            "commlog",
+            "benefits_grid",
+            "insadjust",
+        )
     )
     return routing, check_id, insverify_num, layers, json.dumps(opd)
 

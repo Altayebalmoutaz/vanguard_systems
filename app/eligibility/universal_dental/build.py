@@ -217,7 +217,11 @@ def _build_frequency_limitations(breakdown: dict[str, Any]) -> list[FrequencyLim
             continue
         qty = row.get("quantity")
         period = row.get("period_months")
-        confidence = ConfidenceLevel.EXPLICIT if qty is not None or period is not None else ConfidenceLevel.INFERRED
+        confidence = (
+            ConfidenceLevel.EXPLICIT
+            if qty is not None or period is not None
+            else ConfidenceLevel.INFERRED
+        )
         out.append(
             FrequencyLimitation(
                 category=_category_enum(row.get("category")),
@@ -246,7 +250,9 @@ def _build_waiting_periods(breakdown: dict[str, Any]) -> list[WaitingPeriod]:
         end_raw = row.get("end_date")
         end_date = _parse_yyyymmdd(str(end_raw)) if end_raw else None
         months = row.get("months")
-        confidence = ConfidenceLevel.EXPLICIT if months is not None or end_date else ConfidenceLevel.INFERRED
+        confidence = (
+            ConfidenceLevel.EXPLICIT if months is not None or end_date else ConfidenceLevel.INFERRED
+        )
         out.append(
             WaitingPeriod(
                 category=_category_enum(row.get("category")),
@@ -263,7 +269,9 @@ def _build_waiting_periods(breakdown: dict[str, Any]) -> list[WaitingPeriod]:
 def _build_missing_tooth_clause(breakdown: dict[str, Any]) -> MissingToothClause:
     raw = breakdown.get("missing_tooth_clause")
     if not isinstance(raw, dict):
-        return MissingToothClause(present=False, description=None, confidence=ConfidenceLevel.UNKNOWN)
+        return MissingToothClause(
+            present=False, description=None, confidence=ConfidenceLevel.UNKNOWN
+        )
     present = bool(raw.get("present"))
     desc = raw.get("description")
     confidence = ConfidenceLevel.EXPLICIT if present and desc else ConfidenceLevel.UNKNOWN
@@ -380,10 +388,14 @@ def build_universal_dental_record(
     frequency_limitations = _build_frequency_limitations(dbreak if isinstance(dbreak, dict) else {})
     waiting_periods = _build_waiting_periods(dbreak if isinstance(dbreak, dict) else {})
     missing_tooth = _build_missing_tooth_clause(dbreak if isinstance(dbreak, dict) else {})
-    waiting = bool(waiting_periods) or any("waiting" in n.lower() for n in notes_str) or any(
-        bool(p.get("waiting_period_end"))
-        for p in (canonical.get("procedure_details") or [])
-        if isinstance(p, dict)
+    waiting = (
+        bool(waiting_periods)
+        or any("waiting" in n.lower() for n in notes_str)
+        or any(
+            bool(p.get("waiting_period_end"))
+            for p in (canonical.get("procedure_details") or [])
+            if isinstance(p, dict)
+        )
     )
 
     ortho = _build_ortho(canonical, warnings)

@@ -43,7 +43,9 @@ def _run_once(monkeypatch, *, appointments, checked_today, queued_today, seen): 
     def fake_queued(settings, *, practice_id, pat_num):  # type: ignore[no-untyped-def]
         return pat_num in queued_today
 
-    def fake_enqueue(app_settings, *, practice_id, pat_num, connection, client, cdt_codes, trigger_event):  # type: ignore[no-untyped-def]
+    def fake_enqueue(
+        app_settings, *, practice_id, pat_num, connection, client, cdt_codes, trigger_event
+    ):  # type: ignore[no-untyped-def]
         enqueued.append(pat_num)
         return {"id": f"req-{pat_num}"}
 

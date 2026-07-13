@@ -123,7 +123,9 @@ def test_route_incomplete_surfaces_payer_aaa_errors(_mock_payer: object) -> None
 
 
 @patch("app.eligibility.router.fetch_payer_voice_config", return_value=None)
-def test_route_incomplete_surfaces_structured_stedi_actions_and_warnings(_mock_payer: object) -> None:
+def test_route_incomplete_surfaces_structured_stedi_actions_and_warnings(
+    _mock_payer: object,
+) -> None:
     canonical = _base_canonical()
     canonical.update(
         {

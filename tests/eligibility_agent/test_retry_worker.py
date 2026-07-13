@@ -28,7 +28,9 @@ def _patch(monkeypatch, *, agent_settings, due):
         lambda sb, now_iso, limit, **kwargs: due,
     )
     monkeypatch.setattr(
-        retry_worker, "requeue_eligibility_request", lambda sb, rid, **kwargs: calls["requeue"].append(rid)
+        retry_worker,
+        "requeue_eligibility_request",
+        lambda sb, rid, **kwargs: calls["requeue"].append(rid),
     )
     monkeypatch.setattr(
         retry_worker,
@@ -38,7 +40,9 @@ def _patch(monkeypatch, *, agent_settings, due):
     monkeypatch.setattr(
         retry_worker,
         "insert_eligibility_request_event",
-        lambda sb, rid, event_type, detail=None, **kwargs: calls["events"].append((rid, event_type)),
+        lambda sb, rid, event_type, detail=None, **kwargs: calls["events"].append(
+            (rid, event_type)
+        ),
     )
     monkeypatch.setattr(
         retry_worker,
@@ -71,7 +75,9 @@ def test_requeues_due_request_with_budget_left(monkeypatch) -> None:
 
 
 def test_exhausts_request_at_max_attempts(monkeypatch) -> None:
-    due = [{"id": "r2", "attempt_count": 3, "max_attempts": 3, "next_retry_at": "2026-06-15T11:00:00Z"}]
+    due = [
+        {"id": "r2", "attempt_count": 3, "max_attempts": 3, "next_retry_at": "2026-06-15T11:00:00Z"}
+    ]
     calls = _patch(monkeypatch, agent_settings={"auto_retry_enabled": True}, due=due)
 
     out = retry_worker.run_retry_sweep(_settings(), supabase=_SENTINEL, now=_NOW)
@@ -88,7 +94,9 @@ def test_skips_entirely_when_auto_retry_disabled(monkeypatch) -> None:
         raise AssertionError("fetch_retryable_requests must not run when auto_retry is disabled")
 
     monkeypatch.setattr(
-        retry_worker, "get_eligibility_agent_settings", lambda sb, **kwargs: {"auto_retry_enabled": False}
+        retry_worker,
+        "get_eligibility_agent_settings",
+        lambda sb, **kwargs: {"auto_retry_enabled": False},
     )
     monkeypatch.setattr(retry_worker, "fetch_retryable_requests", _boom)
 
@@ -148,7 +156,9 @@ def test_passes_batch_size_and_now_to_fetch(monkeypatch) -> None:
         return []
 
     monkeypatch.setattr(
-        retry_worker, "get_eligibility_agent_settings", lambda sb, **kwargs: {"auto_retry_enabled": True}
+        retry_worker,
+        "get_eligibility_agent_settings",
+        lambda sb, **kwargs: {"auto_retry_enabled": True},
     )
     monkeypatch.setattr(retry_worker, "fetch_retryable_requests", _capture)
 

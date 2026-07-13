@@ -61,7 +61,18 @@ export function DonutChart({
   const total = segments.reduce((sum, s) => sum + s.value, 0) || 1;
   const radius = (size - thickness) / 2;
   const circumference = 2 * Math.PI * radius;
-  let offset = 0;
+  const segmentArcs = segments.map((s, index) => {
+    const len = (s.value / total) * circumference;
+    const offset = segments
+      .slice(0, index)
+      .reduce((sum, prev) => sum + (prev.value / total) * circumference, 0);
+    return {
+      label: s.label,
+      color: s.color,
+      dash: `${len} ${circumference - len}`,
+      offset,
+    };
+  });
 
   return (
     <div className="flex items-center gap-6">
@@ -79,26 +90,20 @@ export function DonutChart({
           stroke="#eef1f6"
           strokeWidth={thickness}
         />
-        {segments.map((s) => {
-          const len = (s.value / total) * circumference;
-          const dash = `${len} ${circumference - len}`;
-          const circle = (
-            <circle
-              key={s.label}
-              cx={size / 2}
-              cy={size / 2}
-              r={radius}
-              fill="none"
-              stroke={s.color}
-              strokeWidth={thickness}
-              strokeDasharray={dash}
-              strokeDashoffset={-offset}
-              strokeLinecap="butt"
-            />
-          );
-          offset += len;
-          return circle;
-        })}
+        {segmentArcs.map((s) => (
+          <circle
+            key={s.label}
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            stroke={s.color}
+            strokeWidth={thickness}
+            strokeDasharray={s.dash}
+            strokeDashoffset={-s.offset}
+            strokeLinecap="butt"
+          />
+        ))}
       </svg>
       <div className="min-w-0">
         {centerLabel ? (

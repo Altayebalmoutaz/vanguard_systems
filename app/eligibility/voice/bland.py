@@ -15,12 +15,12 @@ from typing import Any
 import httpx
 
 from app.eligibility.config import EligibilitySettings
-from app.eligibility.voice.gate import format_missing_fields_for_voice
 from app.eligibility.voice.db import (
     fetch_eligibility_request,
     fetch_payer_voice_config,
     get_supabase_client,
 )
+from app.eligibility.voice.gate import format_missing_fields_for_voice
 
 logger = logging.getLogger(__name__)
 
@@ -41,8 +41,7 @@ BLAND_ANALYSIS_SCHEMA: dict[str, str] = {
 
 def bland_configured(settings: EligibilitySettings) -> bool:
     return bool(
-        (settings.bland_api_key or "").strip()
-        and (settings.twilio_webhook_base_url or "").strip()
+        (settings.bland_api_key or "").strip() and (settings.twilio_webhook_base_url or "").strip()
     )
 
 

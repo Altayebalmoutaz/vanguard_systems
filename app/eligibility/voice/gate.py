@@ -68,8 +68,7 @@ def format_missing_fields_for_voice(
         return ""
     scope = (
         "ONLY verify these missing items from our electronic eligibility check "
-        "(do not re-ask benefits Stedi already confirmed): "
-        + "; ".join(labels)
+        "(do not re-ask benefits Stedi already confirmed): " + "; ".join(labels)
     )
     codes = [str(c).strip().upper() for c in (cdt_codes or []) if c and str(c).strip()]
     if codes:

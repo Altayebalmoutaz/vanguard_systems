@@ -232,18 +232,18 @@ jobs:
           output-file: vanguard-md-sbom.cdx.json
 
       - name: Install OSV-Scanner binary
-        # Pinned to a known release; bumping is a one-line PR. Installing the
-        # binary directly avoids drift from third-party action wrappers.
+        # Releases ship bare binaries (no .tar.gz). Download the linux_amd64
+        # asset and verify against the published SHA256SUMS before installing.
         env:
           OSV_VERSION: "1.9.2"
         run: |
-          curl -sSL -o osv-scanner.tar.gz \
-            "https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_linux_amd64.tar.gz" || \
-          curl -sSL -o osv-scanner \
-            "https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_linux_amd64"
-          if [ -f osv-scanner.tar.gz ]; then tar -xzf osv-scanner.tar.gz; fi
-          chmod +x osv-scanner
-          sudo mv osv-scanner /usr/local/bin/osv-scanner
+          set -euo pipefail
+          BASE="https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}"
+          curl -fsSL -o osv-scanner_SHA256SUMS "${BASE}/osv-scanner_SHA256SUMS"
+          curl -fsSL -o osv-scanner_linux_amd64 "${BASE}/osv-scanner_linux_amd64"
+          grep 'osv-scanner_linux_amd64$' osv-scanner_SHA256SUMS | sha256sum -c -
+          chmod +x osv-scanner_linux_amd64
+          sudo mv osv-scanner_linux_amd64 /usr/local/bin/osv-scanner
           osv-scanner --version
 
       - name: OSV-Scanner (cross-language CVE scan against SBOM)

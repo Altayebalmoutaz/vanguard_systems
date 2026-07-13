@@ -18,15 +18,11 @@ class WorkflowGatingTests(unittest.TestCase):
         self.assertFalse(should_route_to_hitl(0.9, 0.85))
 
     def test_coding_payer_flags_gate(self) -> None:
-        self.assertTrue(
-            should_route_coding_to_hitl(0.95, 0.85, payer_flags=["needs_human_review"])
-        )
+        self.assertTrue(should_route_coding_to_hitl(0.95, 0.85, payer_flags=["needs_human_review"]))
 
     def test_prior_auth_gate(self) -> None:
         self.assertTrue(should_route_prior_auth_to_hitl({"requires_auth": True}))
-        self.assertTrue(
-            should_route_prior_auth_to_hitl({"required_documents": ["panoramic_xray"]})
-        )
+        self.assertTrue(should_route_prior_auth_to_hitl({"required_documents": ["panoramic_xray"]}))
         self.assertTrue(should_route_prior_auth_to_hitl({"risk_level": "high"}))
         self.assertFalse(should_route_prior_auth_to_hitl({"risk_level": "low"}))
 

@@ -60,7 +60,9 @@ def insadjust_fingerprint(
     }
 
 
-def last_insadjust_fingerprint(audit_rows: list[dict[str, Any]], pat_plan_num: int) -> dict[str, Any] | None:
+def last_insadjust_fingerprint(
+    audit_rows: list[dict[str, Any]], pat_plan_num: int
+) -> dict[str, Any] | None:
     for row in audit_rows:
         if row.get("event_type") != INSADJUST_MUTATION_EVENT:
             continue

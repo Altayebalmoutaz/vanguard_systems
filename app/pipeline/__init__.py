@@ -16,10 +16,10 @@ from app.pipeline.store import (
 from app.pipeline.worker import run_pipeline_sweep, start_pipeline_worker
 
 __all__ = [
-    "PipelineNotConfiguredError",
     "RUN_TYPE_ELIGIBILITY_REQUEST",
     "RUN_TYPE_FULL_RCM_PIPELINE",
     "RUN_TYPE_OPENDENTAL_WRITEBACK",
+    "PipelineNotConfiguredError",
     "claim_pipeline_runs",
     "complete_pipeline_run",
     "create_pipeline_run",

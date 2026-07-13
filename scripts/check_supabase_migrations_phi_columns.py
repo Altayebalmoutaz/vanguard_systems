@@ -155,9 +155,7 @@ def find_violations(path: Path) -> list[str]:
             if col in {"primary", "unique", "check", "constraint", "foreign", "exclude"}:
                 continue
             if col in FORBIDDEN_COLUMN_NAMES:
-                violations.append(
-                    f"{path.name}: column {col!r} in create table {table_lc}"
-                )
+                violations.append(f"{path.name}: column {col!r} in create table {table_lc}")
 
     for match in _ADD_COLUMN_RE.finditer(sql):
         schema, table, column = match.group(1), match.group(2), match.group(3)

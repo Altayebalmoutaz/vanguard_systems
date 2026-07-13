@@ -9,7 +9,8 @@ from typing import Any, Literal
 from uuid import UUID
 
 from app.audit.writer import write_audit_log
-from app.config import Settings, get_settings as get_app_settings
+from app.config import Settings
+from app.config import get_settings as get_app_settings
 from app.eligibility.config import get_settings as get_eligibility_settings
 from app.eligibility.db import (
     complete_eligibility_request_processing,

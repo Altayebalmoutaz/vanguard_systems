@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import time
 from typing import Any, Literal
 from uuid import UUID
 
@@ -33,12 +32,12 @@ from app.dashboard.store import (
     get_hitl_task,
     get_patient_360,
     list_eligibility_activity,
-    update_eligibility_agent_settings,
     list_eligibility_queue,
     list_eligibility_request_events,
     list_hitl_tasks,
     list_procedure_estimates_for_request,
     resolve_hitl_task,
+    update_eligibility_agent_settings,
 )
 from app.db.connection import NeonNotConfiguredError
 from app.pilot.shadow_store import get_shadow_summary
@@ -47,30 +46,6 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 _DB_UNAVAILABLE_MSG = "Database is unavailable"
 _RESOLVE_HITL_ROLES = frozenset({"admin", "billing_lead"})
-
-
-# region agent log
-def _agent_debug_log(hypothesis_id: str, message: str, data: dict[str, Any]) -> None:
-    try:
-        with open("debug-c16f79.log", "a", encoding="utf-8") as fh:
-            fh.write(
-                json.dumps(
-                    {
-                        "sessionId": "c16f79",
-                        "runId": "initial",
-                        "hypothesisId": hypothesis_id,
-                        "location": "app/api/routes/dashboard.py",
-                        "message": message,
-                        "data": data,
-                        "timestamp": int(time.time() * 1000),
-                    },
-                    default=str,
-                )
-                + "\n"
-            )
-    except Exception:
-        pass
-# endregion
 
 
 class CreateEligibilityRequestBody(BaseModel):
@@ -348,17 +323,6 @@ def post_eligibility_request(
     tenant: PracticeContextDep,
 ) -> dict[str, Any]:
     settings = get_settings()
-    _agent_debug_log(
-        "H8",
-        "eligibility request route entry",
-        {
-            "practiceId": tenant.practice_id,
-            "pipelineWorkerEnabled": settings.pipeline_worker_enabled,
-            "primaryPayerId": body.primary_payer_id,
-            "triggerEvent": body.trigger_event,
-            "cdtCount": len(body.cdt_codes),
-        },
-    )
     payload = body.model_dump(mode="json")
     payload["input_json"] = {
         **payload.get("input_json", {}),
@@ -377,27 +341,7 @@ def post_eligibility_request(
             raise HTTPException(status_code=409, detail="idempotency_conflict") from exc
         raise HTTPException(status_code=400, detail="invalid_request") from exc
     except RuntimeError as exc:
-        _agent_debug_log(
-            "H8,H9",
-            "eligibility request route failure",
-            {
-                "practiceId": tenant.practice_id,
-                "errorType": type(exc).__name__,
-                "errorMessage": str(exc)[:500],
-                "pipelineWorkerEnabled": settings.pipeline_worker_enabled,
-            },
-        )
         raise _db_failure(exc, log_message="create_eligibility_request failure") from exc
-    _agent_debug_log(
-        "H8",
-        "eligibility request route success",
-        {
-            "practiceId": tenant.practice_id,
-            "requestId": str(row.get("id") or ""),
-            "pipelineRunId": str(row.get("pipeline_run_id") or ""),
-            "pipelineWorkerEnabled": settings.pipeline_worker_enabled,
-        },
-    )
     return {
         "practice_id": tenant.practice_id,
         "request": row,
@@ -497,40 +441,12 @@ def get_patient_profile(patient_id: UUID, tenant: PracticeContextDep) -> dict[st
 @router.get("/overview")
 def get_overview(tenant: PracticeContextDep) -> dict[str, Any]:
     settings = get_settings()
-    _agent_debug_log(
-        "H6,H7",
-        "dashboard overview route entry",
-        {"practiceId": tenant.practice_id, "pipelineWorkerEnabled": settings.pipeline_worker_enabled},
-    )
     try:
         overview = get_dashboard_overview(settings, practice_id=tenant.practice_id)
     except NeonNotConfiguredError as exc:
-        _agent_debug_log(
-            "H7",
-            "dashboard overview db not configured",
-            {"practiceId": tenant.practice_id, "errorType": type(exc).__name__},
-        )
         raise _neon_unavailable(exc) from exc
     except RuntimeError as exc:
-        _agent_debug_log(
-            "H7",
-            "dashboard overview route failure",
-            {
-                "practiceId": tenant.practice_id,
-                "errorType": type(exc).__name__,
-                "errorMessage": str(exc)[:500],
-            },
-        )
         raise _db_failure(exc, log_message="get_dashboard_overview failure") from exc
-    _agent_debug_log(
-        "H6,H7",
-        "dashboard overview route success",
-        {
-            "practiceId": tenant.practice_id,
-            "worklistCount": len(overview.get("worklist") or []),
-            "kpiKeys": sorted((overview.get("kpis") or {}).keys()),
-        },
-    )
     return overview
 
 

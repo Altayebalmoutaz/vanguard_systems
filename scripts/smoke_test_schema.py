@@ -7,8 +7,8 @@ import sys
 import uuid
 from pathlib import Path
 
-from dotenv import load_dotenv
 import psycopg
+from dotenv import load_dotenv
 
 from app.database_url import resolve_database_url
 
@@ -53,9 +53,7 @@ def main() -> None:
         supabase_pooler_host=os.getenv("SUPABASE_POOLER_HOST"),
     )
     if not url:
-        raise SystemExit(
-            "DATABASE_URL (or legacy NEON_DATABASE_URL) is not set in .env"
-        )
+        raise SystemExit("DATABASE_URL (or legacy NEON_DATABASE_URL) is not set in .env")
 
     failures: list[str] = []
 

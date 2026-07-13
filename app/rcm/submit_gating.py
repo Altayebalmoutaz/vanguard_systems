@@ -18,24 +18,32 @@ def _find_pending_hitl_for_claim(
     practice_id: str,
     claim_record_id: str,
 ) -> dict | None:
-    with neon_connection(settings, practice_id=practice_id) as conn:
-        with conn.cursor(row_factory=dict_row) as cur:
-            cur.execute(
-                """
-                select id, status, task_type
-                from agents.rcm_tasks
-                where practice_id = %s
-                  and status = %s
-                  and (
-                    backend_claim_id = %s
-                    or pipeline_json->'claim_draft'->>'id' = %s
-                    or backend_record_id = %s
-                  )
-                limit 1
-                """,
-                (practice_id, HITL_STATUS_PENDING, claim_record_id, claim_record_id, claim_record_id),
-            )
-            row = cur.fetchone()
+    with (
+        neon_connection(settings, practice_id=practice_id) as conn,
+        conn.cursor(row_factory=dict_row) as cur,
+    ):
+        cur.execute(
+            """
+            select id, status, task_type
+            from agents.rcm_tasks
+            where practice_id = %s
+              and status = %s
+              and (
+                backend_claim_id = %s
+                or pipeline_json->'claim_draft'->>'id' = %s
+                or backend_record_id = %s
+              )
+            limit 1
+            """,
+            (
+                practice_id,
+                HITL_STATUS_PENDING,
+                claim_record_id,
+                claim_record_id,
+                claim_record_id,
+            ),
+        )
+        row = cur.fetchone()
     return dict(row) if row else None
 
 
@@ -45,18 +53,20 @@ def _get_hitl_task_status(
     practice_id: str,
     task_id: str,
 ) -> str | None:
-    with neon_connection(settings, practice_id=practice_id) as conn:
-        with conn.cursor(row_factory=dict_row) as cur:
-            cur.execute(
-                """
-                select status
-                from agents.rcm_tasks
-                where practice_id = %s and id = %s
-                limit 1
-                """,
-                (practice_id, UUID(str(task_id))),
-            )
-            row = cur.fetchone()
+    with (
+        neon_connection(settings, practice_id=practice_id) as conn,
+        conn.cursor(row_factory=dict_row) as cur,
+    ):
+        cur.execute(
+            """
+            select status
+            from agents.rcm_tasks
+            where practice_id = %s and id = %s
+            limit 1
+            """,
+            (practice_id, UUID(str(task_id))),
+        )
+        row = cur.fetchone()
     return str(row["status"]) if row else None
 
 

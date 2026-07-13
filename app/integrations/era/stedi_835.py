@@ -118,7 +118,7 @@ def _looks_like_x12_835(text: str) -> bool:
     return upper.startswith("ST*835") or "~ST*835*" in upper
 
 
-def get_default_era_adapter() -> "Stedi835SandboxAdapter":
+def get_default_era_adapter() -> Stedi835SandboxAdapter:
     """Return the sandbox ERA adapter (production Stedi API wiring lands later)."""
     return Stedi835SandboxAdapter()
 
@@ -152,9 +152,7 @@ class Stedi835SandboxAdapter:
         try:
             parsed = json.loads(stripped)
         except json.JSONDecodeError as exc:
-            raise ValueError(
-                "Expected UTF-8 JSON remittance payload in sandbox mode"
-            ) from exc
+            raise ValueError("Expected UTF-8 JSON remittance payload in sandbox mode") from exc
 
         if not isinstance(parsed, dict):
             raise ValueError("Stedi 835 JSON root must be an object")

@@ -123,7 +123,9 @@ def upsert_connection(
     fields = {k: v for k, v in updates.items() if k in UPDATABLE_FIELDS}
     cols = ["practice_id", *fields.keys()]
     placeholders = ", ".join(f"%({c})s" for c in cols)
-    set_sql = ", ".join(f"{c} = excluded.{c}" for c in fields) or "practice_id = excluded.practice_id"
+    set_sql = (
+        ", ".join(f"{c} = excluded.{c}" for c in fields) or "practice_id = excluded.practice_id"
+    )
     sql = f"""
         insert into rcm.opendental_connections ({", ".join(cols)})
         values ({placeholders})

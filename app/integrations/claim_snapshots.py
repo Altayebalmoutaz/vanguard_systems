@@ -7,11 +7,11 @@ import logging
 from typing import Any
 
 from psycopg.rows import dict_row
-from supabase import Client
 
 from app.config import Settings
 from app.db.connection import get_neon_dsn, neon_connection
 from app.integrations.supabase_client import create_supabase
+from supabase import Client
 
 logger = logging.getLogger(__name__)
 
@@ -55,13 +55,12 @@ def _fetch_claim_snapshot_neon(
     *,
     practice_id: str,
 ) -> dict[str, Any] | None:
-    with neon_connection(settings, practice_id=practice_id) as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                "select agents.get_claim_intake_snapshot(%s, %s)",
-                (practice_id, encounter_id),
-            )
-            row = cur.fetchone()
+    with neon_connection(settings, practice_id=practice_id) as conn, conn.cursor() as cur:
+        cur.execute(
+            "select agents.get_claim_intake_snapshot(%s, %s)",
+            (practice_id, encounter_id),
+        )
+        row = cur.fetchone()
     if not row or row[0] is None:
         return None
     return _normalize_snapshot(row[0])
@@ -129,10 +128,12 @@ def fetch_claim_intake_snapshot_row(
               and encounter_id = %s
             limit 1
         """
-        with neon_connection(settings, practice_id=practice_id) as conn:
-            with conn.cursor(row_factory=dict_row) as cur:
-                cur.execute(query, (practice_id, encounter_id))
-                row = cur.fetchone()
+        with (
+            neon_connection(settings, practice_id=practice_id) as conn,
+            conn.cursor(row_factory=dict_row) as cur,
+        ):
+            cur.execute(query, (practice_id, encounter_id))
+            row = cur.fetchone()
         return dict(row) if row else None
 
     supabase = create_supabase(settings)

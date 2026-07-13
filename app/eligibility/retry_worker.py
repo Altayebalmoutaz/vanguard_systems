@@ -14,7 +14,8 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from app.config import Settings, get_settings as get_app_settings
+from app.config import Settings
+from app.config import get_settings as get_app_settings
 from app.eligibility.config import EligibilitySettings
 from app.eligibility.db import (
     fail_eligibility_request_exhausted,
@@ -56,9 +57,7 @@ def run_retry_sweep(
     app_settings = app_settings or get_app_settings()
     now = now or datetime.now(UTC)
 
-    agent_settings = get_eligibility_agent_settings(
-        supabase, settings=app_settings
-    )
+    agent_settings = get_eligibility_agent_settings(supabase, settings=app_settings)
     if agent_settings is not None and agent_settings.get("auto_retry_enabled") is False:
         return {"skipped": "auto_retry_disabled", "requeued": 0, "exhausted": 0, "considered": 0}
 

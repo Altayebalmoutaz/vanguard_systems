@@ -12,9 +12,7 @@ only for local dev / unit tests without a DSN; the production startup guard
 from __future__ import annotations
 
 import logging
-import json
-import time
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -31,30 +29,6 @@ from app.eligibility.sanitize import scrub_detail_for_storage
 from supabase import Client
 
 logger = logging.getLogger(__name__)
-
-
-# region agent log
-def _agent_debug_log(hypothesis_id: str, message: str, data: dict[str, Any]) -> None:
-    try:
-        with open("debug-c16f79.log", "a", encoding="utf-8") as fh:
-            fh.write(
-                json.dumps(
-                    {
-                        "sessionId": "c16f79",
-                        "runId": "post-fix",
-                        "hypothesisId": hypothesis_id,
-                        "location": "app/eligibility/db_phi.py",
-                        "message": message,
-                        "data": data,
-                        "timestamp": int(time.time() * 1000),
-                    },
-                    default=str,
-                )
-                + "\n"
-            )
-    except Exception:
-        pass
-# endregion
 
 _JSONB_KEYS = frozenset(
     {
@@ -194,11 +168,14 @@ def _neon_fetchone(
     params: tuple[Any, ...] | list[Any],
     bypass_rls: bool = False,
 ) -> dict[str, Any] | None:
-    with neon_connection(
-        settings,
-        practice_id=practice_id,
-        bypass_rls=bypass_rls,
-    ) as conn, conn.cursor(row_factory=dict_row) as cur:
+    with (
+        neon_connection(
+            settings,
+            practice_id=practice_id,
+            bypass_rls=bypass_rls,
+        ) as conn,
+        conn.cursor(row_factory=dict_row) as cur,
+    ):
         cur.execute(sql, params)
         row = cur.fetchone()
     return _serialize_row(dict(row)) if row else None
@@ -212,11 +189,14 @@ def _neon_fetchall(
     params: tuple[Any, ...] | list[Any],
     bypass_rls: bool = False,
 ) -> list[dict[str, Any]]:
-    with neon_connection(
-        settings,
-        practice_id=practice_id,
-        bypass_rls=bypass_rls,
-    ) as conn, conn.cursor(row_factory=dict_row) as cur:
+    with (
+        neon_connection(
+            settings,
+            practice_id=practice_id,
+            bypass_rls=bypass_rls,
+        ) as conn,
+        conn.cursor(row_factory=dict_row) as cur,
+    ):
         cur.execute(sql, params)
         rows = cur.fetchall()
     return [_serialize_row(dict(r)) for r in rows]
@@ -561,9 +541,7 @@ def get_latest_eligibility_for_patient(
     s = _resolve_settings(settings)
     pid = _practice_id_from(practice_id=practice_id)
     if _use_neon(s) and pid:
-        return _get_latest_eligibility_for_patient_neon(
-            s, practice_id=pid, patient_id=patient_id
-        )
+        return _get_latest_eligibility_for_patient_neon(s, practice_id=pid, patient_id=patient_id)
     return _get_latest_eligibility_for_patient_supabase(supabase, patient_id)
 
 
@@ -856,11 +834,7 @@ def _insert_eligibility_request_event_supabase(
     }
     if practice_id:
         row["practice_id"] = practice_id
-    (
-        supabase.table("eligibility_request_events")
-        .insert(row)
-        .execute()
-    )
+    (supabase.table("eligibility_request_events").insert(row).execute())
 
 
 def insert_eligibility_request_event(
@@ -874,19 +848,6 @@ def insert_eligibility_request_event(
 ) -> None:
     s = _resolve_settings(settings)
     pid = _require_neon_practice_id(s, practice_id=practice_id)
-    # region agent log
-    _agent_debug_log(
-        "H14,H15",
-        "eligibility request event branch",
-        {
-            "requestId": str(request_id),
-            "eventType": event_type,
-            "hasPracticeId": bool(pid),
-            "usesDirectPostgres": _use_neon(s),
-            "settingsType": type(settings).__name__ if settings is not None else None,
-        },
-    )
-    # endregion
     if _use_neon(s):
         _insert_eligibility_request_event_neon(
             s,

@@ -2,6 +2,7 @@
 Prior authorization + end-to-end RCM pipeline routes (synchronous).
 """
 
+import contextlib
 import json
 from typing import Any, Literal
 from uuid import UUID
@@ -26,7 +27,6 @@ from app.integrations.agent_runs import (
     update_agent_run_status,
 )
 from app.integrations.supabase_client import create_supabase
-from app.workflow.rcm_tasks import create_hitl_task_from_denial
 from app.pipeline import (
     RUN_TYPE_FULL_RCM_PIPELINE,
     PipelineNotConfiguredError,
@@ -34,7 +34,6 @@ from app.pipeline import (
     get_pipeline_run,
     serialize_pipeline_run,
 )
-from app.config import get_settings
 from app.rcm.claims_store import CLAIM_STATUS_SUBMITTED, update_claim_status
 from app.rcm.submit_gating import assert_claim_submission_allowed
 from app.schemas.claim import (
@@ -50,6 +49,7 @@ from app.schemas.prior_auth import (
     PriorAuthAgentResponse,
     RcmPipelineResponse,
 )
+from app.workflow.rcm_tasks import create_hitl_task_from_denial
 
 router = APIRouter(prefix="/agents", tags=["rcm"])
 
@@ -281,7 +281,9 @@ def enqueue_full_rcm_pipeline_job(
     response_model=PipelineJobStatusResponse,
     tags=["rcm-full-pipeline"],
 )
-def get_full_rcm_pipeline_job(run_id: UUID, tenant: PracticeContextDep) -> PipelineJobStatusResponse:
+def get_full_rcm_pipeline_job(
+    run_id: UUID, tenant: PracticeContextDep
+) -> PipelineJobStatusResponse:
     settings = get_settings()
     try:
         row = get_pipeline_run(settings, run_id, practice_id=tenant.practice_id)
@@ -377,15 +379,13 @@ def submit_claim_draft_endpoint(
         ) from e
 
     if body.claim_record_id:
-        try:
+        with contextlib.suppress(ValueError, TypeError):
             update_claim_status(
                 settings,
                 practice_id=tenant.practice_id,
                 claim_id=UUID(str(body.claim_record_id)),
                 status=CLAIM_STATUS_SUBMITTED,
             )
-        except (ValueError, TypeError):
-            pass
 
     write_audit_log(
         settings,

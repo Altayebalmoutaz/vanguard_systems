@@ -217,10 +217,7 @@ def deidentify_record(record: dict[str, Any]) -> dict[str, Any]:
             out[key] = deidentify_record(value)
         elif isinstance(value, list):
             out[key] = [
-                deidentify_record(item)
-                if isinstance(item, dict)
-                else item
-                for item in value
+                deidentify_record(item) if isinstance(item, dict) else item for item in value
             ]
         elif isinstance(value, str):
             _scan_string_for_residual_phi(value, field_name=key)

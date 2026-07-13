@@ -31,7 +31,7 @@ def main() -> None:
                     print(json.dumps(resp.json(), indent=2)[:12000])
                 except Exception:
                     print(text[:4000])
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 print("ERR", type(exc).__name__, exc)
 
 
