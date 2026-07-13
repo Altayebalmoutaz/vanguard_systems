@@ -20,7 +20,6 @@ from app.config import Settings
 from app.db.connection import get_neon_dsn, neon_connection
 from app.db.phi_store import PhiStoreError
 from app.integrations.supabase_client import create_supabase
-from supabase import Client  # type: ignore[attr-defined]
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +104,7 @@ def _insert_agent_run_neon(
 
 
 def _insert_agent_run_supabase(
-    supabase: Client,
+    supabase: Any,
     *,
     practice_id: str | None,
     agent: str,
@@ -218,7 +217,7 @@ def _list_agent_runs_neon(
 
 
 def _list_agent_runs_supabase(
-    supabase: Client,
+    supabase: Any,
     patient_id: UUID,
     *,
     practice_id: str | None,
@@ -334,7 +333,7 @@ def _update_agent_run_status_neon(
 
 
 def _update_agent_run_status_supabase(
-    supabase: Client,
+    supabase: Any,
     run_id: UUID,
     status: str,
     *,
