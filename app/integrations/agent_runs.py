@@ -20,7 +20,7 @@ from app.config import Settings
 from app.db.connection import get_neon_dsn, neon_connection
 from app.db.phi_store import PhiStoreError
 from app.integrations.supabase_client import create_supabase
-from supabase import Client
+from supabase import Client  # type: ignore[attr-defined]
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +129,7 @@ def _insert_agent_run_supabase(
         row["patient_id"] = str(patient_id)
     if practice_id:
         row["practice_id"] = practice_id
-    res = supabase.table("agent_runs").insert(row).select("id").execute()  # type: ignore[attr-defined]
+    res = supabase.table("agent_runs").insert(row).select("id").execute()
     data = getattr(res, "data", None) or []
     if data and data[0].get("id"):
         return UUID(str(data[0]["id"]))
