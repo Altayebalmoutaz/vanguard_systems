@@ -102,6 +102,7 @@ def test_from_opendental_route(monkeypatch) -> None:  # type: ignore[no-untyped-
             (),
             {
                 "opendental_writeback_enabled": True,
+                "opendental_writeback_allowed": True,
                 "opendental_write_benefit_notes_enabled": True,
                 "opendental_write_subscriber_note_enabled": True,
                 "opendental_write_commlog_enabled": True,
@@ -110,6 +111,7 @@ def test_from_opendental_route(monkeypatch) -> None:  # type: ignore[no-untyped-
                 "opendental_write_benefits_grid_respect_manual_edits": True,
                 "opendental_auto_poll_enabled": False,
                 "eligibility_agent_api_key": "",
+                "pilot_shadow_mode": False,
             },
         )(),
     )

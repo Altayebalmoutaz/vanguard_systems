@@ -50,6 +50,10 @@ _MBI_PATTERN = re.compile(
     re.I,
 )
 _SSN_LIKE = re.compile(r"\b\d{3}-?\d{2}-?\d{4}\b")
+# Presidio's US_DRIVER_LICENSE recognizer classifies CDT codes such as D0120
+# as PHI at low confidence. Exact CDT procedure codes are clinical data, not
+# patient identifiers, and must remain intact for coding prompts.
+_CDT_CODE = re.compile(r"D\d{4}", re.I)
 
 # Keys we always strip from any storage / memory dict regardless of the value.
 _BANNED_KEYS = frozenset(
@@ -105,6 +109,8 @@ def _scrub_text_for_llm(text: str) -> str:
     if not text:
         return text
     out = _apply_regex_scrub(text)
+    if _CDT_CODE.fullmatch(out):
+        return out
     return _apply_presidio_scrub(out)
 
 

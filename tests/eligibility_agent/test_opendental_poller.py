@@ -6,15 +6,25 @@ from types import SimpleNamespace
 import app.integrations.opendental.poller as poller
 
 
-def _settings(window_days: int = 0) -> SimpleNamespace:
+def _settings(window_days: int = 0, *, auto_poll_enabled: bool = False) -> SimpleNamespace:
     return SimpleNamespace(
         opendental_developer_key="dev",
         opendental_customer_key="cust",
         opendental_base_url="http://localhost:30222/api/v1",
         opendental_timeout_seconds=5.0,
+        opendental_auto_poll_enabled=auto_poll_enabled,
         opendental_auto_poll_date_window_days=window_days,
         opendental_auto_poll_cdt_codes="D1110",
         opendental_auto_poll_interval_seconds=60.0,
+        opendental_writeback_enabled=False,
+        eligibility_retry_worker_enabled=False,
+        eligibility_retry_worker_interval_seconds=60.0,
+        eligibility_retry_batch_size=20,
+        voice_verification_worker_enabled=False,
+        voice_verification_enabled=False,
+        voice_call_provider="",
+        voice_verification_worker_interval_seconds=60.0,
+        voice_verification_batch_size=20,
         pilot_shadow_mode=False,
     )
 
@@ -141,14 +151,7 @@ def test_parent_app_lifespan_starts_poller_when_enabled(monkeypatch) -> None:  #
     monkeypatch.setattr(
         main_module,
         "get_eligibility_settings",
-        lambda: SimpleNamespace(
-            opendental_auto_poll_enabled=True,
-            opendental_auto_poll_interval_seconds=30.0,
-            opendental_auto_poll_date_window_days=0,
-            eligibility_retry_worker_enabled=False,
-            eligibility_retry_worker_interval_seconds=60.0,
-            eligibility_retry_batch_size=20,
-        ),
+        lambda: _settings(auto_poll_enabled=True),
     )
 
     app = main_module.create_app()
@@ -172,14 +175,7 @@ def test_parent_app_lifespan_skips_poller_when_disabled(monkeypatch) -> None:  #
     monkeypatch.setattr(
         main_module,
         "get_eligibility_settings",
-        lambda: SimpleNamespace(
-            opendental_auto_poll_enabled=False,
-            opendental_auto_poll_interval_seconds=30.0,
-            opendental_auto_poll_date_window_days=0,
-            eligibility_retry_worker_enabled=False,
-            eligibility_retry_worker_interval_seconds=60.0,
-            eligibility_retry_batch_size=20,
-        ),
+        lambda: _settings(auto_poll_enabled=False),
     )
 
     app = main_module.create_app()

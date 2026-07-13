@@ -7,7 +7,7 @@ This module focuses on:
 
 * :func:`_resolve_claim_context` rejecting requests that lack both direct
   context and a usable encounter snapshot.
-* :func:`_fetch_claim_snapshot` falling back from the RPC path to the
+* :func:`_fetch_claim_snapshot_supabase` falling back from the RPC path to the
   ``claim_intake_snapshot`` table, and its error propagation.
 * The Pydantic-validation error path inside :func:`_resolve_claim_context`
   (snapshot present but malformed).
@@ -21,11 +21,11 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from app.agents.rcm_pipeline import (
-    _fetch_claim_snapshot,
     _resolve_claim_context,
     run_full_rcm_pipeline,
 )
 from app.config import Settings
+from app.integrations.claim_snapshots import _fetch_claim_snapshot_supabase
 from app.schemas.claim import FullRcmPipelineRequest
 
 
@@ -51,33 +51,35 @@ class ResolveClaimContextErrors(unittest.TestCase):
         dummy.provider = None
         dummy.billing = None
         with self.assertRaises(RuntimeError) as cm:
-            _resolve_claim_context(dummy, supabase=None)
+            _resolve_claim_context(Settings(), dummy)
         self.assertIn("provide patient/provider/billing or encounter_id", str(cm.exception))
 
-    def test_encounter_id_without_supabase_raises(self) -> None:
+    @patch("app.agents.rcm_pipeline.fetch_claim_intake_snapshot")
+    def test_encounter_id_without_snapshot_raises(self, mock_fetch: MagicMock) -> None:
+        mock_fetch.return_value = None
         request = _minimal_full_request()
         with self.assertRaises(RuntimeError) as cm:
-            _resolve_claim_context(request, supabase=None)
-        self.assertIn("Supabase client is required", str(cm.exception))
+            _resolve_claim_context(Settings(), request)
+        self.assertIn("No claim intake snapshot", str(cm.exception))
 
-    @patch("app.agents.rcm_pipeline._fetch_claim_snapshot")
+    @patch("app.agents.rcm_pipeline.fetch_claim_intake_snapshot")
     def test_snapshot_missing_raises(self, mock_fetch: MagicMock) -> None:
         mock_fetch.return_value = None
         request = _minimal_full_request()
         with self.assertRaises(RuntimeError) as cm:
-            _resolve_claim_context(request, supabase=MagicMock())
+            _resolve_claim_context(Settings(), request)
         self.assertIn("No claim intake snapshot", str(cm.exception))
         self.assertIn("enc-zzz", str(cm.exception))
 
-    @patch("app.agents.rcm_pipeline._fetch_claim_snapshot")
+    @patch("app.agents.rcm_pipeline.fetch_claim_intake_snapshot")
     def test_snapshot_not_ready_raises(self, mock_fetch: MagicMock) -> None:
         mock_fetch.return_value = {"ready_for_claim": False, "patient": {}}
         request = _minimal_full_request()
         with self.assertRaises(RuntimeError) as cm:
-            _resolve_claim_context(request, supabase=MagicMock())
+            _resolve_claim_context(Settings(), request)
         self.assertIn("not ready_for_claim", str(cm.exception))
 
-    @patch("app.agents.rcm_pipeline._fetch_claim_snapshot")
+    @patch("app.agents.rcm_pipeline.fetch_claim_intake_snapshot")
     def test_snapshot_invalid_pydantic_raises(self, mock_fetch: MagicMock) -> None:
         mock_fetch.return_value = {
             "ready_for_claim": True,
@@ -93,7 +95,7 @@ class ResolveClaimContextErrors(unittest.TestCase):
         }
         request = _minimal_full_request()
         with self.assertRaises(RuntimeError) as cm:
-            _resolve_claim_context(request, supabase=MagicMock())
+            _resolve_claim_context(Settings(), request)
         self.assertIn("Invalid claim snapshot", str(cm.exception))
         self.assertIn("enc-zzz", str(cm.exception))
 
@@ -123,7 +125,7 @@ class FetchClaimSnapshotPaths(unittest.TestCase):
     def test_rpc_returns_dict(self) -> None:
         snapshot = {"ready_for_claim": True, "patient": {"name": "x", "dob": "2000-01-01"}}
         supabase = self._make_supabase(rpc_data=snapshot)
-        out = _fetch_claim_snapshot(supabase, "enc-1")
+        out = _fetch_claim_snapshot_supabase(supabase, "enc-1", practice_id=None)
         self.assertEqual(out, snapshot)
         supabase.rpc.assert_called_once_with(
             "get_claim_intake_snapshot", {"p_encounter_id": "enc-1"}
@@ -133,32 +135,32 @@ class FetchClaimSnapshotPaths(unittest.TestCase):
     def test_rpc_returns_list_with_dict(self) -> None:
         snapshot = {"ready_for_claim": True, "patient": {"name": "x", "dob": "2000-01-01"}}
         supabase = self._make_supabase(rpc_data=[snapshot])
-        out = _fetch_claim_snapshot(supabase, "enc-2")
+        out = _fetch_claim_snapshot_supabase(supabase, "enc-2", practice_id=None)
         self.assertEqual(out, snapshot)
 
     def test_rpc_returns_unusable_then_table_fallback_succeeds(self) -> None:
         snapshot = {"ready_for_claim": True}
         # rpc returns None / non-dict / empty list -> fall through to table
         supabase = self._make_supabase(rpc_data=None, table_data=[snapshot])
-        out = _fetch_claim_snapshot(supabase, "enc-3")
+        out = _fetch_claim_snapshot_supabase(supabase, "enc-3", practice_id=None)
         self.assertEqual(out, snapshot)
         supabase.table.assert_called_once_with("claim_intake_snapshot")
 
     def test_rpc_raises_then_table_fallback_succeeds(self) -> None:
         snapshot = {"ready_for_claim": True}
         supabase = self._make_supabase(rpc_raises=True, table_data=[snapshot])
-        out = _fetch_claim_snapshot(supabase, "enc-4")
+        out = _fetch_claim_snapshot_supabase(supabase, "enc-4", practice_id=None)
         self.assertEqual(out, snapshot)
 
     def test_rpc_and_table_both_empty_returns_none(self) -> None:
         supabase = self._make_supabase(rpc_data=None, table_data=[])
-        out = _fetch_claim_snapshot(supabase, "enc-5")
+        out = _fetch_claim_snapshot_supabase(supabase, "enc-5", practice_id=None)
         self.assertIsNone(out)
 
     def test_table_raises_propagates_runtime_error(self) -> None:
         supabase = self._make_supabase(rpc_data=None, table_raises=True)
         with self.assertRaises(RuntimeError) as cm:
-            _fetch_claim_snapshot(supabase, "enc-6")
+            _fetch_claim_snapshot_supabase(supabase, "enc-6", practice_id=None)
         self.assertIn("Failed to load claim intake snapshot", str(cm.exception))
         self.assertIn("enc-6", str(cm.exception))
 
@@ -166,7 +168,7 @@ class FetchClaimSnapshotPaths(unittest.TestCase):
 class FullPipelineDirectContext(unittest.TestCase):
     """Sanity check that the direct-context path skips the snapshot lookup entirely."""
 
-    @patch("app.agents.rcm_pipeline._fetch_claim_snapshot")
+    @patch("app.agents.rcm_pipeline.fetch_claim_intake_snapshot")
     @patch("app.tools.prior_auth_tools.llm_prior_auth_decision")
     @patch("app.tools.coding_tools.llm_generate_codes")
     def test_direct_context_skips_snapshot_lookup(
