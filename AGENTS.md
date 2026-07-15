@@ -26,6 +26,21 @@ venv and installs `-e ".[dev,scripts]"` + the `en_core_web_lg` spaCy model, and 
 - **Two separate env files.** Backend reads repo-root `.env`; the dashboard reads
   `eligibility_dashboard/.env.local` (Next.js does NOT read the root `.env`). Both are
   gitignored. Copy from the respective `.env.example` / `.env.example`.
+- **Empty injected secrets override `.env`.** pydantic-settings (backend) and Next.js
+  both let real OS environment variables take precedence over the dotenv files. If the
+  Cloud Agent environment injects `SUPABASE_URL`/`STEDI_API_KEY`/etc. as *empty* env vars
+  (placeholders), they silently override your `.env` values and the app behaves as if
+  unconfigured. Either put real values in the Secrets panel, or launch the backend with
+  the empties unset, e.g. `unset SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY SUPABASE_ANON_KEY STEDI_API_KEY OPENROUTER_API_KEY JINA_API_KEY && uvicorn main:app ...`.
+- **DB `DATABASE_URL` must use the Supabase session pooler on port 5432** (not the
+  IPv6-only direct `db.*` host, and not the 6543 transaction pooler) so LISTEN/NOTIFY
+  realtime works. The schema is already applied on the pilot project — do NOT run
+  `scripts/apply_neon_migrations.py` against it unless you intend to migrate.
+- **Live outbound side effects:** enabling `VOICE_VERIFICATION_ENABLED` /
+  `VOICE_VERIFICATION_WORKER_ENABLED` places real Bland.ai/Twilio calls, and
+  `OPENDENTAL_WRITEBACK_ENABLED` writes to a live PMS. Keep `PILOT_SHADOW_MODE=true`
+  (blocks OD write-back + claim submit) for safe smoke tests; `STEDI_TEST_HEADER=true`
+  keeps eligibility 270/271 in Stedi sandbox.
 - **Local dashboard runs unauthenticated** with `DASHBOARD_REQUIRE_AUTH=0` and blank
   `NEXT_PUBLIC_SUPABASE_*` (the browser Supabase client returns `null` instead of throwing).
 - **Full eligibility E2E requires external SaaS creds that are not available offline.**
