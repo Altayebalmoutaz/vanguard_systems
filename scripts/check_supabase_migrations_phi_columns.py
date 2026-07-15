@@ -86,6 +86,15 @@ FORBIDDEN_TABLE_NAMES: frozenset[str] = frozenset(
     }
 )
 
+# Single-DB Supabase pilot may host non-PHI operational tables under platform.*.
+# Still enforce FORBIDDEN_COLUMN_NAMES on these creates.
+ALLOWED_PLATFORM_TABLES: frozenset[str] = frozenset(
+    {
+        "user_practice_roles",
+        "pipeline_runs",
+    }
+)
+
 _MIGRATION_PREFIX_RE = re.compile(r"^(\d{3})_")
 _STRIP_COMMENTS_RE = re.compile(
     r"--[^\n]*|/\*.*?\*/",
@@ -134,7 +143,10 @@ def find_violations(path: Path) -> list[str]:
     for match in _CREATE_TABLE_RE.finditer(sql):
         schema, table = match.group(1), match.group(2)
         table_lc = table.lower()
-        if table_lc in FORBIDDEN_TABLE_NAMES:
+        schema_lc = (schema or "").lower()
+        if table_lc in FORBIDDEN_TABLE_NAMES and not (
+            schema_lc == "platform" and table_lc in ALLOWED_PLATFORM_TABLES
+        ):
             qual = f"{schema}.{table}" if schema else table
             violations.append(f"{path.name}: create table {qual} (PHI-plane table)")
 
@@ -155,9 +167,7 @@ def find_violations(path: Path) -> list[str]:
             if col in {"primary", "unique", "check", "constraint", "foreign", "exclude"}:
                 continue
             if col in FORBIDDEN_COLUMN_NAMES:
-                violations.append(
-                    f"{path.name}: column {col!r} in create table {table_lc}"
-                )
+                violations.append(f"{path.name}: column {col!r} in create table {table_lc}")
 
     for match in _ADD_COLUMN_RE.finditer(sql):
         schema, table, column = match.group(1), match.group(2), match.group(3)

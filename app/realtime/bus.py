@@ -1,7 +1,7 @@
 """Realtime event bus.
 
 One background task per process holds a dedicated Postgres connection with
-``LISTEN rcm_events`` (triggers from ``neon/migrations/008_realtime_notify.sql``)
+``LISTEN rcm_events`` (triggers from ``schema/migrations/008_realtime_notify.sql``)
 and republishes every notification to in-process subscribers keyed by
 ``practice_id``. SSE endpoints subscribe per request. Postgres broadcasts NOTIFY
 to every listening connection, so this is safe with multiple app replicas.

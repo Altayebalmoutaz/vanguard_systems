@@ -8,16 +8,13 @@ import {
   createEligibilityRequest,
   fetchEligibilityActivity,
   fetchEligibilityQueue,
-  fetchEligibilitySettings,
   fetchProcedureEstimates,
   fetchRequestEvents,
   reviewVoiceSession as reviewVoiceSessionApi,
 } from "@/lib/eligibilityApi";
 import type {
-  AgentStatusSummary,
   DashboardRow,
   DashboardStatusLabel,
-  EligibilityAgentSettings,
   EligibilityDashboardRow,
   EligibilityRequestEvent,
   ProcedureEstimate,
@@ -709,68 +706,6 @@ function needsHumanAttention(status: DashboardStatusLabel): boolean {
   );
 }
 
-function deriveAgentStatus(
-  readRows: EligibilityDashboardRow[],
-  settings: EligibilityAgentSettings | null,
-): AgentStatusSummary {
-  const today = new Date().toDateString();
-  const todays = readRows.filter(
-    (row) => new Date(row.created_at).toDateString() === today,
-  );
-  const todayTotal = todays.length;
-  const todayVerified = todays.filter(
-    (row) => row.status_label === "Verified",
-  ).length;
-  const todayRetried = todays.filter(
-    (row) => (row.attempt_count ?? 0) > 1,
-  ).length;
-  const todayAwaitingHuman = todays.filter((row) =>
-    ["Needs Attention", "Failed", "Inactive"].includes(row.status_label),
-  ).length;
-  const todayAutoHandled = todays.filter(
-    (row) =>
-      row.status_label === "Verified" &&
-      (row.attempt_count ?? 0) <= 1 &&
-      !row.failure_category,
-  ).length;
-  const autoHandledPct = todayTotal
-    ? Math.round((todayAutoHandled / todayTotal) * 100)
-    : 0;
-
-  const lastEventCandidates = [
-    settings?.last_sync_at,
-    ...readRows.map((row) => row.updated_at),
-  ].filter(Boolean) as string[];
-  const lastEventAt = lastEventCandidates.length
-    ? lastEventCandidates.sort(
-        (a, b) => new Date(b).getTime() - new Date(a).getTime(),
-      )[0]
-    : null;
-
-  const upcomingRetries = readRows
-    .map((row) => row.next_retry_at)
-    .filter((value): value is string => Boolean(value))
-    .filter((value) => new Date(value).getTime() > Date.now())
-    .sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
-  const nextRetryAt = upcomingRetries[0] ?? settings?.next_retry_at ?? null;
-
-  const online = lastEventAt
-    ? Date.now() - new Date(lastEventAt).getTime() < 30 * 60_000
-    : Boolean(settings);
-
-  return {
-    online,
-    last_event_at: lastEventAt,
-    next_retry_at: nextRetryAt,
-    today_total: todayTotal,
-    today_verified: todayVerified,
-    today_retried: todayRetried,
-    today_awaiting_human: todayAwaitingHuman,
-    today_auto_handled: todayAutoHandled,
-    auto_handled_pct: autoHandledPct,
-  };
-}
-
 function humanizeEventType(eventType: string): string {
   const map: Record<string, string> = {
     "request.created": "Queued",
@@ -999,15 +934,6 @@ function exportUpcomingCsv(
   a.download = `eligibility-export-${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
-}
-
-function eventActivityIcon(eventType: string) {
-  const t = eventType.toLowerCase();
-  if (t.includes("fail") || t.includes("error") || t.includes("attention"))
-    return AlertTriangle;
-  if (t.includes("invoked") || t.includes("retry")) return Phone;
-  if (t.includes("complet") || t.includes("verified")) return Check;
-  return Sparkles;
 }
 
 function VoiceWaveIcon({ size = 28 }: { size?: number }) {
@@ -1246,15 +1172,10 @@ export default function EligibilityDashboard() {
   const deepLinkRequestId = searchParams.get("request");
   const [rows, setRows] = useState<DashboardRow[]>([]);
   const [readRows, setReadRows] = useState<EligibilityDashboardRow[]>([]);
-  const [settings, setSettings] = useState<EligibilityAgentSettings | null>(
-    null,
-  );
   const [estimates, setEstimates] = useState<ProcedureEstimate[]>([]);
   const [events, setEvents] = useState<EligibilityRequestEvent[]>([]);
   const [activity, setActivity] = useState<EligibilityRequestEvent[]>([]);
   const [activityExpanded, setActivityExpanded] = useState(false);
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
   const [pollingActive, setPollingActive] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [panelMode, setPanelMode] = useState<PanelMode>(null);
@@ -1268,7 +1189,6 @@ export default function EligibilityDashboard() {
   const [submitting, setSubmitting] = useState(false);
   const [showRaw, setShowRaw] = useState(false);
   const [voiceReviewBusy, setVoiceReviewBusy] = useState(false);
-  const refreshTimerRef = useRef<number | null>(null);
   const deepLinkAppliedRef = useRef<string | null>(null);
   // Time/locale-dependent labels are client-only: the server clock/timezone
   // would differ from the browser and cause a hydration mismatch. They render a
@@ -1339,11 +1259,6 @@ export default function EligibilityDashboard() {
     setLoading(false);
   }, [rows.length]);
 
-  const loadSettings = useCallback(async () => {
-    const result = await fetchEligibilitySettings();
-    setSettings(result.ok ? result.settings : null);
-  }, []);
-
   const loadEstimates = useCallback(
     async (requestId: string | null | undefined) => {
       if (!requestId || requestId.startsWith("demo-")) {
@@ -1390,10 +1305,9 @@ export default function EligibilityDashboard() {
   useEffect(() => {
     const id = window.setTimeout(() => {
       void loadRows();
-      void loadSettings();
     }, 0);
     return () => window.clearTimeout(id);
-  }, [loadRows, loadSettings]);
+  }, [loadRows]);
 
   useEffect(() => {
     const limit = activityExpanded ? 100 : 25;
@@ -1402,14 +1316,6 @@ export default function EligibilityDashboard() {
     }, 0);
     return () => window.clearTimeout(id);
   }, [activityExpanded, loadActivity]);
-
-  useEffect(() => {
-    return () => {
-      if (refreshTimerRef.current) {
-        window.clearTimeout(refreshTimerRef.current);
-      }
-    };
-  }, []);
 
   useEffect(() => {
     if (!deepLinkRequestId || rows.length === 0) return;
@@ -1425,7 +1331,6 @@ export default function EligibilityDashboard() {
     if (!pollingActive) return;
     const interval = window.setInterval(() => {
       void loadRows();
-      void loadSettings();
       const cap = activityCapRef.current;
       void loadActivity(cap);
       if (selectedId) {
@@ -1441,7 +1346,6 @@ export default function EligibilityDashboard() {
     loadEstimates,
     loadEvents,
     loadRows,
-    loadSettings,
     panelMode,
     pollingActive,
     selectedId,
@@ -1467,26 +1371,9 @@ export default function EligibilityDashboard() {
     };
   }, [panelMode]);
 
-  const rowsInDateRange = useMemo(() => {
-    if (!dateFrom && !dateTo) return rows;
-    const fromTime = dateFrom
-      ? new Date(`${dateFrom}T00:00:00`).getTime()
-      : null;
-    const toTime = dateTo ? new Date(`${dateTo}T23:59:59.999`).getTime() : null;
-    return rows.filter((row) => {
-      const readRow = readRowById.get(row.request.id);
-      const appt = readRow?.appointment_date ?? row.request.appointment_date;
-      const raw = appt || row.request.created_at.slice(0, 10);
-      const t = new Date(`${raw}T12:00:00`).getTime();
-      if (fromTime !== null && t < fromTime) return false;
-      if (toTime !== null && t > toTime) return false;
-      return true;
-    });
-  }, [rows, dateFrom, dateTo, readRowById]);
-
   const filteredRows = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return rowsInDateRange.filter((row) => {
+    return rows.filter((row) => {
       const readRow = readRowById.get(row.request.id);
       const status = readRow?.status_label ?? deriveStatus(row);
       const matchesFilter =
@@ -1505,7 +1392,7 @@ export default function EligibilityDashboard() {
         `${row.request.first_name} ${row.request.last_name} ${row.request.subscriber_id} ${readRow?.payer_label ?? ""}`.toLowerCase();
       return matchesFilter && (!q || haystack.includes(q));
     });
-  }, [filter, query, readRowById, rowsInDateRange]);
+  }, [filter, query, readRowById, rows]);
 
   const sortedRows = useMemo(() => {
     const list = [...filteredRows];
@@ -1609,11 +1496,6 @@ export default function EligibilityDashboard() {
       attentionSeries,
     };
   }, [readRows]);
-
-  const agentStatus = useMemo<AgentStatusSummary>(
-    () => deriveAgentStatus(readRows, settings),
-    [readRows, settings],
-  );
 
   const openDetails = (row: DashboardRow) => {
     setSelectedId(row.request.id);
@@ -2056,7 +1938,7 @@ export default function EligibilityDashboard() {
                   ) : sortedRows.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="px-4 py-10 text-center">
-                        {rowsInDateRange.length === 0 ? (
+                        {rows.length === 0 ? (
                           <>
                             <p className="text-[13.5px] font-medium text-slate-700">
                               No upcoming patients yet
@@ -2244,7 +2126,7 @@ export default function EligibilityDashboard() {
             </div>
             <div className="border-t border-slate-100 bg-slate-50/40 px-4 py-2.5 text-center">
               <div className="text-[12px] font-medium text-slate-600">
-                {sortedRows.length} of {rowsInDateRange.length} patients
+                {sortedRows.length} of {rows.length} patients
               </div>
               <div className="mt-0.5 text-[11.5px] text-slate-500">
                 Showing patients with upcoming appointments

@@ -11,6 +11,7 @@ import httpx
 
 from app.eligibility.config import EligibilitySettings
 from app.eligibility.db import get_eligibility_agent_settings, insert_eligibility_request_event
+from app.eligibility.voice.bland import bland_configured, initiate_bland_call
 from app.eligibility.voice.db import (
     fetch_payer_voice_config,
     fetch_queued_sessions,
@@ -18,7 +19,6 @@ from app.eligibility.voice.db import (
     get_supabase_client,
     update_verification_session,
 )
-from app.eligibility.voice.bland import bland_configured, initiate_bland_call
 from app.eligibility.voice.extract import extract_fields_from_transcript
 from app.eligibility.voice.queue import voice_infra_ready
 from app.eligibility.voice.reconcile import complete_voice_session_reconciliation

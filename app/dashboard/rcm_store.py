@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import json
 import re
-import time
 from decimal import Decimal
 from typing import Any
-from uuid import UUID
 
 from psycopg.rows import dict_row
 
@@ -23,33 +20,9 @@ _MODULE_HREF = {
 }
 
 
-# region agent log
-def _agent_debug_log(hypothesis_id: str, message: str, data: dict[str, Any]) -> None:
-    try:
-        with open("debug-c16f79.log", "a", encoding="utf-8") as fh:
-            fh.write(
-                json.dumps(
-                    {
-                        "sessionId": "c16f79",
-                        "runId": "initial",
-                        "hypothesisId": hypothesis_id,
-                        "location": "app/dashboard/rcm_store.py",
-                        "message": message,
-                        "data": data,
-                        "timestamp": int(time.time() * 1000),
-                    },
-                    default=str,
-                )
-                + "\n"
-            )
-    except Exception:
-        pass
-# endregion
-
-
 def _require_neon(settings: Settings) -> None:
     if not get_neon_dsn(settings):
-        raise NeonNotConfiguredError("NEON_DATABASE_URL is not configured")
+        raise NeonNotConfiguredError("DATABASE_URL is not configured")
 
 
 def _as_list(value: Any) -> list[Any]:
@@ -189,12 +162,14 @@ def list_coding_cases(
         limit %s
     """
 
-    with neon_connection(settings, practice_id=practice_id) as conn:
-        with conn.cursor(row_factory=dict_row) as cur:
-            cur.execute(decisions_sql, (practice_id, status_filter, status_filter, limit))
-            decision_rows = cur.fetchall()
-            cur.execute(tasks_sql, (practice_id, limit))
-            task_rows = cur.fetchall()
+    with (
+        neon_connection(settings, practice_id=practice_id) as conn,
+        conn.cursor(row_factory=dict_row) as cur,
+    ):
+        cur.execute(decisions_sql, (practice_id, status_filter, status_filter, limit))
+        decision_rows = cur.fetchall()
+        cur.execute(tasks_sql, (practice_id, limit))
+        task_rows = cur.fetchall()
 
     cases = [_shape_coding_decision(dict(row)) for row in decision_rows]
     seen = {case["id"] for case in cases}
@@ -270,7 +245,11 @@ def list_prior_auth_cases(
     limit: int = 75,
 ) -> list[dict[str, Any]]:
     _require_neon(settings)
-    status_filter = status if status in {"pending_review", "approved", "denied", "expired", "superseded"} else None
+    status_filter = (
+        status
+        if status in {"pending_review", "approved", "denied", "expired", "superseded"}
+        else None
+    )
     runs_sql = """
         select ar.id, ar.patient_id, ar.payer_id, ar.status, ar.input_json, ar.output_json, ar.created_at,
                p.name as patient_name, p.dob
@@ -287,12 +266,14 @@ def list_prior_auth_cases(
         order by created_at desc
         limit %s
     """
-    with neon_connection(settings, practice_id=practice_id) as conn:
-        with conn.cursor(row_factory=dict_row) as cur:
-            cur.execute(runs_sql, (practice_id, status_filter, status_filter, limit))
-            run_rows = cur.fetchall()
-            cur.execute(tasks_sql, (practice_id, limit))
-            task_rows = cur.fetchall()
+    with (
+        neon_connection(settings, practice_id=practice_id) as conn,
+        conn.cursor(row_factory=dict_row) as cur,
+    ):
+        cur.execute(runs_sql, (practice_id, status_filter, status_filter, limit))
+        run_rows = cur.fetchall()
+        cur.execute(tasks_sql, (practice_id, limit))
+        task_rows = cur.fetchall()
     cases = [_shape_prior_auth_run(dict(row)) for row in run_rows]
     seen = {case["id"] for case in cases}
     for row in task_rows:
@@ -359,10 +340,12 @@ def list_claim_cases(
         order by c.created_at desc
         limit %s
     """
-    with neon_connection(settings, practice_id=practice_id) as conn:
-        with conn.cursor(row_factory=dict_row) as cur:
-            cur.execute(sql, (practice_id, status, status, limit))
-            rows = cur.fetchall()
+    with (
+        neon_connection(settings, practice_id=practice_id) as conn,
+        conn.cursor(row_factory=dict_row) as cur,
+    ):
+        cur.execute(sql, (practice_id, status, status, limit))
+        rows = cur.fetchall()
     return [_shape_claim_row(dict(row)) for row in rows]
 
 
@@ -371,17 +354,23 @@ def _shape_denial_row(row: dict[str, Any]) -> dict[str, Any]:
     steps = _split_lines(row.get("corrective_actions"))
     return {
         "claim_id": str(row.get("claim_reference") or row.get("id") or ""),
-        "patient_name": str(row.get("patient_name") or row.get("claim_reference") or "Unknown patient"),
+        "patient_name": str(
+            row.get("patient_name") or row.get("claim_reference") or "Unknown patient"
+        ),
         "dob": _serialize_value(row.get("dob")) or "",
         "payer": str(row.get("payer") or "Unknown payer"),
-        "status": "paid" if db_status == "resolved" else ("partial" if db_status == "in_appeal" else "denied"),
+        "status": "paid"
+        if db_status == "resolved"
+        else ("partial" if db_status == "in_appeal" else "denied"),
         "reason": str(row.get("provider_code") or "unknown"),
         "reason_label": str(row.get("root_cause") or row.get("executive_summary") or "Denial"),
         "next_action": steps[0] if steps else "review_denial",
         "amount_at_risk": _parse_amount(row.get("recoverable_amount")),
         "resubmission_steps": steps,
         "required_evidence": _split_lines(row.get("missing_documents")),
-        "reasoning_summary": str(row.get("executive_summary") or row.get("validity_reasoning") or ""),
+        "reasoning_summary": str(
+            row.get("executive_summary") or row.get("validity_reasoning") or ""
+        ),
         "appeal_letter": str(row.get("coding_note") or ""),
         "requires_human_review": db_status in {"pending", "in_appeal"},
         "created_at": _serialize_value(row.get("created_at")) or "",
@@ -392,13 +381,19 @@ def _shape_denial_task(row: dict[str, Any]) -> dict[str, Any]:
     pipeline = row.get("pipeline_json") if isinstance(row.get("pipeline_json"), dict) else {}
     denial = pipeline.get("denial") if isinstance(pipeline.get("denial"), dict) else {}
     return {
-        "claim_id": str(denial.get("claim_id") or row.get("backend_claim_id") or row.get("id") or ""),
+        "claim_id": str(
+            denial.get("claim_id") or row.get("backend_claim_id") or row.get("id") or ""
+        ),
         "patient_name": str(row.get("patient_name") or "Unknown patient"),
         "dob": str(row.get("patient_dob") or ""),
         "payer": str(row.get("payer") or "Unknown payer"),
         "status": str(denial.get("status") or "denied"),
-        "reason": str(denial.get("reason") or denial.get("deterministic_reason_token") or "unknown"),
-        "reason_label": str(denial.get("reasoning_summary") or denial.get("reason") or "Denial review"),
+        "reason": str(
+            denial.get("reason") or denial.get("deterministic_reason_token") or "unknown"
+        ),
+        "reason_label": str(
+            denial.get("reasoning_summary") or denial.get("reason") or "Denial review"
+        ),
         "next_action": str(denial.get("next_action") or "review_denial"),
         "amount_at_risk": 0.0,
         "resubmission_steps": _as_str_list(denial.get("resubmission_steps")),
@@ -418,7 +413,7 @@ def list_denial_cases(
     limit: int = 75,
 ) -> list[dict[str, Any]]:
     _require_neon(settings)
-    db_status = {"denied": "pending", "partial": "in_appeal", "paid": "resolved"}.get(status or "", None)
+    db_status = {"denied": "pending", "partial": "in_appeal", "paid": "resolved"}.get(status or "")
     sql = """
         select dc.id, dc.claim_reference, dc.payer, dc.provider_code, dc.root_cause,
                dc.corrective_actions, dc.missing_documents, dc.recoverable_amount,
@@ -437,12 +432,14 @@ def list_denial_cases(
         order by created_at desc
         limit %s
     """
-    with neon_connection(settings, practice_id=practice_id) as conn:
-        with conn.cursor(row_factory=dict_row) as cur:
-            cur.execute(sql, (practice_id, db_status, db_status, limit))
-            denial_rows = cur.fetchall()
-            cur.execute(tasks_sql, (practice_id, limit))
-            task_rows = cur.fetchall()
+    with (
+        neon_connection(settings, practice_id=practice_id) as conn,
+        conn.cursor(row_factory=dict_row) as cur,
+    ):
+        cur.execute(sql, (practice_id, db_status, db_status, limit))
+        denial_rows = cur.fetchall()
+        cur.execute(tasks_sql, (practice_id, limit))
+        task_rows = cur.fetchall()
     cases = [_shape_denial_row(dict(row)) for row in denial_rows]
     seen = {case["claim_id"] for case in cases}
     for row in task_rows:
@@ -460,7 +457,9 @@ def list_dashboard_worklist(
     limit: int = 25,
 ) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
-    for case in list_coding_cases(settings, practice_id=practice_id, status="pending_review", limit=10):
+    for case in list_coding_cases(
+        settings, practice_id=practice_id, status="pending_review", limit=10
+    ):
         conf = float(case.get("confidence") or 0)
         items.append(
             {
@@ -474,7 +473,9 @@ def list_dashboard_worklist(
                 "href": _MODULE_HREF["Coding"],
             }
         )
-    for case in list_prior_auth_cases(settings, practice_id=practice_id, status="pending_review", limit=10):
+    for case in list_prior_auth_cases(
+        settings, practice_id=practice_id, status="pending_review", limit=10
+    ):
         items.append(
             {
                 "id": case["id"],
@@ -561,16 +562,18 @@ def get_dashboard_analytics(
         where practice_id = %s and created_at >= now() - interval '12 months'
         group by 1 order by 1
     """
-    with neon_connection(settings, practice_id=practice_id) as conn:
-        with conn.cursor(row_factory=dict_row) as cur:
-            cur.execute(payer_sql, (practice_id,))
-            payer_rows = cur.fetchall()
-            cur.execute(throughput_sql, (practice_id, practice_id))
-            throughput_rows = cur.fetchall()
-            cur.execute(monthly_sql, (practice_id,))
-            monthly_rows = cur.fetchall()
-            cur.execute(denial_monthly_sql, (practice_id,))
-            denial_rows = cur.fetchall()
+    with (
+        neon_connection(settings, practice_id=practice_id) as conn,
+        conn.cursor(row_factory=dict_row) as cur,
+    ):
+        cur.execute(payer_sql, (practice_id,))
+        payer_rows = cur.fetchall()
+        cur.execute(throughput_sql, (practice_id, practice_id))
+        throughput_rows = cur.fetchall()
+        cur.execute(monthly_sql, (practice_id,))
+        monthly_rows = cur.fetchall()
+        cur.execute(denial_monthly_sql, (practice_id,))
+        denial_rows = cur.fetchall()
 
     payer_colors = ["#005DAA", "#00A88E", "#003594", "#0090DA", "#002677", "#94a3b8"]
     payer_mix = [
@@ -586,7 +589,9 @@ def get_dashboard_analytics(
         {"label": weekday_labels[idx % 7], "value": int(row.get("actions") or 0)}
         for idx, row in enumerate(throughput_rows)
     ]
-    denial_by_month = {row["month"]: int(row.get("denials") or 0) for row in denial_rows if row.get("month")}
+    denial_by_month = {
+        row["month"]: int(row.get("denials") or 0) for row in denial_rows if row.get("month")
+    }
     monthly_trend: list[float] = []
     denial_trend: list[float] = []
     for row in monthly_rows:
@@ -622,8 +627,6 @@ def get_dashboard_overview(
     practice_id: str,
 ) -> dict[str, Any]:
     _require_neon(settings)
-    started = time.perf_counter()
-    _agent_debug_log("H10,H11", "overview store start", {"practiceId": practice_id})
     counts_sql = """
         select
           (select count(*) from rcm.eligibility_requests er
@@ -641,50 +644,33 @@ def get_dashboard_overview(
           (select count(*) from rcm.denied_claims dc
             where dc.practice_id = %s and dc.created_at >= now() - interval '30 days') as denials_30d
     """
-    with neon_connection(settings, practice_id=practice_id) as conn:
-        with conn.cursor(row_factory=dict_row) as cur:
-            cur.execute(counts_sql, (practice_id,) * 6)
-            counts = dict(cur.fetchone() or {})
-    after_counts = time.perf_counter()
-    _agent_debug_log(
-        "H10,H11",
-        "overview counts complete",
-        {"practiceId": practice_id, "elapsedMs": round((after_counts - started) * 1000)},
-    )
+    with (
+        neon_connection(settings, practice_id=practice_id) as conn,
+        conn.cursor(row_factory=dict_row) as cur,
+    ):
+        cur.execute(counts_sql, (practice_id,) * 6)
+        counts = dict(cur.fetchone() or {})
 
     submitted = int(counts.get("claims_submitted_30d") or 0)
     denials = int(counts.get("denials_30d") or 0)
     denial_rate = round((denials / max(submitted + denials, 1)) * 100, 1)
     clean_claim_rate = round(max(0.0, 100.0 - denial_rate), 1)
     analytics = get_dashboard_analytics(settings, practice_id=practice_id)
-    after_analytics = time.perf_counter()
-    _agent_debug_log(
-        "H10,H11",
-        "overview analytics complete",
-        {
-            "practiceId": practice_id,
-            "stepElapsedMs": round((after_analytics - after_counts) * 1000),
-            "totalElapsedMs": round((after_analytics - started) * 1000),
-        },
-    )
     worklist = list_dashboard_worklist(settings, practice_id=practice_id)
-    after_worklist = time.perf_counter()
-    _agent_debug_log(
-        "H10,H11",
-        "overview worklist complete",
-        {
-            "practiceId": practice_id,
-            "stepElapsedMs": round((after_worklist - after_analytics) * 1000),
-            "totalElapsedMs": round((after_worklist - started) * 1000),
-            "worklistCount": len(worklist),
-        },
-    )
     return {
         "practice_id": practice_id,
         "worklist": worklist,
         "revenue_funnel": [
-            {"label": "Eligibility verified", "count": int(counts.get("eligibility_today") or 0), "value": 0},
-            {"label": "Coding pending", "count": int(counts.get("coding_pending") or 0), "value": 0},
+            {
+                "label": "Eligibility verified",
+                "count": int(counts.get("eligibility_today") or 0),
+                "value": 0,
+            },
+            {
+                "label": "Coding pending",
+                "count": int(counts.get("coding_pending") or 0),
+                "value": 0,
+            },
             {"label": "Claims open", "count": int(counts.get("claims_open") or 0), "value": 0},
             {"label": "Claims submitted (30d)", "count": submitted, "value": 0},
         ],

@@ -42,9 +42,15 @@ from app.eligibility.models import (
 )
 from app.eligibility.services import run_eligibility_check_endpoint
 from app.eligibility.triggers import layer0_supabase_validation
-from app.eligibility.voice.approve import approve_voice_verification_session, reject_voice_verification_session
+from app.eligibility.voice.approve import (
+    approve_voice_verification_session,
+    reject_voice_verification_session,
+)
 from app.eligibility.voice.db import fetch_session_by_id
-from app.eligibility.voice.queue import maybe_auto_queue_voice_verification, queue_voice_verification
+from app.eligibility.voice.queue import (
+    maybe_auto_queue_voice_verification,
+    queue_voice_verification,
+)
 from app.eligibility.voice.twilio_routes import router as voice_twilio_router
 from app.integrations.opendental import (
     OpenDentalAPIError,
@@ -53,9 +59,9 @@ from app.integrations.opendental import (
     OpenDentalMappingError,
     od_to_eligibility_request,
 )
-from app.pilot.shadow import record_eligibility_shadow
 from app.integrations.opendental.poller import start_appointment_poller
 from app.integrations.opendental.writeback import run_opendental_writeback
+from app.pilot.shadow import record_eligibility_shadow
 from app.pipeline.writeback_queue import (
     build_opendental_writeback_payload,
     enqueue_opendental_writeback,
@@ -323,7 +329,9 @@ def run_from_opendental(
         "write_back_result": (writeback_detail or {}).get("write_back_result"),
         "write_back_notes": writeback_detail,
     }
-    effective_practice = practice_id or mapped.request.practice_id or settings.pilot_default_practice_id
+    effective_practice = (
+        practice_id or mapped.request.practice_id or settings.pilot_default_practice_id
+    )
     if effective_practice and settings.pilot_shadow_mode and primary:
         app_settings = get_app_settings()
         record_eligibility_shadow(

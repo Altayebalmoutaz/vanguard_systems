@@ -39,9 +39,7 @@ def try_lease(settings: Settings, lease_name: str) -> Generator[bool, None, None
     try:
         with psycopg.connect(dsn) as conn:
             with conn.cursor() as cur:
-                cur.execute(
-                    "select pg_try_advisory_lock(hashtext(%s)::bigint)", (lease_name,)
-                )
+                cur.execute("select pg_try_advisory_lock(hashtext(%s)::bigint)", (lease_name,))
                 row = cur.fetchone()
             acquired = bool(row and row[0])
             if not acquired:

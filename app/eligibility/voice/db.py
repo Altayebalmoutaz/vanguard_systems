@@ -6,7 +6,6 @@ from typing import Any
 from uuid import UUID
 
 from psycopg.types.json import Jsonb
-from supabase import Client
 
 from app.config import Settings
 from app.eligibility.config import EligibilitySettings
@@ -20,6 +19,7 @@ from app.eligibility.db_phi import (
     _resolve_settings,
     _use_neon,
 )
+from supabase import Client
 
 OPEN_SESSION_STATUSES = (
     "queued",

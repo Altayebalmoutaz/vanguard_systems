@@ -120,7 +120,11 @@ class ResolvePriorAuthRunEndpointTests(unittest.TestCase):
     @patch("app.api.routes.rcm.update_agent_run_status")
     def test_resolve_success(self, mock_update: MagicMock) -> None:
         run_id = UUID("44444444-4444-4444-4444-444444444444")
-        mock_update.return_value = {"id": str(run_id), "status": "approved", "agent": AGENT_PRIOR_AUTH}
+        mock_update.return_value = {
+            "id": str(run_id),
+            "status": "approved",
+            "agent": AGENT_PRIOR_AUTH,
+        }
         client = _build_resolve_client(role="admin")
 
         resp = client.post(

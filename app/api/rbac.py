@@ -20,9 +20,7 @@ from app.db.connection import neon_connection
 logger = logging.getLogger(__name__)
 
 PracticeRoleName = Literal["admin", "billing_lead", "front_office", "read_only"]
-VALID_ROLE_NAMES: frozenset[str] = frozenset(
-    {"admin", "billing_lead", "front_office", "read_only"}
-)
+VALID_ROLE_NAMES: frozenset[str] = frozenset({"admin", "billing_lead", "front_office", "read_only"})
 
 
 class RbacNotConfiguredError(RuntimeError):
@@ -85,18 +83,17 @@ def _fetch_neon_roles(settings: Settings, user_id: str) -> tuple[PracticeRole, .
         raise RbacNotConfiguredError("NEON_DATABASE_URL is not configured")
 
     try:
-        with neon_connection(settings) as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
+        with neon_connection(settings) as conn, conn.cursor() as cur:
+            cur.execute(
+                """
                     select practice_id, role
                     from platform.user_practice_roles
                     where user_id = %s
                     order by practice_id
                     """,
-                    (user_uuid,),
-                )
-                rows = cur.fetchall()
+                (user_uuid,),
+            )
+            rows = cur.fetchall()
     except psycopg.Error as exc:
         raise RbacResolutionError("Failed to resolve practice roles") from exc
 
@@ -122,7 +119,9 @@ def resolve_practice_roles(
 
     roles = _claim_roles(claims)
     if roles:
-        logger.info("Resolved practice roles from JWT metadata because Neon RBAC is not configured.")
+        logger.info(
+            "Resolved practice roles from JWT metadata because Neon RBAC is not configured."
+        )
     return roles
 
 

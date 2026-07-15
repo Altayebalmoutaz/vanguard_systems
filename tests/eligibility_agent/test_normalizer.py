@@ -761,8 +761,12 @@ def test_structured_frequency_waiting_and_missing_tooth_in_breakdown() -> None:
                 "benefitAmount": "1500",
                 "serviceTypeCodes": ["35"],
                 "inPlanNetworkIndicatorCode": "Y",
-                "benefitsServiceDelivery": [{"quantity": "1", "unit": "visit", "period": "6 months"}],
-                "additionalInformation": [{"description": "Missing tooth clause applies to prosthetics"}],
+                "benefitsServiceDelivery": [
+                    {"quantity": "1", "unit": "visit", "period": "6 months"}
+                ],
+                "additionalInformation": [
+                    {"description": "Missing tooth clause applies to prosthetics"}
+                ],
             },
         ],
         "_request_procedure_codes": ["D2740"],

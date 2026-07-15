@@ -13,19 +13,24 @@ dependencies = [
     "fastapi>=0.136,<0.137",
     "uvicorn[standard]>=0.32,<0.40",
     "pydantic>=2.7,<3",
-    "pydantic-settings>=2.4,<3",
+    "pydantic-settings>=2.14.2,<3",
     "python-dotenv>=1.0,<2",
-    "python-multipart>=0.0.9,<1",
+    "python-multipart>=0.0.31,<1",
     "supabase>=2.7,<3",
     "psycopg[binary]>=3.2,<4",
     "httpx>=0.28,<1",
     "idna>=3.15,<4",
+    "PyJWT>=2.13.0,<3",
     "starlette>=1.0.1,<2",
     "urllib3>=2.7,<3",
     "pypdf>=6.10.2,<7",
     # Presidio + spaCy for PHI scrubbing.
     # NOTE: spaCy models are installed via a separate command (see README) because PEP 517
     # cannot pull from arbitrary URLs; we declare the loader package as a runtime dep.
+    # cryptography is constrained by presidio-anonymizer (<47 as of 2.2.363); pin the
+    # highest allowed floor and ignore GHSA-537c-gmf6-5ccf in CI until Presidio releases
+    # a build that allows cryptography>=48.0.1.
+    "cryptography>=46.0.4,<47",
     "presidio-analyzer>=2.2,<3",
     "presidio-anonymizer>=2.2,<3",
     "spacy>=3.7,<4",

@@ -414,12 +414,12 @@ def test_benefits_grid_upsert_frequency_waiting_and_exclusions() -> None:
     assert ("missing_tooth_clause/Prosthodontics", "Exclusions", "created") in actions
     assert ("missing_tooth_clause/MaxillofacialProsth", "Exclusions", "created") in actions
     assert any(
-        c.get("BenefitType") == "Limitations"
-        and c.get("CovCatNum") == 2
-        and c.get("Quantity") == 2
+        c.get("BenefitType") == "Limitations" and c.get("CovCatNum") == 2 and c.get("Quantity") == 2
         for c in stub.created
     )
-    assert any(c.get("BenefitType") == "WaitingPeriod" and c.get("CovCatNum") == 8 for c in stub.created)
+    assert any(
+        c.get("BenefitType") == "WaitingPeriod" and c.get("CovCatNum") == 8 for c in stub.created
+    )
 
 
 def test_benefits_grid_isolates_row_failure() -> None:

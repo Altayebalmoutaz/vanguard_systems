@@ -29,6 +29,13 @@ class ShadowModeConfigTests(unittest.TestCase):
         )
         self.assertTrue(settings.opendental_writeback_allowed)
 
+    def test_writeback_blocked_when_writeback_disabled(self) -> None:
+        settings = EligibilitySettings.model_construct(
+            opendental_writeback_enabled=False,
+            pilot_shadow_mode=False,
+        )
+        self.assertFalse(settings.opendental_writeback_allowed)
+
     def test_helper_respects_shadow_flag(self) -> None:
         on = EligibilitySettings.model_construct(
             opendental_writeback_enabled=True,

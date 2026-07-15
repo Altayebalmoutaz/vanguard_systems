@@ -11,7 +11,7 @@ SQL_FILE = REPO_ROOT / "supabase" / "migrations" / "053_supabase_dashboard_bridg
 
 
 def main() -> int:
-    from scripts.apply_neon_migrations import _database_url
+    from scripts.apply_schema_migrations import _database_url
 
     url = _database_url()
     if not url:
@@ -24,7 +24,8 @@ def main() -> int:
         return 1
     if "supabase.co" not in url:
         print(
-            "This script targets Supabase Postgres. For Neon, use apply_neon_migrations.py.",
+            "This script targets Supabase Postgres. "
+            "For the app schema DDL, use apply_schema_migrations.py.",
             file=sys.stderr,
         )
         return 1

@@ -89,7 +89,11 @@ def _voice_routing_overlay(
     payer_id = str(canonical.get("payer_id") or "").strip()
     payer_cfg = fetch_payer_voice_config(supabase, payer_id)
     if not payer_cfg or not payer_cfg.get("eligibility_phone"):
-        detail = {**detail, "voice_escalation_eligible": False, "voice_skip_reason": "payer_phone_missing"}
+        detail = {
+            **detail,
+            "voice_escalation_eligible": False,
+            "voice_skip_reason": "payer_phone_missing",
+        }
         return None, str(detail.get("action") or "notify_front_office_missing_fields"), detail
     if not payer_cfg.get("voice_escalation_enabled"):
         detail = {
@@ -215,7 +219,9 @@ def route(canonical: dict[str, Any], supabase: Client) -> dict[str, Any]:
                 },
                 canonical,
             )
-            next_agent, action, detail = _voice_routing_overlay(canonical, supabase, detail, reasons)
+            next_agent, action, detail = _voice_routing_overlay(
+                canonical, supabase, detail, reasons
+            )
             if next_agent is None:
                 action = detail.pop("action", "notify_front_office_missing_fields")
             return {
@@ -269,7 +275,9 @@ def route(canonical: dict[str, Any], supabase: Client) -> dict[str, Any]:
                 },
                 canonical,
             )
-            next_agent, action, detail = _voice_routing_overlay(canonical, supabase, detail, reasons)
+            next_agent, action, detail = _voice_routing_overlay(
+                canonical, supabase, detail, reasons
+            )
             if next_agent is None:
                 action = detail.pop("action", "notify_front_office_coverage_ambiguous")
             return {

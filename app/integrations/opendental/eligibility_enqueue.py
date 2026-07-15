@@ -94,20 +94,22 @@ def od_request_exists_today(
 ) -> bool:
     try:
         today_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-        with neon_connection(settings, practice_id=practice_id) as conn:
-            with conn.cursor(row_factory=dict_row) as cur:
-                cur.execute(
-                    """
-                    select 1
-                    from rcm.eligibility_requests
-                    where practice_id = %s
-                      and (input_json->>'pat_num') = %s
-                      and created_at >= %s
-                    limit 1
-                    """,
-                    (practice_id, str(pat_num), today_start),
-                )
-                return cur.fetchone() is not None
+        with (
+            neon_connection(settings, practice_id=practice_id) as conn,
+            conn.cursor(row_factory=dict_row) as cur,
+        ):
+            cur.execute(
+                """
+                select 1
+                from rcm.eligibility_requests
+                where practice_id = %s
+                  and (input_json->>'pat_num') = %s
+                  and created_at >= %s
+                limit 1
+                """,
+                (practice_id, str(pat_num), today_start),
+            )
+            return cur.fetchone() is not None
     except Exception as exc:
         logger.debug("od_request_exists_today skipped: %s", exc)
         return False

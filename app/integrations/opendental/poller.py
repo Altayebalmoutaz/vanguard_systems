@@ -114,15 +114,11 @@ def run_connection_poll(
     try:
         client = OpenDentalClient.from_connection(connection, settings=settings)
     except OpenDentalConfigError as exc:
-        record_poll_result(
-            app_settings, practice_id=practice_id, status="error", error=str(exc)
-        )
+        record_poll_result(app_settings, practice_id=practice_id, status="error", error=str(exc))
         return {"practice_id": practice_id, "status": "error", "error": str(exc)}
 
     headers = od_headers(client.developer_key, client.customer_key)
-    cdt_codes = [
-        c.strip() for c in str(connection.get("cdt_codes") or "").split(",") if c.strip()
-    ]
+    cdt_codes = [c.strip() for c in str(connection.get("cdt_codes") or "").split(",") if c.strip()]
     window_days = int(connection.get("poll_window_days") or 0)
 
     total_appointments = 0
@@ -244,7 +240,9 @@ async def _poll_loop(settings: EligibilitySettings) -> None:
         try:
             outcome = await asyncio.to_thread(_leased_pass)
             if outcome == "legacy":
-                logger.warning("OpenDental poller: no connection rows configured; skipping legacy path")
+                logger.warning(
+                    "OpenDental poller: no connection rows configured; skipping legacy path"
+                )
         except asyncio.CancelledError:
             raise
         except Exception as exc:

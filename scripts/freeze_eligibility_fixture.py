@@ -17,7 +17,6 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-
 DEFAULT_OUTPUT_DIR = Path("tests/fixtures/eligibility_271")
 DEFAULT_COVERAGE_ORDER = "primary"
 IDENTITY_REDACTIONS = {

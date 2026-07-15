@@ -63,9 +63,7 @@ def should_route_denial_to_hitl(denial: dict[str, Any]) -> bool:
         return True
     status = str(denial.get("status") or "")
     next_action = str(denial.get("next_action") or "")
-    if status in {"denied", "partial"} and next_action not in {"", "none"}:
-        return True
-    return False
+    return bool(status in {"denied", "partial"} and next_action not in {"", "none"})
 
 
 def create_rcm_task(
@@ -151,14 +149,22 @@ def create_hitl_task_from_pipeline(
     pipeline_result: dict[str, Any],
     confidence: float | None,
 ) -> str | None:
-    coding = pipeline_result.get("coding") if isinstance(pipeline_result.get("coding"), dict) else {}
-    prior = pipeline_result.get("prior_auth") if isinstance(pipeline_result.get("prior_auth"), dict) else {}
-    claim = pipeline_result.get("claim_draft") if isinstance(pipeline_result.get("claim_draft"), dict) else {}
+    coding = (
+        pipeline_result.get("coding") if isinstance(pipeline_result.get("coding"), dict) else {}
+    )
+    prior = (
+        pipeline_result.get("prior_auth")
+        if isinstance(pipeline_result.get("prior_auth"), dict)
+        else {}
+    )
+    claim = (
+        pipeline_result.get("claim_draft")
+        if isinstance(pipeline_result.get("claim_draft"), dict)
+        else {}
+    )
 
     patient_name = str(
-        pipeline_result.get("patient_name")
-        or pipeline_result.get("patient")
-        or "Unknown patient"
+        pipeline_result.get("patient_name") or pipeline_result.get("patient") or "Unknown patient"
     )
     payer = str(pipeline_result.get("insurance") or prior.get("payer") or "Unknown payer")
     cdt_codes = coding.get("cdt_codes") if isinstance(coding.get("cdt_codes"), list) else []
@@ -205,7 +211,9 @@ def create_hitl_task_from_coding_decision(
     ):
         return None
 
-    cdt_codes = agent_result.get("cdt_codes") if isinstance(agent_result.get("cdt_codes"), list) else []
+    cdt_codes = (
+        agent_result.get("cdt_codes") if isinstance(agent_result.get("cdt_codes"), list) else []
+    )
     patient_name = str(
         encounter.get("patient_name")
         or f"{encounter.get('first_name', '')} {encounter.get('last_name', '')}".strip()
@@ -296,7 +304,9 @@ def create_hitl_task_from_denial(
         patient_name=patient_name,
         payer=str(request.get("insurance_company_name") or "Unknown payer"),
         ai_codes=[str(code) for code in cdt_codes],
-        ai_summary=str(response.get("reasoning_summary") or response.get("reason") or "Denial review required"),
+        ai_summary=str(
+            response.get("reasoning_summary") or response.get("reason") or "Denial review required"
+        ),
         confidence=float(response.get("llm_confidence") or 0.0) or None,
         pipeline_json={
             "claim_id": claim_id,

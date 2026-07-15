@@ -122,8 +122,8 @@ export default function Patient360Page() {
               <p className="text-[13px] text-slate-500">No agent activity recorded.</p>
             ) : (
               <ul className="divide-y divide-slate-100">
-                {agentRuns.map((run) => (
-                  <li key={asString(run.id, Math.random().toString())} className="flex items-center justify-between py-3 text-[13px]">
+                {agentRuns.map((run, index) => (
+                  <li key={asString(run.id, `${asString(run.agent)}-${asString(run.created_at)}-${index}`)} className="flex items-center justify-between py-3 text-[13px]">
                     <div>
                       <div className="font-semibold text-slate-900">{asString(run.agent, "Agent")}</div>
                       <div className="text-slate-500">{asString(run.created_at)}</div>

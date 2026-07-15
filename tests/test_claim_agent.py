@@ -213,7 +213,7 @@ class TestClaimAgent(unittest.TestCase):
         self.assertTrue(bool(out.claim_draft.claim_payload))
         self.assertIn("D1110", out.coding.cdt_codes)
 
-    @patch("app.agents.rcm_pipeline._fetch_claim_snapshot")
+    @patch("app.agents.rcm_pipeline.fetch_claim_intake_snapshot")
     @patch("app.tools.prior_auth_tools.llm_prior_auth_decision")
     @patch("app.tools.coding_tools.llm_generate_codes")
     def test_full_pipeline_uses_snapshot_context(

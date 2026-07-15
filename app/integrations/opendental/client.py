@@ -99,7 +99,9 @@ class OpenDentalClient:
         """Lightweight connectivity/auth probe (used by the dashboard Test button)."""
         try:
             # /covcats is small, read-only, and requires valid keys.
-            payload = self._read_fixture("covcats") if self.replay_dir else self._get_json("/covcats")
+            payload = (
+                self._read_fixture("covcats") if self.replay_dir else self._get_json("/covcats")
+            )
             count = len(payload) if isinstance(payload, list) else None
             return {"ok": True, "covcats_count": count}
         except OpenDentalAPIError as exc:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -84,19 +84,21 @@ def get_shadow_summary(
     _require_neon(settings)
     window_days = max(1, min(int(days), 90))
 
-    with neon_connection(settings, practice_id=practice_id) as conn:
-        with conn.cursor(row_factory=dict_row) as cur:
-            cur.execute(
-                """
-                select event_type, match_status, agent_payload, human_label, metadata
-                from platform.pilot_shadow_events
-                where practice_id = %s
-                  and created_at >= now() - make_interval(days => %s)
-                order by created_at desc
-                """,
-                (practice_id, window_days),
-            )
-            rows = [dict(row) for row in cur.fetchall()]
+    with (
+        neon_connection(settings, practice_id=practice_id) as conn,
+        conn.cursor(row_factory=dict_row) as cur,
+    ):
+        cur.execute(
+            """
+            select event_type, match_status, agent_payload, human_label, metadata
+            from platform.pilot_shadow_events
+            where practice_id = %s
+              and created_at >= now() - make_interval(days => %s)
+            order by created_at desc
+            """,
+            (practice_id, window_days),
+        )
+        rows = [dict(row) for row in cur.fetchall()]
 
     eligibility_total = 0
     routing_status: dict[str, int] = {}
@@ -113,8 +115,14 @@ def get_shadow_summary(
 
         if event_type == "eligibility.checked":
             eligibility_total += 1
-            agent_payload = row.get("agent_payload") if isinstance(row.get("agent_payload"), dict) else {}
-            routing = agent_payload.get("routing") if isinstance(agent_payload.get("routing"), dict) else {}
+            agent_payload = (
+                row.get("agent_payload") if isinstance(row.get("agent_payload"), dict) else {}
+            )
+            routing = (
+                agent_payload.get("routing")
+                if isinstance(agent_payload.get("routing"), dict)
+                else {}
+            )
             status_key = str(routing.get("status") or "unknown")
             routing_status[status_key] = routing_status.get(status_key, 0) + 1
             continue
@@ -160,5 +168,5 @@ def get_shadow_summary(
             "override_count": hitl_overrides,
             "override_rate": hitl_override_rate,
         },
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
     }

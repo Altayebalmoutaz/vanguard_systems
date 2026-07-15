@@ -131,7 +131,7 @@ jobs:
   docker-image:
     # Build (always) and push (main only) the backend image to GHCR. Deploys stay
     # a gated manual step for the pilot: point the runtime at the pushed tag and
-    # run `python scripts/apply_neon_migrations.py` before rolling it out.
+    # run `python scripts/apply_schema_migrations.py` before rolling it out.
     name: Backend Docker image
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -219,7 +219,12 @@ jobs:
         run: |
           python -m pip install --upgrade "pip>=26.1" wheel
           python -m pip install "pip-audit>=2.7,<3"
-          pip-audit --vulnerability-service osv
+          # GHSA-537c-gmf6-5ccf (cryptography OpenSSL wheels) is fixed in
+          # cryptography>=48.0.1, but presidio-anonymizer==2.2.363 still
+          # requires cryptography<47. Ignore until Presidio publishes a
+          # compatible release. owner: platform, reviewed: 2026-07-13
+          pip-audit --vulnerability-service osv \
+            --ignore-vuln GHSA-537c-gmf6-5ccf
 
       - name: Generate CycloneDX SBOM (Python + npm)
         # anchore/sbom-action wraps Syft and detects pyproject.toml + every
@@ -232,18 +237,18 @@ jobs:
           output-file: vanguard-md-sbom.cdx.json
 
       - name: Install OSV-Scanner binary
-        # Pinned to a known release; bumping is a one-line PR. Installing the
-        # binary directly avoids drift from third-party action wrappers.
+        # Releases ship bare binaries (no .tar.gz). Download the linux_amd64
+        # asset and verify against the published SHA256SUMS before installing.
         env:
           OSV_VERSION: "1.9.2"
         run: |
-          curl -sSL -o osv-scanner.tar.gz \
-            "https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_linux_amd64.tar.gz" || \
-          curl -sSL -o osv-scanner \
-            "https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_linux_amd64"
-          if [ -f osv-scanner.tar.gz ]; then tar -xzf osv-scanner.tar.gz; fi
-          chmod +x osv-scanner
-          sudo mv osv-scanner /usr/local/bin/osv-scanner
+          set -euo pipefail
+          BASE="https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}"
+          curl -fsSL -o osv-scanner_SHA256SUMS "${BASE}/osv-scanner_SHA256SUMS"
+          curl -fsSL -o osv-scanner_linux_amd64 "${BASE}/osv-scanner_linux_amd64"
+          grep 'osv-scanner_linux_amd64$' osv-scanner_SHA256SUMS | sha256sum -c -
+          chmod +x osv-scanner_linux_amd64
+          sudo mv osv-scanner_linux_amd64 /usr/local/bin/osv-scanner
           osv-scanner --version
 
       - name: OSV-Scanner (cross-language CVE scan against SBOM)

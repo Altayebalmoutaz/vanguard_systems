@@ -43,7 +43,9 @@ class PipelineJobRouteTests(unittest.TestCase):
         async def _tenant() -> object:
             from app.api.tenancy import PracticeContext
 
-            return PracticeContext(practice_id="practice-1", role="admin", principal=await _principal())
+            return PracticeContext(
+                practice_id="practice-1", role="admin", principal=await _principal()
+            )
 
         app.dependency_overrides[get_settings] = lambda: settings
         app.dependency_overrides[require_principal] = _principal
@@ -84,9 +86,7 @@ class PipelineJobRouteTests(unittest.TestCase):
         settings = Settings(neon_database_url="postgresql://neon", require_auth=False)
         client = self._client(settings)
 
-        resp = client.get(
-            "/agents/rcm/full-pipeline/jobs/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
-        )
+        resp = client.get("/agents/rcm/full-pipeline/jobs/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()["status"], "completed")

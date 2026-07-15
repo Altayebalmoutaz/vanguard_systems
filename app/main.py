@@ -12,7 +12,6 @@ from app.api.routes import auth as auth_routes
 from app.config import get_settings
 from app.eligibility.config import get_settings as get_eligibility_settings
 from app.eligibility.main import app as eligibility_agent_app
-from app.eligibility.main import run_from_opendental
 from app.eligibility.retry_worker import start_retry_worker
 from app.eligibility.voice.worker import start_voice_worker
 from app.integrations.opendental.poller import start_appointment_poller
@@ -41,9 +40,7 @@ async def lifespan(app: FastAPI):
             "eligibility/coding runs are logged to platform.pilot_shadow_events"
         )
     if eligibility_settings.pilot_shadow_mode and eligibility_settings.opendental_writeback_enabled:
-        logger.warning(
-            "OPENDENTAL_WRITEBACK_ENABLED is set but shadow mode suppresses all writes"
-        )
+        logger.warning("OPENDENTAL_WRITEBACK_ENABLED is set but shadow mode suppresses all writes")
     if eligibility_settings.opendental_auto_poll_enabled:
         poller_task = start_appointment_poller(eligibility_settings)
         logger.warning(

@@ -8,11 +8,12 @@ test.describe("dashboard smoke", () => {
 
   test("home eligibility dashboard loads", async ({ page }) => {
     await page.goto("/");
-    await expect(
-      page.getByText(/what.?s happening with your eligibility verifications/i),
-    ).toBeVisible({
+    await expect(page.getByText(/verification success/i)).toBeVisible({
       timeout: 15_000,
     });
+    await expect(
+      page.getByRole("button", { name: /new check/i }),
+    ).toBeVisible();
   });
 
   test("opendental page loads", async ({ page }) => {

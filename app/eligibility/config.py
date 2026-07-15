@@ -271,8 +271,11 @@ class EligibilitySettings(BaseSettings):
 
     @property
     def opendental_writeback_allowed(self) -> bool:
-        """Global kill-switch only; per-clinic writeback is controlled on the dashboard."""
-        return not self.pilot_shadow_mode
+        """True when global writeback is enabled and shadow mode is off.
+
+        Per-clinic writeback is controlled separately on the dashboard connection row.
+        """
+        return self.opendental_writeback_enabled and not self.pilot_shadow_mode
 
 
 @lru_cache

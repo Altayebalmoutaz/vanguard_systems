@@ -8,13 +8,13 @@ from uuid import UUID
 
 from app.eligibility.config import EligibilitySettings, get_settings
 from app.eligibility.db import get_eligibility_agent_settings, insert_eligibility_request_event
+from app.eligibility.voice.bland import bland_configured
 from app.eligibility.voice.db import (
     fetch_open_session_for_check,
     fetch_payer_voice_config,
     get_supabase_client,
     insert_verification_session,
 )
-from app.eligibility.voice.bland import bland_configured
 from app.eligibility.voice.gate import (
     canonical_voice_escalation_eligible,
     routing_status_voice_eligible,
@@ -198,7 +198,10 @@ def maybe_auto_queue_voice_verification(
                 practice_id=getattr(request, "practice_id", None),
                 settings=s,
             )
-        return {"queued": False, "skip_reason": detail.get("voice_skip_reason") or "not_voice_eligible"}
+        return {
+            "queued": False,
+            "skip_reason": detail.get("voice_skip_reason") or "not_voice_eligible",
+        }
 
     return queue_voice_verification(
         eligibility_check_id=check_id,

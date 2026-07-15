@@ -61,13 +61,11 @@ def _counter_lines() -> list[str]:
 def _db_gauge_lines() -> list[str]:
     settings = get_settings()
     if not get_neon_dsn(settings):
-        return ['db_metrics_available 0']
+        return ["db_metrics_available 0"]
     lines: list[str] = ["db_metrics_available 1"]
     try:
         with neon_connection(settings, bypass_rls=True) as conn, conn.cursor() as cur:
-            cur.execute(
-                "select status, count(*)::int from platform.pipeline_runs group by status"
-            )
+            cur.execute("select status, count(*)::int from platform.pipeline_runs group by status")
             lines.append("# TYPE pipeline_runs gauge")
             for status, count in cur.fetchall():
                 lines.append(f'pipeline_runs{{status="{status}"}} {count}')

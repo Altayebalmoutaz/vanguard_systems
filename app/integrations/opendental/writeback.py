@@ -21,10 +21,10 @@ from app.integrations.opendental.benefit_provenance import (
     BENEFIT_GRID_MUTATION_EVENT,
     INSADJUST_MUTATION_EVENT,
     BenefitGridGuard,
+    benefit_row_fingerprint,
     collect_agent_benefit_nums,
     insadjust_fingerprint,
     last_insadjust_fingerprint,
-    benefit_row_fingerprint,
 )
 from app.integrations.opendental.client import OpenDentalClient
 from app.integrations.opendental.models import (
@@ -79,7 +79,9 @@ def _frequency_limits_from_canonical(canonical: dict[str, Any]) -> dict[str, str
         desc = str(row.get("description") or "").strip()
         if not desc:
             continue
-        key = row.get("cdt_code") or row.get("category") or f"rule_{row.get('source_benefit_index')}"
+        key = (
+            row.get("cdt_code") or row.get("category") or f"rule_{row.get('source_benefit_index')}"
+        )
         out[str(key)] = desc
     return out
 
@@ -92,7 +94,9 @@ def _waiting_periods_from_canonical(canonical: dict[str, Any]) -> dict[str, str]
         desc = str(row.get("description") or "").strip()
         if not desc:
             continue
-        key = row.get("cdt_code") or row.get("category") or f"wait_{row.get('source_benefit_index')}"
+        key = (
+            row.get("cdt_code") or row.get("category") or f"wait_{row.get('source_benefit_index')}"
+        )
         out[str(key)] = desc
     return out
 
@@ -469,9 +473,7 @@ def _normalize_quantity_qualifier(value: Any) -> str:
     return raw
 
 
-def _covcat_for_category(
-    category: Any, ebenefit_to_covcat: dict[str, int]
-) -> int | None:
+def _covcat_for_category(category: Any, ebenefit_to_covcat: dict[str, int]) -> int | None:
     key = _CATEGORY_PRIMARY_EBENEFIT.get(str(category or "").upper())
     if not key:
         return None
@@ -498,10 +500,7 @@ def _build_frequency_grid_targets(breakdown: dict[str, Any]) -> list[dict[str, A
         if period_months is not None:
             try:
                 months = int(period_months)
-                if months >= 12 and months % 12 == 0:
-                    time_period = "CalendarYear"
-                else:
-                    time_period = "Months"
+                time_period = "CalendarYear" if months >= 12 and months % 12 == 0 else "Months"
             except (TypeError, ValueError):
                 pass
         key = (category, quantity, qualifier, time_period)
@@ -544,7 +543,8 @@ def _build_waiting_grid_targets(breakdown: dict[str, Any]) -> list[dict[str, Any
                 "category": category,
                 "cdt_code": row.get("cdt_code"),
                 "months": month_count,
-                "label": str(row.get("description") or "waiting_period").strip() or "waiting_period",
+                "label": str(row.get("description") or "waiting_period").strip()
+                or "waiting_period",
             }
         )
     return rows
@@ -766,7 +766,11 @@ def run_opendental_benefits_grid_writeback(
                 {"target": label, "type": benefit_type, "action": "skipped_no_general_covcat"}
             )
             return
-        existing_row = _find_limitations_monetary(general_num) if benefit_type == "Limitations" else _find(benefit_type, general_num)
+        existing_row = (
+            _find_limitations_monetary(general_num)
+            if benefit_type == "Limitations"
+            else _find(benefit_type, general_num)
+        )
         try:
             if existing_row is None:
                 created = client.create_benefit(
@@ -878,7 +882,9 @@ def run_opendental_benefits_grid_writeback(
                     }
                 )
         except Exception as exc:
-            logger.warning("OpenDental frequency Limitations upsert failed (cat %s): %s", cov_cat_num, exc)
+            logger.warning(
+                "OpenDental frequency Limitations upsert failed (cat %s): %s", cov_cat_num, exc
+            )
             actions.append(
                 {
                     "target": label,

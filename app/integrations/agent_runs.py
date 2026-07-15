@@ -15,7 +15,6 @@ from uuid import UUID
 
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
-from supabase import Client
 
 from app.config import Settings
 from app.db.connection import get_neon_dsn, neon_connection
@@ -26,9 +25,7 @@ logger = logging.getLogger(__name__)
 
 AGENT_PRIOR_AUTH = "prior_auth"
 
-AGENT_RUN_STATUSES = frozenset(
-    {"pending_review", "approved", "denied", "expired", "superseded"}
-)
+AGENT_RUN_STATUSES = frozenset({"pending_review", "approved", "denied", "expired", "superseded"})
 AGENT_RUN_RESOLVE_STATUSES = frozenset({"approved", "denied", "expired", "superseded"})
 AGENT_RUN_TERMINAL_STATUSES = AGENT_RUN_RESOLVE_STATUSES
 VALID_AGENT_RUN_TRANSITIONS: dict[str, frozenset[str]] = {
@@ -107,7 +104,7 @@ def _insert_agent_run_neon(
 
 
 def _insert_agent_run_supabase(
-    supabase: Client,
+    supabase: Any,
     *,
     practice_id: str | None,
     agent: str,
@@ -131,7 +128,7 @@ def _insert_agent_run_supabase(
         row["patient_id"] = str(patient_id)
     if practice_id:
         row["practice_id"] = practice_id
-    res = supabase.table("agent_runs").insert(row).select("id").execute()  # type: ignore[attr-defined]
+    res = supabase.table("agent_runs").insert(row).select("id").execute()
     data = getattr(res, "data", None) or []
     if data and data[0].get("id"):
         return UUID(str(data[0]["id"]))
@@ -210,15 +207,17 @@ def _list_agent_runs_neon(
     query += " order by created_at desc limit %s"
     params.append(limit)
 
-    with neon_connection(settings, practice_id=practice_id) as conn:
-        with conn.cursor(row_factory=dict_row) as cur:
-            cur.execute(query, params)
-            rows = cur.fetchall()
+    with (
+        neon_connection(settings, practice_id=practice_id) as conn,
+        conn.cursor(row_factory=dict_row) as cur,
+    ):
+        cur.execute(query, params)
+        rows = cur.fetchall()
     return [_serialize_row(dict(row)) for row in rows]
 
 
 def _list_agent_runs_supabase(
-    supabase: Client,
+    supabase: Any,
     patient_id: UUID,
     *,
     practice_id: str | None,
@@ -334,7 +333,7 @@ def _update_agent_run_status_neon(
 
 
 def _update_agent_run_status_supabase(
-    supabase: Client,
+    supabase: Any,
     run_id: UUID,
     status: str,
     *,

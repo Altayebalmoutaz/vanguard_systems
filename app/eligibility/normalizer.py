@@ -811,7 +811,9 @@ def _frequency_dedupe_key(row: dict[str, Any]) -> tuple[Any, ...]:
     )
 
 
-def _append_unique_frequency(out: list[dict[str, Any]], seen: set[tuple[Any, ...]], row: dict[str, Any]) -> None:
+def _append_unique_frequency(
+    out: list[dict[str, Any]], seen: set[tuple[Any, ...]], row: dict[str, Any]
+) -> None:
     key = _frequency_dedupe_key(row)
     if key in seen:
         return
@@ -819,7 +821,9 @@ def _append_unique_frequency(out: list[dict[str, Any]], seen: set[tuple[Any, ...
     out.append(row)
 
 
-def _collect_structured_frequency_limitations(benefits: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _collect_structured_frequency_limitations(
+    benefits: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     """Structured frequency rows for benefit-grid write-back and BenefitNotes."""
     out: list[dict[str, Any]] = []
     seen: set[tuple[Any, ...]] = set()
@@ -839,7 +843,9 @@ def _collect_structured_frequency_limitations(benefits: list[dict[str, Any]]) ->
                     continue
                 text = " ".join(str(v) for v in item.values() if v is not None).strip()
                 low = text.lower()
-                if not any(k in low for k in ("visit", "month", "year", "frequency", "limit", "per")):
+                if not any(
+                    k in low for k in ("visit", "month", "year", "frequency", "limit", "per")
+                ):
                     continue
                 qty = _parse_int_from_text(str(item.get("quantity") or ""))
                 period_months = _parse_period_months(text)
@@ -913,7 +919,9 @@ def _waiting_dedupe_key(row: dict[str, Any]) -> tuple[Any, ...]:
     )
 
 
-def _append_unique_waiting(out: list[dict[str, Any]], seen: set[tuple[Any, ...]], row: dict[str, Any]) -> None:
+def _append_unique_waiting(
+    out: list[dict[str, Any]], seen: set[tuple[Any, ...]], row: dict[str, Any]
+) -> None:
     key = _waiting_dedupe_key(row)
     if key in seen:
         return

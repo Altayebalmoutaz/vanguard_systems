@@ -31,7 +31,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/eligibility/voice", tags=["voice-verification"])
 
 
-async def _validate_twilio_signature(request: Request, form: dict[str, str], settings: EligibilitySettings) -> bool:
+async def _validate_twilio_signature(
+    request: Request, form: dict[str, str], settings: EligibilitySettings
+) -> bool:
     token = (settings.twilio_auth_token or "").strip()
     if not token:
         return True
@@ -47,9 +49,7 @@ async def _validate_twilio_signature(request: Request, form: dict[str, str], set
 
 def _session_context(session: dict[str, Any], settings: EligibilitySettings) -> dict[str, Any]:
     supabase = get_supabase_client(settings)
-    check = get_eligibility_check_by_id(
-        supabase, UUID(str(session["eligibility_check_id"]))
-    )
+    check = get_eligibility_check_by_id(supabase, UUID(str(session["eligibility_check_id"])))
     request_row = None
     if session.get("request_id"):
         request_row = fetch_eligibility_request(supabase, session["request_id"])
@@ -184,9 +184,7 @@ async def voice_bland_webhook(session_id: UUID, request: Request) -> dict[str, s
 
     duration = _bland_duration_seconds(body)
     if duration is not None:
-        update_verification_session(
-            supabase, session_id, {"call_duration_seconds": duration}
-        )
+        update_verification_session(supabase, session_id, {"call_duration_seconds": duration})
 
     transcript = str(body.get("concatenated_transcript") or "").strip()
     # Pathway extractVars (best-effort) as a base; call-level analysis_schema overrides.

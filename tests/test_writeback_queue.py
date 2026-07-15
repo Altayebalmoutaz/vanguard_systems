@@ -60,9 +60,7 @@ class WritebackQueueTests(unittest.TestCase):
             primary_ins_sub_num=1,
             primary_result={},
         )
-        self.assertIsNone(
-            enqueue_opendental_writeback(settings, practice_id="p1", payload=payload)
-        )
+        self.assertIsNone(enqueue_opendental_writeback(settings, practice_id="p1", payload=payload))
 
 
 class WritebackExecutorRetryTests(unittest.TestCase):

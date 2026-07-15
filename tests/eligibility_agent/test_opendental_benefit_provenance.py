@@ -27,7 +27,10 @@ def test_collect_agent_benefit_nums_from_audit_rows() -> None:
         },
         {
             "event_type": BENEFIT_GRID_MUTATION_EVENT,
-            "detail": {"plan_num": 20, "mutations": [{"benefit_num": 1, "provenance": "eligibility-agent-v1"}]},
+            "detail": {
+                "plan_num": 20,
+                "mutations": [{"benefit_num": 1, "provenance": "eligibility-agent-v1"}],
+            },
         },
     ]
     assert collect_agent_benefit_nums(rows, 19) == {189}
@@ -72,7 +75,10 @@ def test_benefits_grid_updates_agent_owned_row() -> None:
     ]
 
     class _Stub:
-        updated: list[tuple[int, dict]] = []
+        updated: list[tuple[int, dict]]
+
+        def __init__(self) -> None:
+            self.updated = []
 
         def get_covcats(self):  # type: ignore[no-untyped-def]
             from tests.eligibility_agent.test_opendental_writeback import _COVCATS
@@ -100,7 +106,9 @@ def test_benefits_grid_updates_agent_owned_row() -> None:
         respect_manual_edits=True,
         agent_benefit_nums={192},
     )
-    assert ("BASIC/Restorative", "updated") in {(a.get("target"), a.get("action")) for a in result["actions"]}
+    assert ("BASIC/Restorative", "updated") in {
+        (a.get("target"), a.get("action")) for a in result["actions"]
+    }
     assert stub.updated == [(192, {"Percent": 80})]
 
 

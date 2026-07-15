@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import MagicMock
 from uuid import uuid4
 
 from app.integrations.opendental import post_check as mod
@@ -37,24 +36,31 @@ def test_maybe_enqueue_skips_non_opendental_source(monkeypatch) -> None:
     monkeypatch.setattr(
         mod,
         "get_eligibility_settings",
-        lambda: SimpleNamespace(pilot_shadow_mode=False, opendental_write_benefits_grid_respect_manual_edits=True),
+        lambda: SimpleNamespace(
+            pilot_shadow_mode=False, opendental_write_benefits_grid_respect_manual_edits=True
+        ),
     )
     row = _row()
     row["input_json"]["source"] = "dashboard"
-    assert mod.maybe_enqueue_od_writeback(
-        SimpleNamespace(),
-        practice_id="clinic_a",
-        request_id=uuid4(),
-        row=row,
-        result=_result(),
-    ) is None
+    assert (
+        mod.maybe_enqueue_od_writeback(
+            SimpleNamespace(),
+            practice_id="clinic_a",
+            request_id=uuid4(),
+            row=row,
+            result=_result(),
+        )
+        is None
+    )
 
 
 def test_maybe_enqueue_full_writeback_sets_all_flags(monkeypatch) -> None:
     monkeypatch.setattr(
         mod,
         "get_eligibility_settings",
-        lambda: SimpleNamespace(pilot_shadow_mode=False, opendental_write_benefits_grid_respect_manual_edits=True),
+        lambda: SimpleNamespace(
+            pilot_shadow_mode=False, opendental_write_benefits_grid_respect_manual_edits=True
+        ),
     )
     monkeypatch.setattr(mod, "get_connection", lambda *a, **k: {"writeback_enabled": True})
     captured: dict = {}
@@ -85,7 +91,9 @@ def test_maybe_enqueue_partial_writeback_omits_grid(monkeypatch) -> None:
     monkeypatch.setattr(
         mod,
         "get_eligibility_settings",
-        lambda: SimpleNamespace(pilot_shadow_mode=False, opendental_write_benefits_grid_respect_manual_edits=True),
+        lambda: SimpleNamespace(
+            pilot_shadow_mode=False, opendental_write_benefits_grid_respect_manual_edits=True
+        ),
     )
     monkeypatch.setattr(mod, "get_connection", lambda *a, **k: {"writeback_enabled": True})
     captured: dict = {}
