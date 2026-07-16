@@ -175,6 +175,7 @@ def test_commlog_summary_is_concise_ascii() -> None:
     summary = build_commlog_summary(snapshot)
     assert summary.startswith("[Verified by ezfi]")
     assert "CLEARED" in summary
+    assert "checked D1110,D2740" in summary
     summary.encode("ascii")
 
 

@@ -4,6 +4,7 @@ import asyncio
 from types import SimpleNamespace
 
 import app.integrations.opendental.poller as poller
+from app.integrations.opendental.models import ODProcedureLog
 
 
 def _settings(window_days: int = 0, *, auto_poll_enabled: bool = False) -> SimpleNamespace:
@@ -41,8 +42,17 @@ def _connection(*, window_days: int = 0) -> dict:
     }
 
 
-def _run_once(monkeypatch, *, appointments, checked_today, queued_today, seen):  # type: ignore[no-untyped-def]
-    enqueued: list[int] = []
+def _run_once(  # type: ignore[no-untyped-def]
+    monkeypatch,
+    *,
+    appointments,
+    checked_today,
+    queued_today,
+    seen,
+    procedurelogs_by_apt: dict[int, list[ODProcedureLog]] | None = None,
+):
+    enqueued: list[dict] = []
+    procedurelogs_by_apt = procedurelogs_by_apt or {}
 
     def fake_fetch(*, base_url, headers, on_date, timeout):  # type: ignore[no-untyped-def]
         return list(appointments)
@@ -53,16 +63,35 @@ def _run_once(monkeypatch, *, appointments, checked_today, queued_today, seen): 
     def fake_queued(settings, *, practice_id, pat_num):  # type: ignore[no-untyped-def]
         return pat_num in queued_today
 
-    def fake_enqueue(
-        app_settings, *, practice_id, pat_num, connection, client, cdt_codes, trigger_event
-    ):  # type: ignore[no-untyped-def]
-        enqueued.append(pat_num)
+    def fake_enqueue(  # type: ignore[no-untyped-def]
+        app_settings,
+        *,
+        practice_id,
+        pat_num,
+        connection,
+        client,
+        cdt_codes,
+        trigger_event,
+        resolve=None,
+        apt_nums=None,
+    ):
+        enqueued.append(
+            {
+                "pat_num": pat_num,
+                "cdt_codes": list(cdt_codes or []),
+                "apt_nums": list(apt_nums or []),
+                "cdt_source": getattr(resolve, "cdt_source", None),
+            }
+        )
         return {"id": f"req-{pat_num}"}
 
     class FakeClient:
         developer_key = "dev"
         customer_key = "cust"
         base_url = "http://localhost:30222/api/v1"
+
+        def get_procedurelogs_for_appointment(self, apt_num: int) -> list[ODProcedureLog]:
+            return list(procedurelogs_by_apt.get(int(apt_num), []))
 
     monkeypatch.setattr(poller, "fetch_appointments", fake_fetch)
     monkeypatch.setattr(poller, "_checked_today", fake_checked)
@@ -89,8 +118,43 @@ def test_poller_processes_new_patient_once(monkeypatch) -> None:  # type: ignore
         queued_today=set(),
         seen=seen,
     )
-    assert enqueued == [24]
+    assert len(enqueued) == 1
+    assert enqueued[0]["pat_num"] == 24
+    assert enqueued[0]["apt_nums"] == [1, 2]
     assert 24 in seen
+
+
+def test_poller_merges_cdt_codes_from_multiple_apts(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    seen: set[int] = set()
+    enqueued = _run_once(
+        monkeypatch,
+        appointments=[{"AptNum": 1, "PatNum": 24}, {"AptNum": 2, "PatNum": 24}],
+        checked_today=set(),
+        queued_today=set(),
+        seen=seen,
+        procedurelogs_by_apt={
+            1: [ODProcedureLog(ProcNum=1, AptNum=1, procCode="T3541", descript="Prophy")],
+            2: [ODProcedureLog(ProcNum=2, AptNum=2, procCode="T1665", descript="Pano")],
+        },
+    )
+    assert len(enqueued) == 1
+    assert enqueued[0]["cdt_codes"] == ["D1110", "D0330"]
+    assert enqueued[0]["cdt_source"] == "appointment"
+    assert enqueued[0]["apt_nums"] == [1, 2]
+
+
+def test_poller_uses_clinic_default_when_no_procedurelogs(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    seen: set[int] = set()
+    enqueued = _run_once(
+        monkeypatch,
+        appointments=[{"AptNum": 1, "PatNum": 24}],
+        checked_today=set(),
+        queued_today=set(),
+        seen=seen,
+        procedurelogs_by_apt={1: []},
+    )
+    assert enqueued[0]["cdt_codes"] == ["D1110"]
+    assert enqueued[0]["cdt_source"] == "clinic_default"
 
 
 def test_poller_skips_patient_checked_today(monkeypatch) -> None:  # type: ignore[no-untyped-def]

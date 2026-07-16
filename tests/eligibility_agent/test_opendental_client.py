@@ -58,6 +58,36 @@ def test_create_insverify_put() -> None:
     assert out.InsVerifyNum == 999
 
 
+@respx.mock
+def test_get_procedurelogs_for_appointment() -> None:
+    route = respx.get("http://localhost:30222/api/v1/procedurelogs").mock(
+        return_value=Response(
+            200,
+            json=[
+                {
+                    "ProcNum": 9,
+                    "AptNum": 42,
+                    "procCode": "T3541",
+                    "descript": "Prophy, Adult",
+                }
+            ],
+        )
+    )
+    out = _client().get_procedurelogs_for_appointment(42)
+    assert route.called
+    assert len(out) == 1
+    assert out[0].procCode == "T3541"
+    assert "AptNum=42" in str(route.calls[0].request.url)
+
+
+@respx.mock
+def test_get_procedurelogs_for_appointment_errors_return_empty() -> None:
+    respx.get("http://localhost:30222/api/v1/procedurelogs").mock(
+        return_value=Response(500, text="boom")
+    )
+    assert _client().get_procedurelogs_for_appointment(7) == []
+
+
 def test_replay_mode_short_circuits_http(tmp_path: Path) -> None:
     fixtures = tmp_path / "od"
     fixtures.mkdir()

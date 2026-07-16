@@ -13,6 +13,7 @@ from app.config import Settings
 from app.dashboard.store import create_eligibility_request
 from app.db.connection import neon_connection
 from app.eligibility.models import TriggerEvent
+from app.integrations.opendental.cdt_resolve import ResolveResult
 from app.integrations.opendental.client import OpenDentalClient
 from app.integrations.opendental.mapping import MappedEligibility, od_to_eligibility_request
 
@@ -28,8 +29,10 @@ def _od_input_json(
     pat_num: int,
     mapped: MappedEligibility,
     connection: dict[str, Any],
+    resolve: ResolveResult | None = None,
+    apt_nums: list[int] | None = None,
 ) -> dict[str, Any]:
-    return {
+    payload: dict[str, Any] = {
         "source": "opendental",
         "pat_num": pat_num,
         "primary_pat_plan_num": mapped.primary_pat_plan_num,
@@ -39,6 +42,11 @@ def _od_input_json(
         "writeback_enabled": bool(connection.get("writeback_enabled")),
         "writeback_full": bool(connection.get("writeback_full")),
     }
+    if resolve is not None:
+        payload.update(resolve.to_input_json(apt_nums=apt_nums))
+    elif apt_nums is not None:
+        payload["apt_nums"] = list(apt_nums)
+    return payload
 
 
 def build_od_eligibility_payload(
@@ -49,6 +57,8 @@ def build_od_eligibility_payload(
     connection: dict[str, Any],
     cdt_codes: list[str] | None = None,
     trigger_event: TriggerEvent = TriggerEvent.PRE_APPOINTMENT,
+    resolve: ResolveResult | None = None,
+    apt_nums: list[int] | None = None,
 ) -> dict[str, Any]:
     patient = client.get_patient(pat_num)
     insurance_rows = client.get_patient_insurance(pat_num)
@@ -80,7 +90,13 @@ def build_od_eligibility_payload(
         "priority": "medium",
         "idempotency_key": f"od:{practice_id}:{pat_num}:{date.today().isoformat()}",
         "input_json": {
-            **_od_input_json(pat_num=pat_num, mapped=mapped, connection=connection),
+            **_od_input_json(
+                pat_num=pat_num,
+                mapped=mapped,
+                connection=connection,
+                resolve=resolve,
+                apt_nums=apt_nums,
+            ),
             "submitted_from": "opendental_poll",
         },
     }
@@ -124,6 +140,8 @@ def enqueue_od_eligibility_check(
     client: OpenDentalClient,
     cdt_codes: list[str] | None = None,
     trigger_event: TriggerEvent = TriggerEvent.PRE_APPOINTMENT,
+    resolve: ResolveResult | None = None,
+    apt_nums: list[int] | None = None,
 ) -> dict[str, Any] | None:
     if od_request_exists_today(app_settings, practice_id=practice_id, pat_num=pat_num):
         return None
@@ -134,6 +152,8 @@ def enqueue_od_eligibility_check(
         connection=connection,
         cdt_codes=cdt_codes,
         trigger_event=trigger_event,
+        resolve=resolve,
+        apt_nums=apt_nums,
     )
     try:
         return create_eligibility_request(app_settings, practice_id=practice_id, payload=payload)

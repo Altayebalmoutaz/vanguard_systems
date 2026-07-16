@@ -53,6 +53,7 @@ import {
 } from "lucide-react";
 import { ConfidenceGauge, RadialDonut } from "@/components/ui/Gauges";
 import { useClientValue } from "@/hooks/useClientValue";
+import { staffDisplayName, useStaffSession } from "@/hooks/useStaffSession";
 import {
   FormEvent,
   useCallback,
@@ -63,6 +64,23 @@ import {
 } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+
+/** Short greeting label: "Dr. Sarah" from a full name, or email local-part. */
+function greetingName(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return "there";
+  }
+  if (trimmed.includes("@")) {
+    const local = trimmed.split("@")[0] ?? trimmed;
+    return local.charAt(0).toUpperCase() + local.slice(1);
+  }
+  return trimmed
+    .replace(/^(Dr\.?|Mr\.?|Mrs\.?|Ms\.?)\s+/i, "Dr. ")
+    .split(/\s+/)
+    .slice(0, 2)
+    .join(" ");
+}
 
 type FilterValue = "all" | "verified" | "inactive" | "attention";
 type SortColumn = "patient" | "payer" | "status" | "appointment";
@@ -1211,6 +1229,10 @@ export default function EligibilityDashboard() {
       new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
     "",
   );
+  const sessionUser = useStaffSession();
+  const userGreetingName = greetingName(
+    staffDisplayName(sessionUser, dashboardUserDisplayName),
+  );
 
   const selectedRow = useMemo(
     () => rows.find((row) => row.request.id === selectedId) ?? null,
@@ -1644,12 +1666,7 @@ export default function EligibilityDashboard() {
             </div>
             <div>
               <h1 className="text-[20px] font-semibold leading-tight tracking-tight text-slate-900">
-                {clientGreeting},{" "}
-                {dashboardUserDisplayName
-                  .replace(/^(Dr\.?|Mr\.?|Mrs\.?|Ms\.?)\s+/i, "Dr. ")
-                  .split(" ")
-                  .slice(0, 2)
-                  .join(" ")}
+                {clientGreeting}, {userGreetingName}
               </h1>
               <p className="mt-0.5 text-[12.5px] text-slate-500">
                 Eligibility verifications at a glance.

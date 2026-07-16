@@ -2,7 +2,7 @@
 
 import { FormEvent, useMemo, useState } from "react";
 import Image from "next/image";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 
 import { dashboardAppName, dashboardAppSubtitle } from "@/lib/dashboardEnv";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
@@ -17,7 +17,6 @@ const ERROR_MESSAGES: Record<string, string> = {
 };
 
 export function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") ?? "/";
   const queryError = searchParams.get("error");
@@ -46,15 +45,15 @@ export function LoginForm() {
 
     setSubmitting(true);
     const { error } = await client.auth.signInWithPassword({ email, password });
-    setSubmitting(false);
 
     if (error) {
+      setSubmitting(false);
       setFormError(ERROR_MESSAGES.invalid_credentials);
       return;
     }
 
-    router.replace(redirect);
-    router.refresh();
+    // Hard navigation so middleware sees the new auth cookies on the next request.
+    window.location.assign(redirect.startsWith("/") ? redirect : "/");
   }
 
   return (

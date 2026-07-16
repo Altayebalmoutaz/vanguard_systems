@@ -27,6 +27,7 @@ from app.integrations.opendental.models import (
     ODInsVerifyCreate,
     ODInsVerifyResponse,
     ODPatient,
+    ODProcedureLog,
 )
 
 logger = logging.getLogger(__name__)
@@ -204,6 +205,28 @@ class OpenDentalClient:
         else:
             payload = self._get_json(f"/carriers/{carrier_num}")
         return ODCarrier.model_validate(payload)
+
+    def get_procedurelogs_for_appointment(self, apt_num: int) -> list[ODProcedureLog]:
+        """GET /procedurelogs?AptNum= — returns [] on error (poller-friendly)."""
+        try:
+            if self.replay_dir:
+                payload = self._read_fixture(f"procedurelogs_apt_{apt_num}")
+            else:
+                payload = self._get_json(f"/procedurelogs?AptNum={int(apt_num)}")
+            if not isinstance(payload, list):
+                logger.warning(
+                    "OpenDental procedurelogs for AptNum=%s was not a list", apt_num
+                )
+                return []
+            return [ODProcedureLog.model_validate(row) for row in payload]
+        except Exception as exc:
+            logger.warning(
+                "OpenDental procedurelogs AptNum=%s failed: %s: %s",
+                apt_num,
+                type(exc).__name__,
+                exc,
+            )
+            return []
 
     def create_insverify(self, payload: ODInsVerifyCreate) -> ODInsVerifyResponse:
         if self.replay_dir:

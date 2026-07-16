@@ -181,6 +181,7 @@ class CanonicalBenefitSnapshot:
     patient_estimated_responsibility: float | None = None
     check_id: str | None = None
     source: str = SNAPSHOT_SOURCE
+    checked_cdt_codes: list[str] = field(default_factory=list)
 
 
 def build_benefit_snapshot(
@@ -199,6 +200,8 @@ def build_benefit_snapshot(
     empty and rendered as ``n/a`` rather than fabricated.
     """
     coverage_by_cdt: dict[str, float] = {}
+    checked_cdts: list[str] = []
+    checked_seen: set[str] = set()
     plan_coverage = _to_float(canonical.get("coverage_percent"))
     total_patient = 0.0
     saw_patient = False
@@ -206,6 +209,9 @@ def build_benefit_snapshot(
         cdt = str(row.get("cdt_code") or "").strip().upper()
         if not cdt:
             continue
+        if cdt not in checked_seen:
+            checked_seen.add(cdt)
+            checked_cdts.append(cdt)
         pat_val = _to_float(row.get("patient_responsibility"))
         if pat_val is not None:
             total_patient += pat_val
@@ -233,6 +239,7 @@ def build_benefit_snapshot(
         copay=_to_float(canonical.get("copay")),
         patient_estimated_responsibility=(total_patient if saw_patient else None),
         check_id=check_id,
+        checked_cdt_codes=checked_cdts,
     )
 
 
@@ -335,6 +342,8 @@ def build_commlog_summary(snapshot: CanonicalBenefitSnapshot) -> str:
         f"deductible remaining {_money(snapshot.deductible_remaining)}",
         f"annual max remaining {_money(snapshot.annual_max_remaining)}",
     ]
+    if snapshot.checked_cdt_codes:
+        parts.append("checked " + ",".join(snapshot.checked_cdt_codes))
     if snapshot.patient_estimated_responsibility is not None:
         parts.append(f"est patient {_money(snapshot.patient_estimated_responsibility)}")
     summary = (

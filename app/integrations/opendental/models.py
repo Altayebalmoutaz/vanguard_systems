@@ -32,6 +32,18 @@ class ODCarrier(BaseModel):
     ElectID: str | None = None
 
 
+class ODProcedureLog(BaseModel):
+    """GET /procedurelogs row (appointment-attached procedures)."""
+
+    ProcNum: int | None = None
+    AptNum: int | None = None
+    PatNum: int | None = None
+    procCode: str | None = None
+    descript: str | None = None
+    ProcStatus: str | None = None
+    CodeNum: int | None = None
+
+
 class ODInsVerifyCreate(BaseModel):
     DateLastVerified: date
     VerifyType: Literal["PatientEnrollment", "InsuranceBenefit"] = "PatientEnrollment"

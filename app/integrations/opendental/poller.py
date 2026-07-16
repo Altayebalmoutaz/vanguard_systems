@@ -28,6 +28,7 @@ from app.config import get_settings as get_app_settings
 from app.db.connection import get_neon_dsn
 from app.eligibility.config import EligibilitySettings
 from app.eligibility.models import TriggerEvent
+from app.integrations.opendental.cdt_resolve import resolve_appointment_procedures
 from app.integrations.opendental.client import OpenDentalClient
 from app.integrations.opendental.connections_store import (
     list_enabled_connections,
@@ -39,6 +40,7 @@ from app.integrations.opendental.eligibility_enqueue import (
     opendental_patient_uuid,
 )
 from app.integrations.opendental.errors import OpenDentalConfigError
+from app.integrations.opendental.models import ODProcedureLog
 
 logger = logging.getLogger(__name__)
 
@@ -118,12 +120,14 @@ def run_connection_poll(
         return {"practice_id": practice_id, "status": "error", "error": str(exc)}
 
     headers = od_headers(client.developer_key, client.customer_key)
-    cdt_codes = [c.strip() for c in str(connection.get("cdt_codes") or "").split(",") if c.strip()]
+    clinic_defaults = [
+        c.strip() for c in str(connection.get("cdt_codes") or "").split(",") if c.strip()
+    ]
     window_days = int(connection.get("poll_window_days") or 0)
 
+    # Pass 1: collect AptNums per patient across the poll window.
+    apts_by_pat: dict[int, list[int]] = {}
     total_appointments = 0
-    processed = 0
-    failed = 0
     for on_date in _poll_dates(window_days):
         appointments = fetch_appointments(
             base_url=client.base_url,
@@ -133,45 +137,67 @@ def run_connection_poll(
         )
         total_appointments += len(appointments)
         for apt in appointments:
-            pat_num = apt.get("PatNum")
-            if not pat_num:
+            pat_raw = apt.get("PatNum")
+            if not pat_raw:
                 continue
-            pat_num = int(pat_num)
-            if pat_num in seen:
+            pat_num = int(pat_raw)
+            apt_raw = apt.get("AptNum")
+            if apt_raw is None:
                 continue
-            if _checked_today(pat_num) or od_request_exists_today(
-                app_settings, practice_id=practice_id, pat_num=pat_num
-            ):
-                seen.add(pat_num)
-                continue
+            apt_num = int(apt_raw)
+            bucket = apts_by_pat.setdefault(pat_num, [])
+            if apt_num not in bucket:
+                bucket.append(apt_num)
+
+    # Pass 2: one eligibility enqueue per patient (merged CDTs from all their apts).
+    processed = 0
+    failed = 0
+    for pat_num, apt_nums in apts_by_pat.items():
+        if pat_num in seen:
+            continue
+        if _checked_today(pat_num) or od_request_exists_today(
+            app_settings, practice_id=practice_id, pat_num=pat_num
+        ):
             seen.add(pat_num)
-            try:
-                row = enqueue_od_eligibility_check(
-                    app_settings,
-                    practice_id=practice_id,
-                    pat_num=pat_num,
-                    connection=connection,
-                    client=client,
-                    cdt_codes=cdt_codes,
-                    trigger_event=TriggerEvent.PRE_APPOINTMENT,
-                )
-                if row:
-                    processed += 1
-                    logger.warning(
-                        "poller enqueued practice=%s PatNum=%s request_id=%s",
-                        practice_id,
-                        pat_num,
-                        row.get("id"),
-                    )
-            except Exception as exc:
-                failed += 1
+            continue
+        seen.add(pat_num)
+        try:
+            proc_rows: list[ODProcedureLog] = []
+            for apt_num in apt_nums:
+                proc_rows.extend(client.get_procedurelogs_for_appointment(apt_num))
+            resolved = resolve_appointment_procedures(
+                proc_rows, clinic_defaults=clinic_defaults
+            )
+            row = enqueue_od_eligibility_check(
+                app_settings,
+                practice_id=practice_id,
+                pat_num=pat_num,
+                connection=connection,
+                client=client,
+                cdt_codes=resolved.cdt_codes,
+                trigger_event=TriggerEvent.PRE_APPOINTMENT,
+                resolve=resolved,
+                apt_nums=apt_nums,
+            )
+            if row:
+                processed += 1
                 logger.warning(
-                    "poller practice=%s PatNum=%s failed: %s: %s",
+                    "poller enqueued practice=%s PatNum=%s request_id=%s cdt_source=%s cdts=%s",
                     practice_id,
                     pat_num,
-                    type(exc).__name__,
-                    exc,
+                    row.get("id"),
+                    resolved.cdt_source,
+                    resolved.cdt_codes,
                 )
+        except Exception as exc:
+            failed += 1
+            logger.warning(
+                "poller practice=%s PatNum=%s failed: %s: %s",
+                practice_id,
+                pat_num,
+                type(exc).__name__,
+                exc,
+            )
 
     status = "ok" if failed == 0 else "error"
     record_poll_result(

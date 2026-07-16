@@ -11,6 +11,13 @@ import { type CookieToSet } from "@/lib/supabase/cookies";
 export async function updateSession(request: NextRequest): Promise<NextResponse> {
   const pathname = request.nextUrl.pathname;
 
+  // BFF routes authenticate to FastAPI with RCM_API_KEY (or the user's Bearer).
+  // Do not HTML-redirect /api/* to /login — browsers follow that with POST and
+  // surface 405 / "Failed to submit eligibility request".
+  if (pathname.startsWith("/api/")) {
+    return NextResponse.next({ request });
+  }
+
   if (!isDashboardAuthRequired()) {
     return NextResponse.next({ request });
   }

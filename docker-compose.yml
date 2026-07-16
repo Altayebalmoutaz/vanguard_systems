@@ -1,13 +1,19 @@
-# Local dev composition — Vanguard MD backend.
+# Local / pilot composition — backend (FastAPI) + frontend (Next.js dashboard).
 #
-# Production deployment is via your container platform of choice; this file is for
-# reproducible local runs. The Supabase database is intentionally NOT containerised
-# here because the project targets the hosted Supabase project (use `supabase start`
-# for a local Supabase if you need a fully offline stack).
+# Supabase Postgres stays hosted (not containerised). Point DATABASE_URL at it
+# via the root .env.
 #
 # Usage:
-#   cp .env.example .env             # fill in real values
-#   docker compose up --build        # backend on :8000
+#   cp .env.example .env                         # backend secrets
+#   cp eligibility_dashboard/.env.example \
+#      eligibility_dashboard/.env.local          # dashboard secrets (for local npm)
+#   docker compose up --build
+#
+#   Backend:  http://localhost:8000/health
+#   Frontend: http://localhost:3000
+#
+# Inside the compose network the dashboard reaches the API at http://backend:8000
+# (overridden below). Do not use 127.0.0.1 for FASTAPI_BASE_URL in compose.
 
 services:
   backend:
@@ -19,7 +25,6 @@ services:
     env_file:
       - .env
     environment:
-      # Override container-internal config here, not in .env, to keep secrets centralised.
       PORT: "8000"
     ports:
       - "8000:8000"
@@ -28,5 +33,47 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 15s
+      start_period: 20s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./eligibility_dashboard
+      dockerfile: Dockerfile
+      args:
+        # Baked into the client bundle — must match your Supabase project.
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}
+        NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-ezFi}
+        NEXT_PUBLIC_APP_SUBTITLE: ${NEXT_PUBLIC_APP_SUBTITLE:-Eligibility Agent}
+    image: vanguard-md/frontend:dev
+    container_name: vanguard-frontend
+    env_file:
+      - path: eligibility_dashboard/.env.local
+        required: false
+    environment:
+      # Server-side BFF → backend service on the compose network.
+      FASTAPI_BASE_URL: http://backend:8000
+      # Keep in sync with INTERNAL_API_KEYS in root .env
+      RCM_API_KEY: ${RCM_API_KEY:-vanguard-local-dev-key}
+      DASHBOARD_PRACTICE_ID: ${DASHBOARD_PRACTICE_ID:-vgd_mock_brooklyn}
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     restart: unless-stopped
