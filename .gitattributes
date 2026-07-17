@@ -1,0 +1,7 @@
+# Force LF for files executed on Linux hosts (VM deploy, Docker builds).
+# Prevents Windows CRLF from breaking shell scripts on the server
+# (e.g. `$'\r': command not found`).
+*.sh    text eol=lf
+*.bash  text eol=lf
+Dockerfile      text eol=lf
+*.Dockerfile    text eol=lf
