@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Idempotent Ubuntu LTS prep for Vanguard production on a GCP Compute Engine VM.
+# Idempotent Ubuntu LTS / Debian prep for Vanguard production on a GCP Compute Engine VM.
+# The Docker install step auto-detects the distro (ubuntu | debian) from /etc/os-release.
 #
 # Usage (as a sudo-capable user, NOT as root for the final docker group step):
 #   curl -fsSL ... | bash   # or, after cloning the repo:
@@ -46,16 +47,22 @@ timedatectl status || true
 
 echo "==> [4/10] Docker Engine + Compose plugin"
 if ! command -v docker >/dev/null 2>&1; then
+  # Docker publishes separate repos per distro (ubuntu | debian); pick the right
+  # one from /etc/os-release so this works on both Ubuntu LTS and Debian.
+  OS_ID="$(. /etc/os-release && echo "${ID}")"
+  case "${OS_ID}" in
+    ubuntu|debian) DOCKER_OS="${OS_ID}" ;;
+    *) echo "    WARN: unrecognised distro '${OS_ID}', defaulting to debian repo"; DOCKER_OS="debian" ;;
+  esac
   install -m 0755 -d /etc/apt/keyrings
-  if [[ ! -f /etc/apt/keyrings/docker.gpg ]]; then
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
-      | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-    chmod a+r /etc/apt/keyrings/docker.gpg
-  fi
+  # Re-fetch the key if missing OR if a previous run installed the wrong distro's key.
+  curl -fsSL "https://download.docker.com/linux/${DOCKER_OS}/gpg" \
+    | gpg --dearmor --yes -o /etc/apt/keyrings/docker.gpg
+  chmod a+r /etc/apt/keyrings/docker.gpg
   ARCH="$(dpkg --print-architecture)"
   CODENAME="$(. /etc/os-release && echo "${VERSION_CODENAME}")"
   echo \
-    "deb [arch=${ARCH} signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu ${CODENAME} stable" \
+    "deb [arch=${ARCH} signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/${DOCKER_OS} ${CODENAME} stable" \
     > /etc/apt/sources.list.d/docker.list
   apt-get update -y
   apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
@@ -101,7 +108,9 @@ chown "${DEPLOY_USER}:${DEPLOY_USER}" "${APP_DIR}"
 
 echo "==> [10/10] Ensure swap exists (headroom for spaCy lg + Next build on small VMs)"
 SWAP_SIZE="${VANGUARD_SWAP_SIZE:-2G}"
-if swapon --show | grep -q .; then
+if [[ "${VANGUARD_SKIP_SWAP:-0}" == "1" ]]; then
+  echo "    VANGUARD_SKIP_SWAP=1 — skipping swap creation (e.g. disk too small until resized)"
+elif swapon --show | grep -q .; then
   echo "    swap already active:"
   swapon --show
 elif [[ -e /swapfile ]]; then
