@@ -24,11 +24,14 @@ API = "http://localhost:8000/eligibility-agent"
 def main() -> None:
     reset_supabase_client()
     settings = get_settings()
+    api_key = (settings.eligibility_agent_api_key or "").strip()
+    headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
 
     with httpx.Client(timeout=60.0) as client:
         queue_resp = client.post(
             f"{API}/eligibility/voice/queue",
             json={"check_id": BASE_CHECK_ID, "force": True},
+            headers=headers,
         )
         queue_resp.raise_for_status()
         queued = queue_resp.json()
