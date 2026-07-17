@@ -7,6 +7,7 @@
 .envrc
 deploy/.env.production
 deploy/dashboard.env.production
+deploy/.ekram-temp-password.txt
 
 # --- Python ---
 venv/

@@ -44,11 +44,31 @@ export function LoginForm() {
     }
 
     setSubmitting(true);
-    const { error } = await client.auth.signInWithPassword({ email, password });
+    const trimmedEmail = email.trim().toLowerCase();
+    const { error } = await client.auth.signInWithPassword({
+      email: trimmedEmail,
+      password,
+    });
 
     if (error) {
       setSubmitting(false);
-      setFormError(ERROR_MESSAGES.invalid_credentials);
+      const status = (error as { status?: number }).status;
+      const msg = (error.message || "").toLowerCase();
+      if (status === 429 || msg.includes("rate") || msg.includes("too many")) {
+        setFormError("Too many sign-in attempts. Wait a minute and try again.");
+      } else if (
+        msg.includes("fetch") ||
+        msg.includes("network") ||
+        msg.includes("failed to fetch")
+      ) {
+        setFormError(
+          "Cannot reach the auth server from this network. Check internet / VPN / firewall, then retry.",
+        );
+      } else if (msg.includes("invalid") || msg.includes("credentials")) {
+        setFormError(ERROR_MESSAGES.invalid_credentials);
+      } else {
+        setFormError(error.message || ERROR_MESSAGES.invalid_credentials);
+      }
       return;
     }
 
