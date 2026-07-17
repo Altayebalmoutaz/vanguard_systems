@@ -45,6 +45,7 @@ OD_TRIAL_CODE_ALIASES: dict[str, str] = {
 }
 
 _ADA_CDT_RE = re.compile(r"^D\d{4}$", re.IGNORECASE)
+_PLANNED_PROCEDURE_STATUS = "TP"
 
 RowSource = Literal["ada", "code_alias"]
 OverallSource = Literal["appointment", "clinic_default"]
@@ -143,7 +144,11 @@ def resolve_appointment_procedures(
             data = {
                 "procCode": getattr(row, "procCode", None),
                 "descript": getattr(row, "descript", None),
+                "ProcStatus": getattr(row, "ProcStatus", None),
             }
+        proc_status = str(data.get("ProcStatus") or data.get("procStatus") or "").strip().upper()
+        if proc_status and proc_status != _PLANNED_PROCEDURE_STATUS:
+            continue
         proc_code = str(data.get("procCode") or data.get("ProcCode") or "").strip()
         descript = data.get("descript") or data.get("Descript")
         descript_s = str(descript).strip() if descript is not None else None

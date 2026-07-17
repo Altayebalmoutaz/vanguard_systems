@@ -60,6 +60,22 @@ def test_resolve_appointment_merges_and_dedupes() -> None:
     assert provenance["unmapped_od_codes"][0]["od_proc_code"] == "T9999"
 
 
+def test_resolve_appointment_ignores_inactive_procedurelogs() -> None:
+    result = resolve_appointment_procedures(
+        [
+            {"procCode": "D1110", "ProcStatus": "TP"},
+            {"procCode": "D2750", "ProcStatus": "D"},
+            {"procCode": "D0120", "ProcStatus": "TPi"},
+            {"procCode": "D0330", "ProcStatus": "C"},
+        ],
+        clinic_defaults=["D2740"],
+    )
+
+    assert result.cdt_source == "appointment"
+    assert result.cdt_codes == ["D1110"]
+    assert [row.od_proc_code for row in result.procedures] == ["D1110"]
+
+
 def test_empty_rows_use_clinic_defaults() -> None:
     result = resolve_appointment_procedures([], clinic_defaults=["D1110"])
     assert result.cdt_source == "clinic_default"
