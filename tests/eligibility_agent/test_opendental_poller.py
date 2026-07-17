@@ -109,6 +109,44 @@ def _run_once(  # type: ignore[no-untyped-def]
     return enqueued
 
 
+def test_fetch_appointments_requests_scheduled_only(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    captured: dict[str, object] = {}
+
+    class FakeResponse:
+        status_code = 200
+
+        @staticmethod
+        def json() -> list[dict[str, object]]:
+            return []
+
+    class FakeClient:
+        def __init__(self, *, timeout: float) -> None:
+            captured["timeout"] = timeout
+
+        def __enter__(self):  # type: ignore[no-untyped-def]
+            return self
+
+        def __exit__(self, *args):  # type: ignore[no-untyped-def]
+            return None
+
+        def get(self, url, *, headers, params):  # type: ignore[no-untyped-def]
+            captured.update(url=url, headers=headers, params=params)
+            return FakeResponse()
+
+    monkeypatch.setattr(poller.httpx, "Client", FakeClient)
+
+    assert poller.fetch_appointments(
+        base_url="https://od.example/api/v1",
+        headers={"Authorization": "test"},
+        on_date="2026-07-17",
+        timeout=5.0,
+    ) == []
+    assert captured["params"] == {
+        "date": "2026-07-17",
+        "AptStatus": "Scheduled",
+    }
+
+
 def test_poller_processes_new_patient_once(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     seen: set[int] = set()
     enqueued = _run_once(
@@ -122,6 +160,24 @@ def test_poller_processes_new_patient_once(monkeypatch) -> None:  # type: ignore
     assert enqueued[0]["pat_num"] == 24
     assert enqueued[0]["apt_nums"] == [1, 2]
     assert 24 in seen
+
+
+def test_poller_skips_non_scheduled_appointments(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    seen: set[int] = set()
+    enqueued = _run_once(
+        monkeypatch,
+        appointments=[
+            {"AptNum": 1, "PatNum": 24, "AptStatus": "Broken"},
+            {"AptNum": 2, "PatNum": 25, "AptStatus": "Scheduled"},
+        ],
+        checked_today=set(),
+        queued_today=set(),
+        seen=seen,
+    )
+
+    assert [row["pat_num"] for row in enqueued] == [25]
+    assert 24 not in seen
+    assert 25 in seen
 
 
 def test_poller_merges_cdt_codes_from_multiple_apts(monkeypatch) -> None:  # type: ignore[no-untyped-def]

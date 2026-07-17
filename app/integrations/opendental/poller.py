@@ -44,6 +44,8 @@ from app.integrations.opendental.models import ODProcedureLog
 
 logger = logging.getLogger(__name__)
 
+_SCHEDULED_APPOINTMENT_STATUS = "scheduled"
+
 
 def od_headers(developer_key: str, customer_key: str) -> dict[str, str]:
     return {"Authorization": f"ODFHIR {developer_key.strip()}/{customer_key.strip()}"}
@@ -60,7 +62,11 @@ def fetch_appointments(
     url = f"{base_url.rstrip('/')}/appointments"
     try:
         with httpx.Client(timeout=timeout) as client:
-            resp = client.get(url, headers=headers, params={"date": on_date})
+            resp = client.get(
+                url,
+                headers=headers,
+                params={"date": on_date, "AptStatus": "Scheduled"},
+            )
         if resp.status_code >= 400:
             logger.warning("OD GET /appointments %s: %s", resp.status_code, resp.text[:200])
             return []
@@ -137,6 +143,9 @@ def run_connection_poll(
         )
         total_appointments += len(appointments)
         for apt in appointments:
+            apt_status = str(apt.get("AptStatus") or "").strip().lower()
+            if apt_status and apt_status != _SCHEDULED_APPOINTMENT_STATUS:
+                continue
             pat_raw = apt.get("PatNum")
             if not pat_raw:
                 continue
