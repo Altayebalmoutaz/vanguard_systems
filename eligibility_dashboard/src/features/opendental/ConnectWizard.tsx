@@ -55,23 +55,23 @@ const STEP_COPY: Record<Exclude<ConnectStepId, "success">, StepDef> = {
   welcome: {
     id: "welcome",
     title: "Connect OpenDental",
-    body: "About five minutes. Stay on the computer where OpenDental is installed — we’ll walk you through each click.",
+    body: "About five minutes. Do this on the OpenDental server (the always-on PC that runs eConnector) — we’ll walk you through each click.",
     tip: "Keep this browser tab open while you work in OpenDental.",
     cta: "Let’s start",
   },
   open_od: {
     id: "open_od",
     title: "Open OpenDental",
-    body: "Launch the OpenDental app on this computer and sign in to your clinic database.",
-    tip: "If OpenDental won’t open, restart the computer and try again.",
+    body: "On the OpenDental server, launch the OpenDental app and sign in to your clinic database.",
+    tip: "If OpenDental won’t open, restart that server PC and try again. eConnector should run on one machine only — usually the database server.",
     art: "/onboarding/od-open.svg",
     cta: "I’ve opened OpenDental",
   },
   econnector: {
     id: "econnector",
     title: "Start eConnector",
-    body: "In OpenDental go to Setup → eServices → eConnector Service. If status is Stopped or None, click Install or Start until it says Working.",
-    tip: "eConnector is OpenDental’s bridge to the cloud. Without it, we can’t connect from our servers.",
+    body: "In OpenDental go to eServices → eConnector Service (main menu, not under Setup). If status is Stopped or None, click Install or Start until it says Working.",
+    tip: "eConnector is OpenDental’s bridge to the cloud. Keep that server awake — if it sleeps, Remote API calls will fail.",
     art: "/onboarding/od-econnector.svg",
     cta: "eConnector is Working",
   },
@@ -95,7 +95,7 @@ const STEP_COPY: Record<Exclude<ConnectStepId, "success">, StepDef> = {
     id: "test",
     title: "Test the connection",
     body: "We’ll verify we can reach your OpenDental through the cloud. This takes a few seconds.",
-    tip: "Leave OpenDental open and keep this computer awake during the test.",
+    tip: "Leave OpenDental open and keep the eConnector server awake during the test.",
     cta: "Test connection",
   },
 };
@@ -331,8 +331,9 @@ export function ConnectWizard({
             You’re connected
           </h2>
           <p className="mx-auto mt-2 max-w-md text-[14px] leading-relaxed text-slate-600">
-            OpenDental is linked. You can poll appointments and write
-            eligibility results back into the charts your team already uses.
+            OpenDental is linked — we can reach your clinic through the cloud.
+            Polling and write-back use the toggles on this page once your setup
+            partner enables them.
           </p>
           <button
             type="button"

@@ -547,7 +547,7 @@ function OpenDentalConnectionsPage() {
                 Connect OpenDental wizard
               </div>
               <p className="mt-0.5 text-[12.5px] text-slate-600">
-                Guided setup for a clinic PC — eConnector, API key, and
+                Guided setup on the OpenDental server — eConnector, API key, and
                 connection test.
               </p>
             </div>

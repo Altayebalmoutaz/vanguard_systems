@@ -12,7 +12,7 @@ def friendly_opendental_test_error(raw: str | None) -> dict[str, str]:
         return {
             "code": "econnector_down",
             "title": "OpenDental’s bridge isn’t running",
-            "message": "The eConnector service on the clinic computer must be Working before we can connect.",
+            "message": "The eConnector service on the OpenDental server must be Working (eServices → eConnector Service) before we can connect.",
             "recovery_step": "econnector",
         }
     if (
