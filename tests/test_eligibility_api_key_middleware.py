@@ -1,5 +1,7 @@
 """Bearer guard for mounted eligibility sub-app (Supabase Edge → FastAPI)."""
 
+import hashlib
+import hmac
 import uuid
 from unittest.mock import patch
 
@@ -9,12 +11,15 @@ from fastapi.testclient import TestClient
 from app.eligibility.config import get_settings as get_eligibility_settings
 from app.main import create_app
 
+BLAND_WEBHOOK_SECRET = "test-bland-webhook-secret"
+
 
 @pytest.fixture
 def client_with_eligibility_key(monkeypatch: pytest.MonkeyPatch) -> tuple[TestClient, str]:
     get_eligibility_settings.cache_clear()
     key = "test-eligibility-key-" + uuid.uuid4().hex
     monkeypatch.setenv("ELIGIBILITY_AGENT_API_KEY", key)
+    monkeypatch.setenv("BLAND_WEBHOOK_SIGNING_SECRET", BLAND_WEBHOOK_SECRET)
     get_eligibility_settings.cache_clear()
     with TestClient(create_app()) as client:
         yield client, key
@@ -72,6 +77,55 @@ def test_eligibility_check_accepts_matching_bearer(
             headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
         )
     assert r.status_code == 200
+
+
+@pytest.mark.parametrize(
+    ("path", "body"),
+    [
+        ("/eligibility-agent/eligibility/voice/queue", {"check_id": str(uuid.uuid4())}),
+        (
+            f"/eligibility-agent/eligibility/voice/sessions/{uuid.uuid4()}/review",
+            {"action": "approve"},
+        ),
+        (f"/eligibility-agent/eligibility/voice/twiml/{uuid.uuid4()}", {}),
+    ],
+)
+def test_voice_control_routes_require_bearer(
+    client_with_eligibility_key: tuple[TestClient, str],
+    path: str,
+    body: dict[str, str],
+) -> None:
+    client, _ = client_with_eligibility_key
+    r = client.post(path, json=body)
+    assert r.status_code == 401
+
+
+def test_bland_webhook_requires_provider_signature_not_bearer(
+    client_with_eligibility_key: tuple[TestClient, str],
+) -> None:
+    client, _ = client_with_eligibility_key
+    path = f"/eligibility-agent/eligibility/voice/bland/{uuid.uuid4()}"
+    body = b'{"category":"call"}'
+
+    unsigned = client.post(path, content=body, headers={"Content-Type": "application/json"})
+    assert unsigned.status_code == 403
+    assert unsigned.json()["detail"] == "invalid_bland_signature"
+
+    signature = hmac.new(
+        BLAND_WEBHOOK_SECRET.encode(),
+        body,
+        hashlib.sha256,
+    ).hexdigest()
+    signed = client.post(
+        path,
+        content=body,
+        headers={
+            "Content-Type": "application/json",
+            "X-Webhook-Signature": signature,
+        },
+    )
+    assert signed.status_code == 200
+    assert signed.json() == {"ok": "true", "ignored": "event"}
 
 
 def test_eligibility_guard_off_when_env_unset(monkeypatch: pytest.MonkeyPatch) -> None:

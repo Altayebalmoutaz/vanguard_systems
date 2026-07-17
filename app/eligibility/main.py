@@ -139,6 +139,30 @@ app = FastAPI(title="Vanguard MD Eligibility Agent", version="0.1.0", lifespan=_
 app.include_router(voice_twilio_router)
 
 
+def _is_authenticated_voice_webhook(path: str, method: str, cfg: EligibilitySettings) -> bool:
+    """Return whether a provider-authenticated webhook may bypass the API key."""
+    if method != "POST" or "/eligibility/voice/" not in path:
+        return False
+
+    route_parts = path.split("/eligibility/voice/", 1)[1].strip("/").split("/")
+    provider = (cfg.voice_call_provider or "").strip().lower()
+    if provider == "bland":
+        return (
+            bool((cfg.bland_webhook_signing_secret or "").strip())
+            and len(route_parts) == 2
+            and route_parts[0] == "bland"
+        )
+    if provider == "twilio" and (cfg.twilio_auth_token or "").strip():
+        return (
+            len(route_parts) == 2
+            and route_parts[0] in {"twiml", "status"}
+            or len(route_parts) == 3
+            and route_parts[0] == "twiml"
+            and route_parts[2] == "gather"
+        )
+    return False
+
+
 class EligibilityAgentApiKeyMiddleware(BaseHTTPMiddleware):
     """Mirrors Authorization from Supabase Edge (`process-eligibility-request`)."""
 
@@ -150,7 +174,7 @@ class EligibilityAgentApiKeyMiddleware(BaseHTTPMiddleware):
         path = request.url.path or ""
         if request.method == "GET" and path.rstrip("/").endswith("/health"):
             return await call_next(request)
-        if "/eligibility/voice/" in path:
+        if _is_authenticated_voice_webhook(path, request.method, cfg):
             return await call_next(request)
         auth = request.headers.get("authorization") or ""
         if not auth.startswith("Bearer "):

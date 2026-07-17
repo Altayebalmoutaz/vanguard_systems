@@ -255,7 +255,8 @@ When `ENVIRONMENT=production`, the API will **not start** unless:
 - `DATABASE_URL` (or `NEON_DATABASE_URL`) set
 - `PIPELINE_WORKER_ENABLED=1`
 - `ELIGIBILITY_AGENT_API_KEY` set
-- If voice on + Bland: `BLAND_API_KEY` + `VOICE_WEBHOOK_BASE_URL`
+- If voice on + Bland: `BLAND_API_KEY` + `BLAND_WEBHOOK_SIGNING_SECRET` +
+  `VOICE_WEBHOOK_BASE_URL`
 
 `RCM_API_KEY` (dashboard) must equal one value in `INTERNAL_API_KEYS` (backend).
 

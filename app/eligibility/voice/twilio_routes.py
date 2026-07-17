@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
 import logging
 from typing import Any
 from uuid import UUID
@@ -45,6 +48,19 @@ async def _validate_twilio_signature(
     signature = request.headers.get("X-Twilio-Signature") or ""
     validator = RequestValidator(token)
     return validator.validate(str(request.url), form, signature)
+
+
+def _validate_bland_signature(
+    request: Request,
+    body: bytes,
+    settings: EligibilitySettings,
+) -> bool:
+    secret = (settings.bland_webhook_signing_secret or "").strip()
+    if not secret:
+        return True
+    signature = request.headers.get("X-Webhook-Signature") or ""
+    expected = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, signature)
 
 
 def _session_context(session: dict[str, Any], settings: EligibilitySettings) -> dict[str, Any]:
@@ -96,8 +112,12 @@ def _build_gather_twiml(ctx: dict[str, Any]) -> str:
 
 
 @router.post("/twiml/{session_id}")
-async def voice_twiml(session_id: UUID) -> Response:
+async def voice_twiml(session_id: UUID, request: Request) -> Response:
     settings = get_settings()
+    form = {k: str(v) for k, v in (await request.form()).items()}
+    if not await _validate_twilio_signature(request, form, settings):
+        raise HTTPException(status_code=403, detail="invalid_twilio_signature")
+
     supabase = get_supabase_client(settings)
     session = fetch_session_by_id(supabase, session_id)
     if not session:
@@ -166,8 +186,11 @@ def _bland_duration_seconds(body: dict[str, Any]) -> int | None:
 async def voice_bland_webhook(session_id: UUID, request: Request) -> dict[str, str]:
     """Post-call webhook from Bland.ai: ingest transcript + analysis, reconcile, pending_review."""
     settings = get_settings()
+    raw_body = await request.body()
+    if not _validate_bland_signature(request, raw_body, settings):
+        raise HTTPException(status_code=403, detail="invalid_bland_signature")
     try:
-        body = await request.json()
+        body = json.loads(raw_body)
     except Exception:
         body = {}
     if not isinstance(body, dict):

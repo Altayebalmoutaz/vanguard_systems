@@ -246,6 +246,10 @@ class EligibilitySettings(BaseSettings):
         validation_alias="VOICE_CALL_PROVIDER",
     )
     bland_api_key: str = Field(default="", validation_alias="BLAND_API_KEY")
+    bland_webhook_signing_secret: str = Field(
+        default="",
+        validation_alias="BLAND_WEBHOOK_SIGNING_SECRET",
+    )
     bland_base_url: str = Field(
         default="https://api.bland.ai",
         validation_alias="BLAND_BASE_URL",

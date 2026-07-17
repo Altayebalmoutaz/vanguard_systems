@@ -7,7 +7,11 @@ import unittest
 from unittest.mock import patch
 
 from app.config import Settings
-from app.startup_guards import validate_production_auth
+from app.eligibility.config import EligibilitySettings
+from app.startup_guards import (
+    validate_production_auth,
+    validate_production_eligibility_security,
+)
 
 
 class ProductionAuthGuardTests(unittest.TestCase):
@@ -44,6 +48,26 @@ class ProductionAuthGuardTests(unittest.TestCase):
                     neon_database_url="postgresql://user:pass@example.test/db",
                 )
             )
+
+    def test_raises_when_production_bland_webhook_secret_is_missing(self) -> None:
+        eligibility_settings = EligibilitySettings(
+            eligibility_agent_api_key="eligibility-key",
+            voice_verification_enabled=True,
+            voice_call_provider="bland",
+            bland_api_key="bland-key",
+            bland_webhook_signing_secret="",
+            twilio_webhook_base_url="https://example.test/eligibility-agent",
+        )
+        with (
+            patch.dict(os.environ, {"ENVIRONMENT": "production"}, clear=False),
+            patch(
+                "app.eligibility.config.get_settings",
+                return_value=eligibility_settings,
+            ),
+        ):
+            with self.assertRaises(RuntimeError) as ctx:
+                validate_production_eligibility_security()
+        self.assertIn("BLAND_WEBHOOK_SIGNING_SECRET", str(ctx.exception))
 
 
 if __name__ == "__main__":

@@ -84,6 +84,11 @@ def validate_production_eligibility_security() -> None:
                 "BLAND_API_KEY must be set when VOICE_VERIFICATION_ENABLED and "
                 "VOICE_CALL_PROVIDER=bland in production."
             )
+        if not (elig.bland_webhook_signing_secret or "").strip():
+            raise RuntimeError(
+                "BLAND_WEBHOOK_SIGNING_SECRET must be set when VOICE_VERIFICATION_ENABLED and "
+                "VOICE_CALL_PROVIDER=bland in production."
+            )
         if not (elig.twilio_webhook_base_url or "").strip():
             raise RuntimeError(
                 "VOICE_WEBHOOK_BASE_URL (or TWILIO_WEBHOOK_BASE_URL) must be set when "
