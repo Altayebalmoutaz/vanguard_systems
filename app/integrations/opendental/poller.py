@@ -174,9 +174,7 @@ def run_connection_poll(
             proc_rows: list[ODProcedureLog] = []
             for apt_num in apt_nums:
                 proc_rows.extend(client.get_procedurelogs_for_appointment(apt_num))
-            resolved = resolve_appointment_procedures(
-                proc_rows, clinic_defaults=clinic_defaults
-            )
+            resolved = resolve_appointment_procedures(proc_rows, clinic_defaults=clinic_defaults)
             row = enqueue_od_eligibility_check(
                 app_settings,
                 practice_id=practice_id,

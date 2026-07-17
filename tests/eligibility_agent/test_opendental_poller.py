@@ -135,12 +135,15 @@ def test_fetch_appointments_requests_scheduled_only(monkeypatch) -> None:  # typ
 
     monkeypatch.setattr(poller.httpx, "Client", FakeClient)
 
-    assert poller.fetch_appointments(
-        base_url="https://od.example/api/v1",
-        headers={"Authorization": "test"},
-        on_date="2026-07-17",
-        timeout=5.0,
-    ) == []
+    assert (
+        poller.fetch_appointments(
+            base_url="https://od.example/api/v1",
+            headers={"Authorization": "test"},
+            on_date="2026-07-17",
+            timeout=5.0,
+        )
+        == []
+    )
     assert captured["params"] == {
         "date": "2026-07-17",
         "AptStatus": "Scheduled",
