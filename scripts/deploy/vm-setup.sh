@@ -16,10 +16,18 @@ set -euo pipefail
 APP_DIR="${VANGUARD_APP_DIR:-/opt/vanguard}"
 DEPLOY_USER="${SUDO_USER:-${USER}}"
 TIMEZONE="${VANGUARD_TIMEZONE:-America/New_York}"
+DOCKER_APT_SOURCE="/etc/apt/sources.list.d/docker.list"
 
 if [[ "$(id -u)" -ne 0 ]]; then
   echo "ERROR: run with sudo: sudo bash scripts/deploy/vm-setup.sh" >&2
   exit 1
+fi
+
+# A failed run of the former Ubuntu-only setup leaves a Docker source that makes
+# apt-get update fail on Debian before the distro-aware repair below can run.
+if ! command -v docker >/dev/null 2>&1 && [[ -f "${DOCKER_APT_SOURCE}" ]]; then
+  echo "==> Removing stale Docker apt source before system update"
+  rm -f "${DOCKER_APT_SOURCE}"
 fi
 
 echo "==> [1/10] System update"
@@ -63,7 +71,7 @@ if ! command -v docker >/dev/null 2>&1; then
   CODENAME="$(. /etc/os-release && echo "${VERSION_CODENAME}")"
   echo \
     "deb [arch=${ARCH} signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/${DOCKER_OS} ${CODENAME} stable" \
-    > /etc/apt/sources.list.d/docker.list
+    > "${DOCKER_APT_SOURCE}"
   apt-get update -y
   apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 else

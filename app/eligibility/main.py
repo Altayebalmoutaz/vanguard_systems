@@ -139,6 +139,15 @@ app = FastAPI(title="Vanguard MD Eligibility Agent", version="0.1.0", lifespan=_
 app.include_router(voice_twilio_router)
 
 
+def _is_public_voice_callback(path: str) -> bool:
+    """Allow unauthenticated callbacks from configured telephony providers only."""
+    marker = "/eligibility/voice/"
+    _, separator, callback_path = path.partition(marker)
+    if not separator:
+        return False
+    return callback_path.startswith(("bland/", "status/", "twiml/"))
+
+
 class EligibilityAgentApiKeyMiddleware(BaseHTTPMiddleware):
     """Mirrors Authorization from Supabase Edge (`process-eligibility-request`)."""
 
@@ -150,7 +159,7 @@ class EligibilityAgentApiKeyMiddleware(BaseHTTPMiddleware):
         path = request.url.path or ""
         if request.method == "GET" and path.rstrip("/").endswith("/health"):
             return await call_next(request)
-        if "/eligibility/voice/" in path:
+        if _is_public_voice_callback(path):
             return await call_next(request)
         auth = request.headers.get("authorization") or ""
         if not auth.startswith("Bearer "):
