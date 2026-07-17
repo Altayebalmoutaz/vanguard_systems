@@ -39,12 +39,11 @@ export async function proxyFastApi(path: string, options: FastApiProxyOptions = 
   if (options.body !== undefined) {
     headers["content-type"] = "application/json";
   }
-  // Prefer staff Bearer when present; always fall back to compose API key so
-  // REQUIRE_AUTH=false pilot stacks still reach FastAPI without a session.
+  // Preserve staff RBAC when a session exists. The API key is only for
+  // unauthenticated local/pilot stacks.
   if (token) {
     headers.authorization = `Bearer ${token}`;
-  }
-  if (API_KEY) {
+  } else if (API_KEY) {
     headers["x-api-key"] = API_KEY;
   }
   if (PRACTICE_ID) {
