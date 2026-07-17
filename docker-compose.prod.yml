@@ -1,0 +1,139 @@
+# Production composition — GCP Ubuntu VM behind Caddy.
+#
+# Local `docker-compose.yml` is unchanged (dev publishes :8000/:3000).
+# This file keeps backend + frontend on an internal Docker network only;
+# Caddy alone publishes 80/443.
+#
+# Usage (on the VM, from the repo root):
+#   cp deploy/.env.production.example deploy/.env.production
+#   cp deploy/dashboard.env.production.example deploy/dashboard.env.production
+#   # edit both files with real secrets
+#   set -a && . ./deploy/dashboard.env.production && set +a   # build-arg interpolation
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+#   Dashboard: https://ezfi.smilesuite.ai/
+#   Eligibility + voice: https://ezfi.smilesuite.ai/eligibility-agent/
+#   Health: https://ezfi.smilesuite.ai/health
+
+name: vanguard-prod
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: vanguard-md/backend:prod
+    container_name: vanguard-backend
+    env_file:
+      - path: deploy/.env.production
+        required: true
+    environment:
+      PORT: "8000"
+    expose:
+      - "8000"
+    networks:
+      - vanguard
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  frontend:
+    build:
+      context: ./eligibility_dashboard
+      dockerfile: Dockerfile
+      args:
+        # Baked into the client bundle at build time — must match the Supabase project.
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:?set NEXT_PUBLIC_SUPABASE_URL (source deploy/dashboard.env.production)}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:?set NEXT_PUBLIC_SUPABASE_ANON_KEY}
+        NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-ezFi}
+        NEXT_PUBLIC_APP_SUBTITLE: ${NEXT_PUBLIC_APP_SUBTITLE:-Eligibility Agent}
+    image: vanguard-md/frontend:prod
+    container_name: vanguard-frontend
+    env_file:
+      - path: deploy/dashboard.env.production
+        required: true
+    environment:
+      # Server-side BFF → backend on the compose network (never localhost).
+      FASTAPI_BASE_URL: http://backend:8000
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+      NODE_ENV: production
+    expose:
+      - "3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - vanguard
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: vanguard-caddy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    networks:
+      - vanguard
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+networks:
+  vanguard:
+    driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:

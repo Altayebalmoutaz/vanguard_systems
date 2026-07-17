@@ -3,7 +3,10 @@
 .env.local
 .env.*.local
 *.env.local
+.env.production
 .envrc
+deploy/.env.production
+deploy/dashboard.env.production
 
 # --- Python ---
 venv/

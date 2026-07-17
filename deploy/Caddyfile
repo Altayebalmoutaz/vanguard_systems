@@ -1,0 +1,52 @@
+# Production reverse proxy for ezfi.smilesuite.ai
+#
+# Routing:
+#   /health, /ready          → FastAPI (uptime / readiness probes)
+#   /eligibility-agent/*     → FastAPI mount (eligibility API + Bland voice webhooks)
+#   /* (everything else)     → Next.js dashboard
+#
+# Path prefix /eligibility-agent MUST be preserved — FastAPI mounts the sub-app
+# at that path. Do NOT use handle_path (it strips the prefix).
+#
+# Caddy reverse_proxy streams by default (SSE-safe for the dashboard BFF
+# /api/dashboard/eligibility/stream path that terminates on the frontend).
+
+ezfi.smilesuite.ai {
+	encode gzip zstd
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+
+	# Access log to stdout so Docker's json-file driver captures + rotates it
+	# (see the caddy service logging block in docker-compose.prod.yml).
+	log {
+		output stdout
+		format json
+	}
+
+	# Public liveness / readiness (root FastAPI app).
+	handle /health {
+		reverse_proxy backend:8000
+	}
+	handle /ready {
+		reverse_proxy backend:8000
+	}
+
+	# Eligibility sub-app + Bland/Twilio voice webhooks.
+	# Prefix is PRESERVED (handle, not handle_path) — FastAPI mounts the sub-app
+	# at /eligibility-agent. Public voice base: https://ezfi.smilesuite.ai/eligibility-agent
+	handle /eligibility-agent/* {
+		reverse_proxy backend:8000
+	}
+
+	# Next.js eligibility dashboard (default).
+	handle {
+		reverse_proxy frontend:3000
+	}
+}
