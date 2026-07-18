@@ -243,6 +243,7 @@ Templates (copy on the VM; never commit the filled files):
 | Supabase | `SUPABASE_URL`, service role, anon, JWT secret | Never (keys) |
 | Auth | `INTERNAL_API_KEYS`, `ELIGIBILITY_AGENT_API_KEY` | Never |
 | External APIs | Stedi, OpenRouter, Bland, OD keys | Never |
+| Provider identity | `PROVIDER_NPI`, `PROVIDER_NAME`, `PROVIDER_TAX_ID` | Example only |
 | Dashboard public | `NEXT_PUBLIC_SUPABASE_*` | Example only (anon key is publishable but still not committed here) |
 | Dashboard server | `RCM_API_KEY`, `DASHBOARD_PRACTICE_ID` | Never |
 
@@ -255,6 +256,7 @@ When `ENVIRONMENT=production`, the API will **not start** unless:
 - `DATABASE_URL` (or `NEON_DATABASE_URL`) set
 - `PIPELINE_WORKER_ENABLED=1`
 - `ELIGIBILITY_AGENT_API_KEY` set
+- If Stedi or voice is enabled: real `PROVIDER_NPI`, `PROVIDER_NAME`, and `PROVIDER_TAX_ID`
 - If voice on + Bland: `BLAND_API_KEY` + `VOICE_WEBHOOK_BASE_URL`
 
 `RCM_API_KEY` (dashboard) must equal one value in `INTERNAL_API_KEYS` (backend).
