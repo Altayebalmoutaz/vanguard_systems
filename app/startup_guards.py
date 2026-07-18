@@ -74,8 +74,7 @@ def validate_production_eligibility_security() -> None:
         invalid_provider_fields = [
             field
             for field, value in configured_provider_values.items()
-            if not str(value or "").strip()
-            or str(value).strip() == mock_provider_values[field]
+            if not str(value or "").strip() or str(value).strip() == mock_provider_values[field]
         ]
         if invalid_provider_fields:
             raise RuntimeError(

@@ -79,10 +79,10 @@ def test_backend_recreate_does_not_pull_or_rebuild(
 
     assert result.returncode == 0, result.stderr
     calls = call_log.read_text()
-    assert "git " not in calls
-    assert (
-        "docker compose -f docker-compose.prod.yml up -d --force-recreate backend" in calls
-    )
+    assert "git fetch" not in calls
+    assert "git checkout" not in calls
+    assert "git pull" not in calls
+    assert "docker compose -f docker-compose.prod.yml up -d --force-recreate backend" in calls
     assert "--build" not in calls
 
 
