@@ -7,9 +7,8 @@
 #
 # Usage (on the VM):
 #   ./scripts/deploy/update.sh                 # pull main, rebuild all, verify
-#   ./scripts/deploy/update.sh --recreate      # env-only change: recreate, no image build
 #   ./scripts/deploy/update.sh --service backend   # scope to one service
-#   ./scripts/deploy/update.sh --recreate --service backend  # backend secret/env change
+#   ./scripts/deploy/update.sh --recreate --service backend  # backend env-only change (no pull)
 #   ./scripts/deploy/update.sh --branch hotfix # deploy a different branch
 #   ./scripts/deploy/update.sh --no-pull       # deploy the current checkout as-is
 #   ./scripts/deploy/update.sh --tag           # tag current :prod images before deploying (rollback point)
@@ -54,6 +53,12 @@ cd "$REPO_ROOT"
 
 log() { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
 die() { printf '\n\033[1;31mERROR: %s\033[0m\n' "$*" >&2; exit 1; }
+
+if [[ "$DO_BUILD" -eq 0 ]]; then
+	[[ "$SERVICE" == "backend" ]] ||
+		die "--recreate requires --service backend; frontend config is baked into its image"
+	DO_PULL=0
+fi
 
 # --- Preflight --------------------------------------------------------------
 command -v docker >/dev/null || die "docker not found on PATH"
