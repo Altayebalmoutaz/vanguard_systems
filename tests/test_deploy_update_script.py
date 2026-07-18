@@ -92,8 +92,7 @@ def test_full_deploy_waits_for_health_and_checks_public_application(
     assert result.returncode == 0, result.stderr
     calls = call_log.read_text()
     assert (
-        "docker compose -f docker-compose.prod.yml up -d --build "
-        "--wait --wait-timeout 120" in calls
+        "docker compose -f docker-compose.prod.yml up -d --build --wait --wait-timeout 120" in calls
     )
     assert "curl https://ezfi.smilesuite.ai/health" in calls
     assert "curl https://ezfi.smilesuite.ai/ready" in calls
