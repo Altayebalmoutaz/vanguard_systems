@@ -60,6 +60,27 @@ def validate_production_eligibility_security() -> None:
             "ELIGIBILITY_AGENT_API_KEY must be set when ENVIRONMENT=production; "
             "without it the eligibility sub-app accepts unauthenticated requests."
         )
+    if (elig.stedi_api_key or "").strip() or elig.voice_verification_enabled:
+        mock_provider_values = {
+            "PROVIDER_NPI": "1999999984",
+            "PROVIDER_NAME": "Mock Dental Practice",
+            "PROVIDER_TAX_ID": "123456789",
+        }
+        configured_provider_values = {
+            "PROVIDER_NPI": elig.provider_npi,
+            "PROVIDER_NAME": elig.provider_name,
+            "PROVIDER_TAX_ID": elig.provider_tax_id,
+        }
+        invalid_provider_fields = [
+            field
+            for field, value in configured_provider_values.items()
+            if not str(value or "").strip() or str(value).strip() == mock_provider_values[field]
+        ]
+        if invalid_provider_fields:
+            raise RuntimeError(
+                f"{', '.join(invalid_provider_fields)} must use the real provider identity "
+                "when Stedi or voice verification is enabled in production."
+            )
     if elig.voice_verification_enabled and elig.voice_call_provider == "twilio":
         if not (elig.twilio_auth_token or "").strip():
             raise RuntimeError(

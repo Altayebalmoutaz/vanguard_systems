@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import os
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from app.config import Settings
-from app.startup_guards import validate_production_auth
+from app.startup_guards import (
+    validate_production_auth,
+    validate_production_eligibility_security,
+)
 
 
 class ProductionAuthGuardTests(unittest.TestCase):
@@ -44,6 +48,40 @@ class ProductionAuthGuardTests(unittest.TestCase):
                     neon_database_url="postgresql://user:pass@example.test/db",
                 )
             )
+
+    def test_rejects_mock_provider_identity_for_production_stedi(self) -> None:
+        eligibility_settings = SimpleNamespace(
+            eligibility_agent_api_key="eligibility-key",
+            stedi_api_key="stedi-key",
+            provider_npi="1999999984",
+            provider_name="Mock Dental Practice",
+            provider_tax_id="123456789",
+            voice_verification_enabled=False,
+        )
+        with (
+            patch.dict(os.environ, {"ENVIRONMENT": "production"}, clear=False),
+            patch("app.eligibility.config.get_settings", return_value=eligibility_settings),
+            self.assertRaises(RuntimeError) as ctx,
+        ):
+            validate_production_eligibility_security()
+        self.assertIn("PROVIDER_NPI", str(ctx.exception))
+        self.assertIn("PROVIDER_NAME", str(ctx.exception))
+        self.assertIn("PROVIDER_TAX_ID", str(ctx.exception))
+
+    def test_allows_real_provider_identity_for_production_stedi(self) -> None:
+        eligibility_settings = SimpleNamespace(
+            eligibility_agent_api_key="eligibility-key",
+            stedi_api_key="stedi-key",
+            provider_npi="1104023674",
+            provider_name="Example Dental PLLC",
+            provider_tax_id="987654321",
+            voice_verification_enabled=False,
+        )
+        with (
+            patch.dict(os.environ, {"ENVIRONMENT": "production"}, clear=False),
+            patch("app.eligibility.config.get_settings", return_value=eligibility_settings),
+        ):
+            validate_production_eligibility_security()
 
 
 if __name__ == "__main__":
