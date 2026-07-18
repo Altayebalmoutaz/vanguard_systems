@@ -23,8 +23,11 @@ COMPOSE_FILE="docker-compose.prod.yml"
 DASHBOARD_ENV="deploy/dashboard.env.production"
 BACKEND_ENV="deploy/.env.production"
 HEALTH_URL="https://ezfi.smilesuite.ai/health"
+READY_URL="https://ezfi.smilesuite.ai/ready"
+DASHBOARD_URL="https://ezfi.smilesuite.ai/"
 BACKEND_CONTAINER="vanguard-backend"
 DEFAULT_BRANCH="main"
+COMPOSE_WAIT_TIMEOUT=120
 
 # --- Args -------------------------------------------------------------------
 BRANCH="$DEFAULT_BRANCH"
@@ -94,10 +97,10 @@ if [[ "$DO_BUILD" -eq 1 ]]; then
 	log "Loading dashboard build-args from $DASHBOARD_ENV"
 	set -a; . "./$DASHBOARD_ENV"; set +a
 	log "Building + starting ${SERVICE:-all services}"
-	compose up -d --build ${SERVICE:+$SERVICE}
+	compose up -d --build --wait --wait-timeout "$COMPOSE_WAIT_TIMEOUT" ${SERVICE:+$SERVICE}
 else
 	log "Recreating ${SERVICE:-all services} without rebuild (env-only change)"
-	compose up -d --force-recreate ${SERVICE:+$SERVICE}
+	compose up -d --force-recreate --wait --wait-timeout "$COMPOSE_WAIT_TIMEOUT" ${SERVICE:+$SERVICE}
 fi
 
 # --- Verify -----------------------------------------------------------------
@@ -114,9 +117,18 @@ for i in {1..12}; do
 	sleep 5
 done
 
-log "Public edge check ($HEALTH_URL)"
-if curl -fsS "$HEALTH_URL" >/dev/null 2>&1; then
-	log "Live site healthy ✔  Deploy complete."
-else
-	printf '\n\033[1;33mWARN: %s not reachable from the VM (DNS/TLS/edge). Containers are up; verify from a browser.\033[0m\n' "$HEALTH_URL"
+log "Public liveness check ($HEALTH_URL)"
+curl -fsS "$HEALTH_URL" >/dev/null 2>&1 ||
+	die "$HEALTH_URL is not reachable through DNS/TLS/edge"
+
+log "Public readiness check ($READY_URL)"
+curl -fsS "$READY_URL" >/dev/null 2>&1 ||
+	die "$READY_URL reports that a required dependency is unavailable"
+
+if [[ -z "$SERVICE" || "$SERVICE" == "frontend" || "$SERVICE" == "caddy" ]]; then
+	log "Dashboard check ($DASHBOARD_URL)"
+	curl -fsS "$DASHBOARD_URL" >/dev/null 2>&1 ||
+		die "$DASHBOARD_URL is not serving the dashboard"
 fi
+
+log "Live site healthy ✔  Deploy complete."
