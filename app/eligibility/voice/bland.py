@@ -123,7 +123,13 @@ def _bland_context(
     provider_name = settings.provider_name
     req_id = session.get("request_id")
     if req_id:
-        request_row = fetch_eligibility_request(supabase, req_id)
+        practice_id = str(session.get("practice_id") or "").strip() or None
+        request_row = fetch_eligibility_request(
+            supabase,
+            req_id,
+            practice_id=practice_id,
+            settings=settings,
+        )
         if request_row:
             member_id = str(request_row.get("subscriber_id") or "")
             dob = str(request_row.get("dob") or "")

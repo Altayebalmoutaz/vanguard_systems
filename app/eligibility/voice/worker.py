@@ -99,7 +99,7 @@ def run_voice_sweep(settings: EligibilitySettings) -> dict[str, Any]:
 
     supabase = get_supabase_client(settings)
     batch = min(int(settings.voice_verification_batch_size), 20)
-    sessions = fetch_queued_sessions(supabase, limit=batch)
+    sessions = fetch_queued_sessions(supabase, limit=batch, settings=settings)
 
     provider = (settings.voice_call_provider or "bland").strip().lower()
     use_bland = provider == "bland" and bland_configured(settings)
@@ -131,10 +131,10 @@ def run_voice_sweep(settings: EligibilitySettings) -> dict[str, Any]:
         session_id = session.get("id")
         if not session_id:
             continue
-        practice_id = session.get("practice_id")
+        practice_id = str(session.get("practice_id") or "").strip() or None
         agent_settings = get_eligibility_agent_settings(
             supabase,
-            practice_id=str(practice_id) if practice_id else None,
+            practice_id=practice_id,
             settings=settings,
         )
         if agent_settings is None or agent_settings.get("voice_verification_enabled") is False:
@@ -146,6 +146,8 @@ def run_voice_sweep(settings: EligibilitySettings) -> dict[str, Any]:
                 supabase,
                 session_id,
                 {"status": "calling", "call_provider": provider_name},
+                practice_id=practice_id,
+                settings=settings,
             )
             if use_bland:
                 webhook_url = voice_webhook_url(settings, f"bland/{session_id}")
@@ -156,6 +158,8 @@ def run_voice_sweep(settings: EligibilitySettings) -> dict[str, Any]:
                 supabase,
                 session_id,
                 {"call_sid": call_sid},
+                practice_id=practice_id,
+                settings=settings,
             )
             request_id = session.get("request_id")
             if request_id:
@@ -168,6 +172,8 @@ def run_voice_sweep(settings: EligibilitySettings) -> dict[str, Any]:
                         "call_sid": call_sid,
                         "provider": provider_name,
                     },
+                    practice_id=practice_id,
+                    settings=settings,
                 )
             started += 1
         except Exception as exc:
@@ -185,6 +191,8 @@ def run_voice_sweep(settings: EligibilitySettings) -> dict[str, Any]:
                     "failure_code": "call_initiation_failed",
                     "failure_message": str(exc)[:500],
                 },
+                practice_id=practice_id,
+                settings=settings,
             )
             request_id = session.get("request_id")
             if request_id:
@@ -193,6 +201,8 @@ def run_voice_sweep(settings: EligibilitySettings) -> dict[str, Any]:
                     request_id,
                     "voice_verification_failed",
                     {"session_id": str(session_id), "error": str(exc)[:200]},
+                    practice_id=practice_id,
+                    settings=settings,
                 )
 
     return {
@@ -212,7 +222,7 @@ def process_call_completion(
 ) -> dict[str, Any]:
     """Handle completed call: extract, reconcile, pending_review."""
     supabase = get_supabase_client(settings)
-    session = fetch_session_by_id(supabase, session_id)
+    session = fetch_session_by_id(supabase, session_id, settings=settings)
     if not session:
         raise ValueError("session_not_found")
 
@@ -235,6 +245,7 @@ def process_call_completion(
             session_id,
             {"call_duration_seconds": call_duration},
             practice_id=practice_id,
+            settings=settings,
         )
 
     if not transcript:
@@ -247,6 +258,7 @@ def process_call_completion(
                 "failure_message": "No speech captured on payer call",
             },
             practice_id=practice_id,
+            settings=settings,
         )
         return {"status": "failed", "reason": "empty_transcript"}
 

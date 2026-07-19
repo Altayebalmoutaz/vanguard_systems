@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import app.eligibility.db as elig_db
-from app.eligibility.voice import bland
+from app.eligibility.voice import bland, worker
 from app.eligibility.voice import reconcile as rec
 from app.eligibility.voice.bland import _build_task_prompt
 from app.eligibility.voice.reconcile import merge_voice_extraction
@@ -211,18 +211,20 @@ def _patch_bland_io(monkeypatch, captured: dict) -> None:
             "display_name": "Cigna",
         },
     )
-    monkeypatch.setattr(
-        bland,
-        "fetch_eligibility_request",
-        lambda supabase, req_id: {
+
+    def _fetch_request(supabase, req_id, *, practice_id=None, settings=None):
+        captured["request_practice_id"] = practice_id
+        captured["request_settings"] = settings
+        return {
             "subscriber_id": "U3141592653",
             "dob": "1996-05-05",
             "first_name": "Jaguar",
             "last_name": "Dent",
             "plan_id": "",
             "provider_name": "One",
-        },
-    )
+        }
+
+    monkeypatch.setattr(bland, "fetch_eligibility_request", _fetch_request)
 
     class _FakeResp:
         def raise_for_status(self):
@@ -254,6 +256,7 @@ def _voice_session() -> dict:
     return {
         "id": "sess-1",
         "payer_id": "62308",
+        "practice_id": "vgd_mock_brooklyn",
         "request_id": "req-1",
         "missing_fields_target": ["is_covered"],
         "cdt_codes": ["D1110"],
@@ -279,6 +282,8 @@ def test_initiate_bland_call_prompt_mode(monkeypatch) -> None:
     assert payload["interruption_threshold"] == 120
     assert "John Doe" not in payload["task"]
     assert "2653" in payload["task"]
+    assert captured["request_practice_id"] == "vgd_mock_brooklyn"
+    assert captured["request_settings"] is not None
 
 
 def test_initiate_bland_call_pathway_mode(monkeypatch) -> None:
@@ -297,3 +302,70 @@ def test_initiate_bland_call_pathway_mode(monkeypatch) -> None:
     # Real patient data is still passed as pathway variables.
     assert payload["request_data"]["patient_name"] == "Jaguar Dent"
     assert payload["request_data"]["member_id"] == "U3141592653"
+
+
+def test_run_voice_sweep_threads_practice_id_through_neon_writes(monkeypatch) -> None:
+    settings = _bland_settings(
+        voice_verification_worker_enabled=True,
+        voice_verification_enabled=True,
+        voice_verification_batch_size=5,
+        voice_call_provider="bland",
+        voice_demo_auto_complete=False,
+        voice_demo_transcript="",
+        twilio_webhook_base_url="https://example.test/eligibility-agent",
+    )
+    session = _voice_session()
+    calls: dict[str, list] = {"updates": [], "events": []}
+
+    monkeypatch.setattr(worker, "voice_infra_ready", lambda settings: True)
+    monkeypatch.setattr(worker, "bland_configured", lambda settings: True)
+    monkeypatch.setattr(worker, "get_supabase_client", lambda settings=None: object())
+
+    def _fetch_queued(supabase, *, limit, settings=None):
+        calls["queue_settings"] = [settings]
+        return [session]
+
+    monkeypatch.setattr(worker, "fetch_queued_sessions", _fetch_queued)
+    monkeypatch.setattr(
+        worker,
+        "get_eligibility_agent_settings",
+        lambda supabase, *, practice_id=None, settings=None: {"voice_verification_enabled": True},
+    )
+
+    def _update(supabase, session_id, values, *, practice_id=None, settings=None):
+        assert practice_id == "vgd_mock_brooklyn"
+        assert settings is not None
+        calls["updates"].append(values)
+
+    monkeypatch.setattr(worker, "update_verification_session", _update)
+    monkeypatch.setattr(worker, "initiate_bland_call", lambda *args, **kwargs: "call-1")
+
+    def _event(
+        supabase,
+        request_id,
+        event_type,
+        detail=None,
+        *,
+        practice_id=None,
+        settings=None,
+    ):
+        assert practice_id == "vgd_mock_brooklyn"
+        assert settings is not None
+        calls["events"].append(event_type)
+
+    monkeypatch.setattr(worker, "insert_eligibility_request_event", _event)
+
+    result = worker.run_voice_sweep(settings)
+
+    assert result == {
+        "started": 1,
+        "errors": 0,
+        "considered": 1,
+        "skipped_disabled": 0,
+    }
+    assert calls["queue_settings"] == [settings]
+    assert calls["updates"] == [
+        {"status": "calling", "call_provider": "bland"},
+        {"call_sid": "call-1"},
+    ]
+    assert calls["events"] == ["voice_verification_calling"]
