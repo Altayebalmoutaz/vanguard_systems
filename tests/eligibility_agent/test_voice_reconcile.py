@@ -6,8 +6,9 @@ import uuid
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
-import app.eligibility.db as elig_db
 import pytest
+
+import app.eligibility.db as elig_db
 from app.eligibility.voice import bland
 from app.eligibility.voice import reconcile as rec
 from app.eligibility.voice.bland import _build_task_prompt
