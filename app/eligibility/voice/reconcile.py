@@ -108,7 +108,12 @@ def persist_voice_supplemental_check(
     )
     row["source_check_id"] = str(base_check["id"])
     row["verification_source"] = "voice_verification"
-    merged_id = insert_eligibility_check(supabase, row)
+    practice_id = (
+        str(session.get("practice_id") or "").strip()
+        or str(base_check.get("practice_id") or "").strip()
+        or None
+    )
+    merged_id = insert_eligibility_check(supabase, row, practice_id=practice_id, settings=s)
     return merged_id
 
 
@@ -131,14 +136,17 @@ def complete_voice_session_reconciliation(
     """Full post-call flow: merge, supplemental check, pending_review session."""
     s = settings or get_settings()
     supabase = get_supabase(s)
-    session = fetch_session_by_id(supabase, session_id)
+    session = fetch_session_by_id(supabase, session_id, settings=s)
     if not session:
         raise ValueError("session_not_found")
 
     check_id = session.get("eligibility_check_id")
+    practice_id = str(session.get("practice_id") or "").strip() or None
     from app.eligibility.db import get_eligibility_check_by_id
 
-    base_check = get_eligibility_check_by_id(supabase, UUID(str(check_id)))
+    base_check = get_eligibility_check_by_id(
+        supabase, UUID(str(check_id)), practice_id=practice_id, settings=s
+    )
     if not base_check:
         raise ValueError("base_check_not_found")
 
@@ -167,6 +175,8 @@ def complete_voice_session_reconciliation(
             "merged_check_id": str(merged_id),
             "call_reference": call_ref,
         },
+        practice_id=practice_id,
+        settings=s,
     )
 
     result: dict[str, Any] = {
