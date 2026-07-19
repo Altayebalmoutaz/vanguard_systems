@@ -214,7 +214,7 @@ def _patch_bland_io(monkeypatch, captured: dict) -> None:
     monkeypatch.setattr(
         bland,
         "fetch_eligibility_request",
-        lambda supabase, req_id: {
+        lambda supabase, req_id, **_kwargs: {
             "subscriber_id": "U3141592653",
             "dob": "1996-05-05",
             "first_name": "Jaguar",
