@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import app.eligibility.db as elig_db
+import pytest
 from app.eligibility.voice import bland
 from app.eligibility.voice import reconcile as rec
 from app.eligibility.voice.bland import _build_task_prompt
@@ -253,6 +254,7 @@ def _patch_bland_io(monkeypatch, captured: dict) -> None:
 def _voice_session() -> dict:
     return {
         "id": "sess-1",
+        "practice_id": "vgd_mock_brooklyn",
         "payer_id": "62308",
         "request_id": "req-1",
         "missing_fields_target": ["is_covered"],
@@ -297,3 +299,34 @@ def test_initiate_bland_call_pathway_mode(monkeypatch) -> None:
     # Real patient data is still passed as pathway variables.
     assert payload["request_data"]["patient_name"] == "Jaguar Dent"
     assert payload["request_data"]["member_id"] == "U3141592653"
+
+
+def test_initiate_bland_call_rejects_session_without_request(monkeypatch) -> None:
+    captured: dict = {}
+    _patch_bland_io(monkeypatch, captured)
+    session = _voice_session()
+    session["request_id"] = None
+
+    with pytest.raises(RuntimeError, match="eligibility_request_required"):
+        bland.initiate_bland_call(
+            session,
+            _bland_settings(bland_use_pathway=True),
+            webhook_url="https://example.test/voice/bland/sess-1",
+        )
+
+    assert "payload" not in captured
+
+
+def test_initiate_bland_call_rejects_missing_request_row(monkeypatch) -> None:
+    captured: dict = {}
+    _patch_bland_io(monkeypatch, captured)
+    monkeypatch.setattr(bland, "fetch_eligibility_request", lambda *_args, **_kwargs: None)
+
+    with pytest.raises(RuntimeError, match="eligibility_request_not_found"):
+        bland.initiate_bland_call(
+            _voice_session(),
+            _bland_settings(bland_use_pathway=True),
+            webhook_url="https://example.test/voice/bland/sess-1",
+        )
+
+    assert "payload" not in captured
