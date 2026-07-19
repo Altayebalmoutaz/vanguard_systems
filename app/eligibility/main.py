@@ -184,6 +184,7 @@ class EligibilityCheckHttpResponse(BaseModel):
 class VoiceQueueRequest(BaseModel):
     check_id: UUID
     request_id: UUID | None = None
+    practice_id: str | None = None
     force: bool = False
 
 
@@ -613,9 +614,23 @@ def post_voice_queue(body: VoiceQueueRequest) -> dict[str, Any]:
     supabase = get_supabase(s)
     from app.eligibility.db import get_eligibility_check_by_id
 
-    check = get_eligibility_check_by_id(supabase, body.check_id)
+    practice_id = (
+        (body.practice_id or "").strip() or (s.pilot_default_practice_id or "").strip() or None
+    )
+    check = get_eligibility_check_by_id(
+        supabase, body.check_id, practice_id=practice_id, settings=s
+    )
     if not check:
         raise HTTPException(status_code=404, detail="check_not_found")
+
+    practice_id = (
+        practice_id
+        or str(check.get("practice_id") or "").strip()
+        or (s.pilot_default_practice_id or "").strip()
+        or None
+    )
+    if not practice_id:
+        raise HTTPException(status_code=422, detail="practice_id_required")
 
     canonical = {
         "payer_id": check.get("payer_id"),
@@ -635,6 +650,7 @@ def post_voice_queue(body: VoiceQueueRequest) -> dict[str, Any]:
         canonical=canonical,
         routing=routing,
         cdt_codes=[],
+        practice_id=practice_id,
         request_id=body.request_id,
         settings=s,
         force=body.force,

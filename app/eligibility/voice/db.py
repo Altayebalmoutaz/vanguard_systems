@@ -298,7 +298,12 @@ def update_verification_session(
 ) -> None:
     s = _resolve_settings(settings)
     if _use_neon(s):
-        pid = _require_neon_practice_id(s, practice_id=practice_id, row=values)
+        pid = _practice_id_from(practice_id=practice_id, row=values)
+        if not pid:
+            # Webhook/worker call sites often omit practice_id; resolve from the row.
+            existing = _fetch_session_by_id_neon(s, practice_id=None, session_id=session_id)
+            pid = _practice_id_from(practice_id=None, row=existing) if existing else ""
+        pid = _require_neon_practice_id(s, practice_id=pid)
         _update_verification_session_neon(
             s,
             practice_id=pid,
