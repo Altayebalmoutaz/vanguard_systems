@@ -47,29 +47,59 @@ def bland_configured(settings: EligibilitySettings) -> bool:
 
 def _build_task_prompt(ctx: dict[str, Any]) -> str:
     member_tail = ctx["member_id"][-4:] if ctx["member_id"] else "unknown"
-    targets = ctx["targets"] or "remaining deductible, annual maximum, and coverage status"
-    procedures = ctx["cdt_codes"] or "general dental services"
+    dob = ctx["dob"] or "available on request"
+    payer_name = ctx["payer_name"]
+    scope = (ctx.get("requested_benefits") or "").strip()
+    cdt_codes = [str(c).strip().upper() for c in (ctx.get("cdt_codes") or []) if str(c).strip()]
+    procedures = ", ".join(cdt_codes) if cdt_codes else "general dental services"
+
+    # `requested_benefits` (when present) is already scoped to the missing fields and
+    # already names the CDT codes, so avoid repeating the procedures here. Only the
+    # generic fallback needs to spell out procedures explicitly.
+    if scope:
+        scope_block = f"{scope}\n\n"
+    else:
+        scope_block = (
+            "Confirm whether the member and coverage are active, the remaining deductible, "
+            "the remaining annual maximum, the coverage percentage, and any copay or "
+            "coinsurance. "
+            f"Also confirm coverage for these procedures: {procedures}. "
+            "Ask for exact dollar amounts and percentages where they apply.\n\n"
+        )
+
     return (
-        "You are a friendly, professional dental office benefits coordinator making an "
-        "outbound phone call to a dental insurance payer to verify a patient's eligibility "
-        "and benefits. Speak naturally and conversationally, ask one question at a time, and "
-        "wait for the representative to finish answering before moving on.\n\n"
-        "If you reach an automated phone menu (IVR), listen and navigate it to reach a live "
-        "benefits or eligibility representative. If asked who is calling, you are calling on "
-        f"behalf of a dental provider with N P I {ctx['npi']}.\n\n"
-        "Patient and member details to provide when asked:\n"
-        f"- Member I D ending in {member_tail}\n"
-        f"- Date of birth: {ctx['dob'] or 'available on request'}\n"
-        f"- Payer: {ctx['payer_name']}\n\n"
-        "Your goal is to confirm the following, getting exact dollar amounts where applicable:\n"
-        f"- {targets}\n"
-        f"- Whether these procedures are covered: {procedures}\n\n"
-        "Specifically find out: is the member active, is coverage active, the remaining "
-        "deductible, the remaining annual maximum, the coverage percentage for the procedures, "
-        "and any copay or coinsurance. Before ending the call, always ask for and confirm the "
-        "call reference number and the representative's name.\n\n"
-        "Be polite and concise. Confirm important numbers by repeating them back. Once you have "
-        "the information, thank the representative and end the call."
+        "# Who you are\n"
+        "You are Sam, a warm, easygoing benefits coordinator at a dental office. You are "
+        "calling a dental insurance payer to check a patient's benefits. You are a real "
+        "person having a normal phone conversation, not a script reader.\n\n"
+        "# How you talk\n"
+        "- Sound relaxed and human. Use natural, everyday language and light filler words "
+        "like 'sure', 'okay', 'gotcha', 'perfect', and 'thanks so much'.\n"
+        "- Ask ONE question at a time, then stop and listen. Never stack multiple questions "
+        "in one breath.\n"
+        "- Give a short, natural acknowledgement of each answer before moving on "
+        "(for example: 'okay, got it' or 'perfect, thank you').\n"
+        "- Keep your turns short. Do not lecture or repeat the whole context.\n"
+        "- If you get interrupted, stop talking and let them speak. Do not restart your "
+        "sentence from the beginning; just pick up naturally.\n"
+        "- Be patient and friendly if they need a moment or put you on hold.\n\n"
+        "# Getting to a representative\n"
+        "If you reach an automated menu, listen and press or say the options to reach a live "
+        "benefits or eligibility representative. When a person answers, greet them warmly and "
+        "let them know you're a dental office calling to verify a patient's benefits.\n\n"
+        "# Patient and provider details (share when asked, one item at a time)\n"
+        f"- Payer: {payer_name}\n"
+        f"- Member ID ending in {member_tail} (read the digits slowly if they need the full ID)\n"
+        f"- Patient date of birth: {dob}\n"
+        f"- Calling on behalf of a dental provider, NPI {ctx['npi']}\n\n"
+        "# What you need to find out\n"
+        f"{scope_block}"
+        "# Wrapping up\n"
+        "- When you hear an important number, gently read it back once to confirm you have "
+        "it right (for example: 'so that's one thousand five hundred remaining, correct?').\n"
+        "- Before you hang up, warmly ask for a call reference number and the "
+        "representative's first name.\n"
+        "- Thank them genuinely and end the call politely once you have what you need."
     )
 
 
@@ -114,6 +144,8 @@ def _bland_context(
         "group_number": group_number,
         "provider_name": provider_name,
         "requested_benefits": requested_benefits,
+        "targets": targets,
+        "cdt_codes": cdt_codes,
         "npi": settings.provider_npi,
         "tin": settings.provider_tax_id,
         "payer_name": str(
@@ -160,6 +192,7 @@ def initiate_bland_call(
     ctx = _bland_context(session, settings, payer_cfg)
     to_number = str(payer_cfg["eligibility_phone"])
     pathway_id = (getattr(settings, "bland_pathway_id", "") or "").strip()
+    use_pathway = bool(getattr(settings, "bland_use_pathway", False)) and bool(pathway_id)
 
     payload: dict[str, Any] = {
         "phone_number": to_number,
@@ -170,7 +203,7 @@ def initiate_bland_call(
         "record": bool(getattr(settings, "bland_record", False)),
     }
 
-    if pathway_id:
+    if use_pathway:
         # Pathway mode: Bland runs the visual flow; we feed patient data as variables.
         # A pathway overrides task/model/first_sentence, so we do not send those.
         payload["pathway_id"] = pathway_id
@@ -179,11 +212,18 @@ def initiate_bland_call(
         if version:
             payload["pathway_version"] = version
     else:
-        # Prompt mode: inline conversational task prompt.
+        # Prompt mode (pilot default): the humanized persona and real patient data live in
+        # our task prompt, so the call sounds natural and uses the correct member details.
         payload["task"] = _build_task_prompt(ctx)
         model = (settings.bland_model or "").strip()
         if model:
             payload["model"] = model
+        temperature = getattr(settings, "bland_temperature", None)
+        if temperature is not None:
+            payload["temperature"] = float(temperature)
+        interruption_threshold = getattr(settings, "bland_interruption_threshold", None)
+        if interruption_threshold is not None:
+            payload["interruption_threshold"] = int(interruption_threshold)
 
     voice = (settings.bland_voice or "").strip()
     if voice:

@@ -182,9 +182,20 @@ async def voice_bland_webhook(session_id: UUID, request: Request) -> dict[str, s
     if not session:
         raise HTTPException(status_code=404, detail="session_not_found")
 
+    practice_id = str(session.get("practice_id") or "").strip() or None
+
     duration = _bland_duration_seconds(body)
     if duration is not None:
-        update_verification_session(supabase, session_id, {"call_duration_seconds": duration})
+        # Best-effort: a duration write failure must not drop the reconciliation.
+        try:
+            update_verification_session(
+                supabase,
+                session_id,
+                {"call_duration_seconds": duration},
+                practice_id=practice_id,
+            )
+        except Exception:
+            logger.exception("bland webhook duration update failed session=%s", session_id)
 
     transcript = str(body.get("concatenated_transcript") or "").strip()
     # Pathway extractVars (best-effort) as a base; call-level analysis_schema overrides.
@@ -194,12 +205,16 @@ async def voice_bland_webhook(session_id: UUID, request: Request) -> dict[str, s
         **map_bland_analysis_to_extracted(body.get("analysis")),
     }
     if not extracted and transcript:
-        extracted = extract_fields_from_transcript(
-            transcript,
-            missing_fields_target=list(session.get("missing_fields_target") or []),
-            cdt_codes=list(session.get("cdt_codes") or []),
-            settings=settings,
-        )
+        try:
+            extracted = extract_fields_from_transcript(
+                transcript,
+                missing_fields_target=list(session.get("missing_fields_target") or []),
+                cdt_codes=list(session.get("cdt_codes") or []),
+                settings=settings,
+            )
+        except Exception:
+            logger.exception("bland webhook transcript extraction failed session=%s", session_id)
+            extracted = {}
 
     if not transcript and not extracted:
         update_verification_session(
@@ -210,6 +225,7 @@ async def voice_bland_webhook(session_id: UUID, request: Request) -> dict[str, s
                 "failure_code": "empty_transcript",
                 "failure_message": "Bland call returned no transcript or analysis",
             },
+            practice_id=practice_id,
         )
         return {"ok": "true", "status": "failed"}
 
@@ -222,6 +238,7 @@ async def voice_bland_webhook(session_id: UUID, request: Request) -> dict[str, s
             transcript=transcript,
             extracted=extracted,
             settings=settings,
+            practice_id=practice_id,
         )
     except Exception as exc:
         logger.exception("bland webhook reconciliation failed session=%s", session_id)
@@ -233,6 +250,7 @@ async def voice_bland_webhook(session_id: UUID, request: Request) -> dict[str, s
                 "failure_code": "reconcile_failed",
                 "failure_message": scrub_for_log(str(exc))[:500],
             },
+            practice_id=practice_id,
         )
         return {"ok": "false", "status": "failed"}
 

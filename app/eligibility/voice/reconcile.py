@@ -82,6 +82,7 @@ def persist_voice_supplemental_check(
     base_check: dict[str, Any],
     patched_canonical: dict[str, Any],
     settings: EligibilitySettings | None = None,
+    practice_id: str | None = None,
 ) -> UUID:
     """Insert supplemental eligibility_checks row; cap routing for human review."""
     s = settings or get_settings()
@@ -108,7 +109,14 @@ def persist_voice_supplemental_check(
     )
     row["source_check_id"] = str(base_check["id"])
     row["verification_source"] = "voice_verification"
-    merged_id = insert_eligibility_check(supabase, row)
+    # Thread tenant scope so the Postgres/RLS PHI store accepts the insert.
+    pid = (
+        practice_id
+        or str(base_check.get("practice_id") or session.get("practice_id") or "").strip()
+    )
+    if pid:
+        row["practice_id"] = pid
+    merged_id = insert_eligibility_check(supabase, row, practice_id=pid or None)
     return merged_id
 
 
@@ -127,18 +135,23 @@ def complete_voice_session_reconciliation(
     transcript: str,
     extracted: dict[str, Any],
     settings: EligibilitySettings | None = None,
+    practice_id: str | None = None,
 ) -> dict[str, Any]:
     """Full post-call flow: merge, supplemental check, pending_review session."""
     s = settings or get_settings()
     supabase = get_supabase(s)
-    session = fetch_session_by_id(supabase, session_id)
+    session = fetch_session_by_id(supabase, session_id, practice_id=practice_id, settings=s)
     if not session:
         raise ValueError("session_not_found")
+
+    pid = practice_id or (str(session.get("practice_id") or "").strip() or None)
 
     check_id = session.get("eligibility_check_id")
     from app.eligibility.db import get_eligibility_check_by_id
 
-    base_check = get_eligibility_check_by_id(supabase, UUID(str(check_id)))
+    base_check = get_eligibility_check_by_id(
+        supabase, UUID(str(check_id)), practice_id=pid, settings=s
+    )
     if not base_check:
         raise ValueError("base_check_not_found")
 
@@ -155,6 +168,7 @@ def complete_voice_session_reconciliation(
         base_check=base_check,
         patched_canonical=patched,
         settings=s,
+        practice_id=pid,
     )
 
     update_verification_session(
@@ -167,6 +181,7 @@ def complete_voice_session_reconciliation(
             "merged_check_id": str(merged_id),
             "call_reference": call_ref,
         },
+        practice_id=pid,
     )
 
     result: dict[str, Any] = {
@@ -200,6 +215,8 @@ def complete_voice_session_reconciliation(
                     "merged_check_id": str(merged_id),
                     "missing_fields": patched.get("missing_fields") or [],
                 },
+                practice_id=pid,
+                settings=s,
             )
         return result
 
@@ -214,6 +231,8 @@ def complete_voice_session_reconciliation(
                 "merged_check_id": str(merged_id),
                 "extracted_fields": extracted,
             },
+            practice_id=pid,
+            settings=s,
         )
 
     return result

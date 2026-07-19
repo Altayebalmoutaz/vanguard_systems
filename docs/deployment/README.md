@@ -257,6 +257,24 @@ When `ENVIRONMENT=production`, the API will **not start** unless:
 - `ELIGIBILITY_AGENT_API_KEY` set
 - If voice on + Bland: `BLAND_API_KEY` + `VOICE_WEBHOOK_BASE_URL`
 
+#### Voice persona: prompt mode vs. pathway mode
+
+The pilot runs in **prompt mode** (`BLAND_USE_PATHWAY=false`, the default). In prompt mode
+the humanized, one-question-at-a-time persona and the **real** patient/member data are built
+in code (`app/eligibility/voice/bland.py::_build_task_prompt`) and sent as the Bland `task`,
+so calls use the correct member ID / DOB / payer instead of a Pathway placeholder name.
+
+- `BLAND_USE_PATHWAY=true` routes through the external Bland Pathway (`BLAND_PATHWAY_ID`)
+  instead; the persona/voice/variables then live in the Bland console, not this repo.
+- `BLAND_VOICE` / `BLAND_MODEL` pick a natural conversational voice (tunable without code).
+- `BLAND_TEMPERATURE` / `BLAND_INTERRUPTION_THRESHOLD` fine-tune the human feel in prompt mode.
+
+The reconcile store runs on **Supabase Postgres** (`DATABASE_URL` → `...pooler.supabase.com`),
+which enforces RLS, so the voice webhook threads the session's `practice_id` through every
+write. The webhook fails safe: a completed call advances to `pending_review` (or `approved`
+when `VOICE_AUTO_APPROVE_WHEN_COMPLETE=true`), and any write error marks the session `failed`
+rather than returning HTTP 500.
+
 `RCM_API_KEY` (dashboard) must equal one value in `INTERNAL_API_KEYS` (backend).
 
 Generate secrets:

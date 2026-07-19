@@ -257,6 +257,16 @@ class EligibilitySettings(BaseSettings):
     # inline task prompt; patient/payer data is passed as request_data variables.
     bland_pathway_id: str = Field(default="", validation_alias="BLAND_PATHWAY_ID")
     bland_pathway_version: str = Field(default="", validation_alias="BLAND_PATHWAY_VERSION")
+    # Pilot default is prompt mode: the persona + real patient data live in our task
+    # prompt. Set BLAND_USE_PATHWAY=true to route through the Bland Pathway instead.
+    bland_use_pathway: bool = Field(default=False, validation_alias="BLAND_USE_PATHWAY")
+    # Conversational tuning for prompt mode (more human, less robotic). Empty/None
+    # values are omitted from the Bland payload so provider defaults apply.
+    bland_temperature: float | None = Field(default=None, validation_alias="BLAND_TEMPERATURE")
+    bland_interruption_threshold: int | None = Field(
+        default=None,
+        validation_alias="BLAND_INTERRUPTION_THRESHOLD",
+    )
     voice_auto_approve_when_complete: bool = Field(
         default=True,
         validation_alias="VOICE_AUTO_APPROVE_WHEN_COMPLETE",

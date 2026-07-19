@@ -216,6 +216,8 @@ def process_call_completion(
     if not session:
         raise ValueError("session_not_found")
 
+    practice_id = str(session.get("practice_id") or "").strip() or None
+
     transcript = (speech_result or "").strip()
     if not transcript and settings.voice_demo_transcript:
         transcript = settings.voice_demo_transcript
@@ -232,6 +234,7 @@ def process_call_completion(
             supabase,
             session_id,
             {"call_duration_seconds": call_duration},
+            practice_id=practice_id,
         )
 
     if not transcript:
@@ -243,6 +246,7 @@ def process_call_completion(
                 "failure_code": "empty_transcript",
                 "failure_message": "No speech captured on payer call",
             },
+            practice_id=practice_id,
         )
         return {"status": "failed", "reason": "empty_transcript"}
 
@@ -251,6 +255,7 @@ def process_call_completion(
         transcript=transcript,
         extracted=extracted,
         settings=settings,
+        practice_id=practice_id,
     )
 
 
