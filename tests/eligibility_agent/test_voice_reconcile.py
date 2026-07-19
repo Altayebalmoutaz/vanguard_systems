@@ -7,9 +7,8 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import app.eligibility.db as elig_db
-from app.eligibility.voice import bland
+from app.eligibility.voice import bland, worker
 from app.eligibility.voice import reconcile as rec
-from app.eligibility.voice import worker
 from app.eligibility.voice.bland import _build_task_prompt
 from app.eligibility.voice.reconcile import merge_voice_extraction
 
@@ -212,6 +211,7 @@ def _patch_bland_io(monkeypatch, captured: dict) -> None:
             "display_name": "Cigna",
         },
     )
+
     def _fetch_request(supabase, req_id, *, practice_id=None, settings=None):
         captured["request_practice_id"] = practice_id
         captured["request_settings"] = settings
@@ -329,9 +329,7 @@ def test_run_voice_sweep_threads_practice_id_through_neon_writes(monkeypatch) ->
     monkeypatch.setattr(
         worker,
         "get_eligibility_agent_settings",
-        lambda supabase, *, practice_id=None, settings=None: {
-            "voice_verification_enabled": True
-        },
+        lambda supabase, *, practice_id=None, settings=None: {"voice_verification_enabled": True},
     )
 
     def _update(supabase, session_id, values, *, practice_id=None, settings=None):
