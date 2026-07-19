@@ -103,13 +103,6 @@ def _build_task_prompt(ctx: dict[str, Any]) -> str:
     )
 
 
-# Demo fallbacks used only when a session has no linked eligibility request
-# (e.g. synthetic test sessions) so the call still has coherent values to read out.
-_DEMO_PATIENT_NAME = "Jane Sample"
-_DEMO_MEMBER_ID = "W123456789"
-_DEMO_DOB = "01/01/1985"
-
-
 def _bland_context(
     session: dict[str, Any],
     settings: EligibilitySettings,
@@ -122,22 +115,24 @@ def _bland_context(
     group_number = ""
     provider_name = settings.provider_name
     req_id = session.get("request_id")
-    if req_id:
-        practice_id = str(session.get("practice_id") or "").strip() or None
-        request_row = fetch_eligibility_request(
-            supabase,
-            req_id,
-            practice_id=practice_id,
-            settings=settings,
-        )
-        if request_row:
-            member_id = str(request_row.get("subscriber_id") or "")
-            dob = str(request_row.get("dob") or "")
-            first = str(request_row.get("first_name") or "").strip()
-            last = str(request_row.get("last_name") or "").strip()
-            patient_name = (first + " " + last).strip()
-            group_number = str(request_row.get("plan_id") or "")
-            provider_name = str(request_row.get("provider_name") or provider_name)
+    if not req_id:
+        raise RuntimeError("eligibility_request_required")
+    practice_id = str(session.get("practice_id") or "").strip() or None
+    request_row = fetch_eligibility_request(
+        supabase,
+        req_id,
+        practice_id=practice_id,
+        settings=settings,
+    )
+    if not request_row:
+        raise RuntimeError("eligibility_request_not_found")
+    member_id = str(request_row.get("subscriber_id") or "")
+    dob = str(request_row.get("dob") or "")
+    first = str(request_row.get("first_name") or "").strip()
+    last = str(request_row.get("last_name") or "").strip()
+    patient_name = (first + " " + last).strip()
+    group_number = str(request_row.get("plan_id") or "")
+    provider_name = str(request_row.get("provider_name") or provider_name)
 
     targets = list(session.get("missing_fields_target") or [])
     cdt_codes = list(session.get("cdt_codes") or [])
@@ -170,9 +165,9 @@ def _pathway_request_data(ctx: dict[str, Any]) -> dict[str, Any]:
         "provider_tin": ctx["tin"],
         "provider_name": ctx["provider_name"],
         "office_name": ctx["provider_name"],
-        "patient_name": ctx["patient_name"] or _DEMO_PATIENT_NAME,
-        "patient_dob": ctx["dob"] or _DEMO_DOB,
-        "member_id": ctx["member_id"] or _DEMO_MEMBER_ID,
+        "patient_name": ctx["patient_name"],
+        "patient_dob": ctx["dob"],
+        "member_id": ctx["member_id"],
         "group_number": ctx["group_number"],
         "payer_name": ctx["payer_name"],
         "requested_benefits": ctx["requested_benefits"]
