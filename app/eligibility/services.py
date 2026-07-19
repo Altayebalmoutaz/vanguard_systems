@@ -26,6 +26,7 @@ from app.eligibility.db import (
 )
 from app.eligibility.fee_schedule import merge_ucr_fallback_into_fee_schedule
 from app.eligibility.integrity import validate_completeness
+from app.eligibility.mock_clinic import apply_voice_demo_force_incomplete
 from app.eligibility.models import EligibilityRequest, TriggerEvent
 from app.eligibility.normalizer import normalize
 from app.eligibility.router import _routing_state, route
@@ -154,6 +155,21 @@ def run_realtime_pipeline(
         trading_partner_service_id,
     )
     validate_completeness(canonical)
+    # Jaguar/Elephant Dent on the mock clinic: force a recoverable gap so UI demos
+    # route INCOMPLETE and auto-queue Bland (live Stedi mocks often CLEARED).
+    if apply_voice_demo_force_incomplete(
+        canonical,
+        first_name=getattr(request, "first_name", None),
+        last_name=getattr(request, "last_name", None),
+        practice_id=getattr(request, "practice_id", None),
+    ):
+        attach_eligibility_canonical_record(canonical)
+        logger.info(
+            "voice demo force incomplete patient=%s %s practice=%s",
+            getattr(request, "first_name", None),
+            getattr(request, "last_name", None),
+            getattr(request, "practice_id", None),
+        )
     # Decide ambiguous path on pre-enrichment snapshot, enrich, then route so Layer 6 matches final canonical.
     pre_route_state = _routing_state(canonical)
     if pre_route_state == "COVERAGE_AMBIGUOUS":
