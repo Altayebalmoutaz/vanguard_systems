@@ -17,6 +17,12 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any
 
+from app.integrations.opendental.benefit_diff import (
+    classify_coinsurance_change,
+    classify_monetary_change,
+    classify_quantity_change,
+    summarize_dispositions,
+)
 from app.integrations.opendental.benefit_provenance import (
     BENEFIT_GRID_MUTATION_EVENT,
     INSADJUST_MUTATION_EVENT,
@@ -27,11 +33,23 @@ from app.integrations.opendental.benefit_provenance import (
     last_insadjust_fingerprint,
 )
 from app.integrations.opendental.client import OpenDentalClient
+from app.integrations.opendental.fee_schedule_intel import detect_fee_schedule_alerts
+from app.integrations.opendental.insplan_drift import detect_insplan_drift
 from app.integrations.opendental.models import (
+    ODBenefit,
     ODBenefitCreate,
     ODBenefitUpdate,
     ODInsVerifyCreate,
     ODInsVerifyResponse,
+)
+from app.integrations.opendental.reverify import material_change_alert_items
+from app.integrations.opendental.review_queue import (
+    FEE_ALERT_EVENT_TYPE,
+    INSPLAN_DRIFT_EVENT_TYPE,
+    REVERIFY_ALERT_EVENT_TYPE,
+    extract_review_items_from_grid_actions,
+    persist_benefits_snapshot,
+    persist_review_items,
 )
 
 logger = logging.getLogger(__name__)
@@ -45,6 +63,10 @@ _UNIVERSAL_TO_EBENEFIT_CATS: dict[str, tuple[str, ...]] = {
     "BASIC": ("Restorative", "Endodontics", "Periodontics", "OralSurgery", "Adjunctive"),
     "MAJOR": ("Crowns", "Prosthodontics", "MaxillofacialProsth"),
     "ORTHO": ("Orthodontics",),
+    # Finer UDR categories (when present) write their own CovCats; CovCatNum dedupe avoids double-write.
+    "ENDO": ("Endodontics",),
+    "PERIO": ("Periodontics",),
+    "MAXILLOFACIAL": ("MaxillofacialProsth",),
 }
 
 # Primary EbenefitCat per coarse category for frequency / waiting rows (first match wins).
@@ -54,6 +76,9 @@ _CATEGORY_PRIMARY_EBENEFIT: dict[str, str] = {
     "BASIC": "Restorative",
     "MAJOR": "Crowns",
     "ORTHO": "Orthodontics",
+    "ENDO": "Endodontics",
+    "PERIO": "Periodontics",
+    "MAXILLOFACIAL": "MaxillofacialProsth",
     "DENTAL": "General",
 }
 
@@ -182,6 +207,14 @@ class CanonicalBenefitSnapshot:
     check_id: str | None = None
     source: str = SNAPSHOT_SOURCE
     checked_cdt_codes: list[str] = field(default_factory=list)
+    prior_auth_required: bool | None = None
+    last_service_dates: list[str] = field(default_factory=list)
+    age_limits: list[str] = field(default_factory=list)
+    downgrade_notes: list[str] = field(default_factory=list)
+    deductible_individual: float | None = None
+    deductible_family: float | None = None
+    annual_max_individual: float | None = None
+    annual_max_family: float | None = None
 
 
 def build_benefit_snapshot(
@@ -223,6 +256,36 @@ def build_benefit_snapshot(
         elif plan_coverage is not None:
             coverage_by_cdt[cdt] = round(plan_coverage)
 
+    breakdown = canonical.get("dental_benefit_breakdown")
+    if not isinstance(breakdown, dict):
+        breakdown = {}
+    last_service_lines: list[str] = []
+    for row in canonical.get("last_service_dates") or []:
+        if not isinstance(row, dict):
+            continue
+        cdt = str(row.get("cdt_code") or "").strip().upper()
+        svc = str(row.get("service_date") or "").strip()
+        if not svc:
+            continue
+        last_service_lines.append(f"{cdt or 'visit'}: {svc}" if cdt else svc)
+    age_lines: list[str] = []
+    for row in breakdown.get("age_limits") or []:
+        if not isinstance(row, dict):
+            continue
+        desc = str(row.get("description") or "").strip()
+        if desc:
+            age_lines.append(desc)
+    downgrade_lines: list[str] = []
+    for row in breakdown.get("downgrades") or []:
+        if not isinstance(row, dict):
+            continue
+        desc = str(row.get("description") or "").strip()
+        if desc:
+            downgrade_lines.append(desc)
+    prior_auth = canonical.get("prior_auth_required")
+    if prior_auth is not None:
+        prior_auth = bool(prior_auth)
+
     return CanonicalBenefitSnapshot(
         timestamp=now or datetime.now(),
         routing_status=str(routing.get("status") or "UNKNOWN"),
@@ -240,6 +303,14 @@ def build_benefit_snapshot(
         patient_estimated_responsibility=(total_patient if saw_patient else None),
         check_id=check_id,
         checked_cdt_codes=checked_cdts,
+        prior_auth_required=prior_auth,
+        last_service_dates=last_service_lines[:12],
+        age_limits=age_lines[:12],
+        downgrade_notes=downgrade_lines[:12],
+        deductible_individual=_to_float(canonical.get("deductible_individual")),
+        deductible_family=_to_float(canonical.get("deductible_family")),
+        annual_max_individual=_to_float(canonical.get("annual_max_individual")),
+        annual_max_family=_to_float(canonical.get("annual_max_family")),
     )
 
 
@@ -263,11 +334,19 @@ def format_benefit_notes(snapshot: CanonicalBenefitSnapshot) -> str:
     lines.append("Deductible:")
     lines.append(f" - Total: {_money(snapshot.deductible_total)}")
     lines.append(f" - Remaining: {_money(snapshot.deductible_remaining)}")
+    if snapshot.deductible_individual is not None:
+        lines.append(f" - Individual: {_money(snapshot.deductible_individual)}")
+    if snapshot.deductible_family is not None:
+        lines.append(f" - Family: {_money(snapshot.deductible_family)}")
     lines.append("")
 
     lines.append("Annual Max:")
     lines.append(f" - Total: {_money(snapshot.annual_max_total)}")
     lines.append(f" - Remaining: {_money(snapshot.annual_max_remaining)}")
+    if snapshot.annual_max_individual is not None:
+        lines.append(f" - Individual: {_money(snapshot.annual_max_individual)}")
+    if snapshot.annual_max_family is not None:
+        lines.append(f" - Family: {_money(snapshot.annual_max_family)}")
     lines.append("")
 
     lines.append("Coverage:")
@@ -296,6 +375,37 @@ def format_benefit_notes(snapshot: CanonicalBenefitSnapshot) -> str:
 
     lines.append("Missing Tooth Clause:")
     lines.append(f" - {snapshot.missing_tooth_clause or 'n/a'}")
+    lines.append("")
+
+    lines.append("Prior Auth / Predetermination:")
+    if snapshot.prior_auth_required is None:
+        lines.append(" - n/a")
+    else:
+        lines.append(f" - Required: {'yes' if snapshot.prior_auth_required else 'no'}")
+    lines.append("")
+
+    lines.append("Last Service Dates:")
+    if snapshot.last_service_dates:
+        for item in snapshot.last_service_dates:
+            lines.append(f" - {item}")
+    else:
+        lines.append(" - n/a")
+    lines.append("")
+
+    lines.append("Age Limits:")
+    if snapshot.age_limits:
+        for item in snapshot.age_limits:
+            lines.append(f" - {item}")
+    else:
+        lines.append(" - n/a")
+    lines.append("")
+
+    lines.append("Downgrades / Alternate Benefits:")
+    if snapshot.downgrade_notes:
+        for item in snapshot.downgrade_notes:
+            lines.append(f" - {item}")
+    else:
+        lines.append(" - n/a")
     lines.append("")
 
     lines.append("Estimates:")
@@ -572,6 +682,115 @@ def _build_exclusion_grid_targets(breakdown: dict[str, Any]) -> list[dict[str, A
     ]
 
 
+def _merge_limitation_sources(
+    canonical: dict[str, Any],
+    universal_record: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Prefer canonical dental_benefit_breakdown; fall back to UDR lists when richer."""
+    breakdown = dict(_breakdown_dict(canonical))
+    record = universal_record or {}
+
+    def _as_dict_list(rows: Any) -> list[dict[str, Any]]:
+        out: list[dict[str, Any]] = []
+        for row in rows or []:
+            if isinstance(row, dict):
+                item = dict(row)
+                cat = item.get("category")
+                if hasattr(cat, "value"):
+                    item["category"] = cat.value
+                elif cat is not None:
+                    item["category"] = str(cat)
+                out.append(item)
+        return out
+
+    canon_freq = breakdown.get("frequency_limitations") or []
+    udr_freq = _as_dict_list(record.get("frequency_limitations"))
+    if len(udr_freq) > len(canon_freq or []):
+        breakdown["frequency_limitations"] = udr_freq
+
+    canon_wait = breakdown.get("waiting_periods") or []
+    udr_wait = _as_dict_list(record.get("waiting_periods"))
+    if len(udr_wait) > len(canon_wait or []):
+        breakdown["waiting_periods"] = udr_wait
+
+    if not isinstance(breakdown.get("missing_tooth_clause"), dict):
+        udr_mtc = record.get("missing_tooth_clause")
+        if isinstance(udr_mtc, dict):
+            breakdown["missing_tooth_clause"] = udr_mtc
+
+    return breakdown
+
+
+def _ortho_lifetime_max(
+    canonical: dict[str, Any],
+    universal_record: dict[str, Any] | None,
+) -> float | None:
+    breakdown = _breakdown_dict(canonical)
+    direct = _to_float(breakdown.get("ortho_lifetime_max"))
+    if direct is not None:
+        return direct
+    record = universal_record or {}
+    financial = record.get("financial") if isinstance(record.get("financial"), dict) else {}
+    ortho_dp = financial.get("ortho_lifetime_max") if isinstance(financial, dict) else None
+    if isinstance(ortho_dp, dict):
+        return _to_float(ortho_dp.get("value"))
+    ortho = record.get("ortho") if isinstance(record.get("ortho"), dict) else {}
+    if isinstance(ortho, dict):
+        lt = ortho.get("lifetime_max")
+        if isinstance(lt, dict):
+            return _to_float(lt.get("value"))
+    return None
+
+
+def _plan_clause_notes(
+    canonical: dict[str, Any],
+    universal_record: dict[str, Any] | None,
+) -> list[str]:
+    """Free-text plan clauses (downgrade / alternate benefit / age) for notes only."""
+    notes: list[str] = []
+    breakdown = _breakdown_dict(canonical)
+    for key in ("limitation_notes", "plan_notes", "special_clauses"):
+        raw = breakdown.get(key)
+        if isinstance(raw, list):
+            for item in raw:
+                text = str(item).strip()
+                if text:
+                    notes.append(text)
+        elif isinstance(raw, str) and raw.strip():
+            notes.append(raw.strip())
+    for key in ("downgrades", "age_limits"):
+        raw = breakdown.get(key)
+        if isinstance(raw, list):
+            for item in raw:
+                if isinstance(item, dict):
+                    text = str(item.get("description") or "").strip()
+                else:
+                    text = str(item).strip()
+                if text:
+                    notes.append(text)
+    record = universal_record or {}
+    for key in ("limitation_notes", "waiting_period_notes", "downgrades", "age_limits"):
+        raw = record.get(key)
+        if isinstance(raw, list):
+            for item in raw:
+                text = (
+                    str(item).strip()
+                    if not isinstance(item, dict)
+                    else str(item.get("description") or "").strip()
+                )
+                if text:
+                    notes.append(text)
+    # Deduplicate preserving order
+    seen: set[str] = set()
+    unique: list[str] = []
+    for note in notes:
+        if note in seen:
+            continue
+        seen.add(note)
+        unique.append(note)
+    return unique[:12]
+
+
 def build_benefit_grid_targets(
     *,
     canonical: dict[str, Any],
@@ -581,16 +800,15 @@ def build_benefit_grid_targets(
 
     Returns a dict with:
       - coverage: list of {ebenefit_cats, percent, label} CoInsurance targets
-      - annual_max: float | None  (overall plan annual maximum the insurer pays)
-      - deductible: float | None  (overall General deductible total)
-      - frequency_limitations: quantity-based Limitations rows per category
-      - waiting_periods: WaitingPeriod rows (months) per category
-      - exclusions: Exclusions rows (e.g. missing tooth clause on prosth categories)
+      - annual_max / deductible / ortho_lifetime_max / copay
+      - active_coverage: bool | None
+      - frequency_limitations / waiting_periods / exclusions
+      - plan_clauses: notes-only special clause strings
     Values absent from the 271 are left as None and simply not written.
     """
     coverage: list[dict[str, Any]] = []
     record = universal_record or {}
-    breakdown = _breakdown_dict(canonical)
+    breakdown = _merge_limitation_sources(canonical, universal_record)
     for cat in record.get("categories") or []:
         name = str(cat.get("category") or "").upper()
         ebenefit_cats = _UNIVERSAL_TO_EBENEFIT_CATS.get(name)
@@ -603,14 +821,29 @@ def build_benefit_grid_targets(
             {"ebenefit_cats": ebenefit_cats, "percent": 100 - patient_pct, "label": name}
         )
 
+    copay = _to_float(canonical.get("copay"))
+    if copay is not None and copay <= 0:
+        copay = None
+
+    active: bool | None = bool(canonical.get("is_active")) if "is_active" in canonical else None
+
     return {
         "coverage": coverage,
         "annual_max": _to_float(canonical.get("annual_max_total")),
         "deductible": _to_float(canonical.get("deductible_total")),
+        "ortho_lifetime_max": _ortho_lifetime_max(canonical, universal_record),
+        "copay": copay,
+        "active_coverage": active,
         "frequency_limitations": _build_frequency_grid_targets(breakdown),
         "waiting_periods": _build_waiting_grid_targets(breakdown),
         "exclusions": _build_exclusion_grid_targets(breakdown),
+        "plan_clauses": _plan_clause_notes(canonical, universal_record),
     }
+
+
+def snapshot_od_benefits(rows: list[ODBenefit]) -> list[dict[str, Any]]:
+    """Serialize current OD benefit rows for audit / rollback comparison."""
+    return [benefit_row_fingerprint(row) for row in rows]
 
 
 def run_opendental_benefits_grid_writeback(
@@ -622,13 +855,19 @@ def run_opendental_benefits_grid_writeback(
     respect_manual_edits: bool = True,
     agent_benefit_nums: set[int] | None = None,
     check_id: str | None = None,
+    dry_run: bool = False,
+    confidence_gating: bool = False,
 ) -> dict[str, Any]:
-    """Upsert structured benefit-grid rows (CoInsurance %, Deductible, Annual Max, frequency Limitations, WaitingPeriod, Exclusions).
+    """Upsert structured benefit-grid rows (Edit Benefits + Other Benefits).
 
     Idempotent: existing rows (matched by BenefitType + CovCatNum) are PUT-updated only when
     the value changed; missing rows are POST-created. Each row is fault-isolated so one failure
     never aborts the rest. Mutates plan-level benefits shared by all subscribers on the plan,
     which mirrors OpenDental's own "Import Benefits" behavior from a 271.
+
+    When ``dry_run`` is True (Track A shadow-compare), no POST/PUT is issued — proposed
+    actions are returned with disposition metadata. When ``confidence_gating`` is True
+    (Track C), large deltas are ``skipped_needs_review`` instead of auto-applied.
     """
     try:
         covcats = client.get_covcats()
@@ -637,11 +876,14 @@ def run_opendental_benefits_grid_writeback(
         logger.warning("OpenDental benefits-grid fetch failed: %s", exc)
         return {"error": f"fetch_failed: {exc}"}
 
+    pre_snapshot = snapshot_od_benefits(existing)
+
     ebenefit_to_covcat: dict[str, int] = {}
     for c in covcats:
         if c.EbenefitCat and c.CovCatNum is not None:
             ebenefit_to_covcat.setdefault(c.EbenefitCat, c.CovCatNum)
     general_num = ebenefit_to_covcat.get("General")
+    ortho_num = ebenefit_to_covcat.get("Orthodontics")
 
     def _find(benefit_type: str, cov_cat_num: int | None) -> Any:
         for b in existing:
@@ -681,6 +923,49 @@ def run_opendental_benefits_grid_writeback(
         check_id=check_id,
     )
 
+    def _gate_or_skip(
+        decision: Any,
+        *,
+        target: str,
+        benefit_type: str,
+        extra: dict[str, Any] | None = None,
+        agent_owned: bool = False,
+    ) -> bool:
+        """Return True when the caller should skip the write (review/block/unchanged)."""
+        payload = {
+            "target": target,
+            "type": benefit_type,
+            "disposition": decision.disposition,
+            "reason": decision.reason,
+            "previous": decision.previous,
+            "proposed": decision.proposed,
+            "delta": decision.delta,
+            **(extra or {}),
+        }
+        if decision.disposition == "unchanged":
+            actions.append({**payload, "action": "unchanged"})
+            return True
+        # Force-overwrite mode (respect_manual_edits=False) applies large deltas;
+        # otherwise material changes are queued for review (Track C).
+        needs_review = (
+            decision.disposition == "review"
+            and confidence_gating
+            and not dry_run
+            and respect_manual_edits
+        )
+        _ = agent_owned  # reserved for future provenance-aware thresholds
+        if needs_review:
+            actions.append({**payload, "action": "skipped_needs_review"})
+            return True
+        if decision.disposition == "block":
+            actions.append({**payload, "action": "skipped_blocked"})
+            return True
+        if dry_run:
+            action = "proposed_create" if decision.previous is None else "proposed_update"
+            actions.append({**payload, "action": action, "disposition": "auto"})
+            return True
+        return False
+
     def _skip_human_edit(existing_row: Any, *, target: str, benefit_type: str) -> bool:
         if guard.allow_update(getattr(existing_row, "BenefitNum", None)):
             return False
@@ -701,7 +986,27 @@ def run_opendental_benefits_grid_writeback(
 
     def _upsert_coinsurance(cov_cat_num: int, percent: int, label: str) -> None:
         existing_row = _find("CoInsurance", cov_cat_num)
+        decision = classify_coinsurance_change(
+            previous=existing_row.Percent if existing_row is not None else None,
+            proposed=percent,
+        )
         try:
+            if existing_row is not None and _skip_human_edit(
+                existing_row, target=label, benefit_type="CoInsurance"
+            ):
+                return
+            agent_owned = bool(
+                existing_row is not None
+                and getattr(existing_row, "BenefitNum", None) in guard.agent_benefit_nums
+            )
+            if _gate_or_skip(
+                decision,
+                target=label,
+                benefit_type="CoInsurance",
+                extra={"cov_cat_num": cov_cat_num, "percent": percent},
+                agent_owned=agent_owned,
+            ):
+                return
             if existing_row is None:
                 created = client.create_benefit(
                     ODBenefitCreate(
@@ -721,14 +1026,13 @@ def run_opendental_benefits_grid_writeback(
                             "cov_cat_num": cov_cat_num,
                             "percent": percent,
                             "action": "created",
+                            "disposition": "auto",
                             "benefit_num": created.BenefitNum,
                         },
                         benefit_num=created.BenefitNum,
                     )
                 )
-            elif (existing_row.Percent or -1) != percent:
-                if _skip_human_edit(existing_row, target=label, benefit_type="CoInsurance"):
-                    return
+            else:
                 client.update_benefit(existing_row.BenefitNum, ODBenefitUpdate(Percent=percent))
                 actions.append(
                     guard.record(
@@ -738,22 +1042,9 @@ def run_opendental_benefits_grid_writeback(
                             "cov_cat_num": cov_cat_num,
                             "percent": percent,
                             "action": "updated",
+                            "disposition": "auto",
                             "benefit_num": existing_row.BenefitNum,
                             "previous_percent": existing_row.Percent,
-                        },
-                        benefit_num=existing_row.BenefitNum,
-                    )
-                )
-            else:
-                actions.append(
-                    guard.record(
-                        {
-                            "target": label,
-                            "type": "CoInsurance",
-                            "cov_cat_num": cov_cat_num,
-                            "percent": percent,
-                            "action": "unchanged",
-                            "benefit_num": existing_row.BenefitNum,
                         },
                         benefit_num=existing_row.BenefitNum,
                     )
@@ -769,27 +1060,57 @@ def run_opendental_benefits_grid_writeback(
                 }
             )
 
-    def _upsert_monetary(benefit_type: str, amount: float, label: str) -> None:
-        if general_num is None:
+    def _upsert_monetary(
+        benefit_type: str,
+        amount: float,
+        label: str,
+        *,
+        cov_cat_num: int | None = None,
+        coverage_level: str = "Individual",
+        time_period: str = "CalendarYear",
+    ) -> None:
+        cat_num = general_num if cov_cat_num is None else cov_cat_num
+        if cat_num is None:
             actions.append(
                 {"target": label, "type": benefit_type, "action": "skipped_no_general_covcat"}
             )
             return
         existing_row = (
-            _find_limitations_monetary(general_num)
+            _find_limitations_monetary(cat_num)
             if benefit_type == "Limitations"
-            else _find(benefit_type, general_num)
+            else _find(benefit_type, cat_num)
+        )
+        decision = classify_monetary_change(
+            previous=existing_row.MonetaryAmt if existing_row is not None else None,
+            proposed=amount,
+            field=f"{benefit_type}.MonetaryAmt",
         )
         try:
+            if existing_row is not None and _skip_human_edit(
+                existing_row, target=label, benefit_type=benefit_type
+            ):
+                return
+            agent_owned = bool(
+                existing_row is not None
+                and getattr(existing_row, "BenefitNum", None) in guard.agent_benefit_nums
+            )
+            if _gate_or_skip(
+                decision,
+                target=label,
+                benefit_type=benefit_type,
+                extra={"cov_cat_num": cat_num, "amount": amount},
+                agent_owned=agent_owned,
+            ):
+                return
             if existing_row is None:
                 created = client.create_benefit(
                     ODBenefitCreate(
                         PlanNum=plan_num,
-                        BenefitType=benefit_type,
-                        CoverageLevel="Individual",
-                        CovCatNum=general_num,
+                        BenefitType=benefit_type,  # type: ignore[arg-type]
+                        CoverageLevel=coverage_level,  # type: ignore[arg-type]
+                        CovCatNum=cat_num,
                         MonetaryAmt=amount,
-                        TimePeriod="CalendarYear",
+                        TimePeriod=time_period,
                     )
                 )
                 actions.append(
@@ -797,44 +1118,28 @@ def run_opendental_benefits_grid_writeback(
                         {
                             "target": label,
                             "type": benefit_type,
-                            "cov_cat_num": general_num,
+                            "cov_cat_num": cat_num,
                             "amount": amount,
                             "action": "created",
+                            "disposition": "auto",
                             "benefit_num": created.BenefitNum,
                         },
                         benefit_num=created.BenefitNum,
                     )
                 )
-            elif (
-                existing_row.MonetaryAmt if existing_row.MonetaryAmt is not None else -1.0
-            ) != amount:
-                if _skip_human_edit(existing_row, target=label, benefit_type=benefit_type):
-                    return
+            else:
                 client.update_benefit(existing_row.BenefitNum, ODBenefitUpdate(MonetaryAmt=amount))
                 actions.append(
                     guard.record(
                         {
                             "target": label,
                             "type": benefit_type,
-                            "cov_cat_num": general_num,
+                            "cov_cat_num": cat_num,
                             "amount": amount,
                             "action": "updated",
+                            "disposition": "auto",
                             "benefit_num": existing_row.BenefitNum,
                             "previous_amount": existing_row.MonetaryAmt,
-                        },
-                        benefit_num=existing_row.BenefitNum,
-                    )
-                )
-            else:
-                actions.append(
-                    guard.record(
-                        {
-                            "target": label,
-                            "type": benefit_type,
-                            "cov_cat_num": general_num,
-                            "amount": amount,
-                            "action": "unchanged",
-                            "benefit_num": existing_row.BenefitNum,
                         },
                         benefit_num=existing_row.BenefitNum,
                     )
@@ -856,6 +1161,20 @@ def run_opendental_benefits_grid_writeback(
         )
         try:
             if existing_row is None:
+                decision = classify_quantity_change(
+                    previous=None, proposed=quantity, field="Limitations.Quantity"
+                )
+                if _gate_or_skip(
+                    decision,
+                    target=label,
+                    benefit_type="Limitations",
+                    extra={
+                        "cov_cat_num": cov_cat_num,
+                        "quantity": quantity,
+                        "quantity_qualifier": quantity_qualifier,
+                    },
+                ):
+                    return
                 created = client.create_benefit(
                     ODBenefitCreate(
                         PlanNum=plan_num,
@@ -868,15 +1187,19 @@ def run_opendental_benefits_grid_writeback(
                     )
                 )
                 actions.append(
-                    {
-                        "target": label,
-                        "type": "Limitations",
-                        "cov_cat_num": cov_cat_num,
-                        "quantity": quantity,
-                        "quantity_qualifier": quantity_qualifier,
-                        "action": "created",
-                        "benefit_num": created.BenefitNum,
-                    }
+                    guard.record(
+                        {
+                            "target": label,
+                            "type": "Limitations",
+                            "cov_cat_num": cov_cat_num,
+                            "quantity": quantity,
+                            "quantity_qualifier": quantity_qualifier,
+                            "action": "created",
+                            "disposition": "auto",
+                            "benefit_num": created.BenefitNum,
+                        },
+                        benefit_num=created.BenefitNum,
+                    )
                 )
             else:
                 actions.append(
@@ -887,6 +1210,7 @@ def run_opendental_benefits_grid_writeback(
                         "quantity": quantity,
                         "quantity_qualifier": quantity_qualifier,
                         "action": "unchanged",
+                        "disposition": "unchanged",
                         "benefit_num": existing_row.BenefitNum,
                     }
                 )
@@ -907,6 +1231,16 @@ def run_opendental_benefits_grid_writeback(
         existing_row = _find("WaitingPeriod", cov_cat_num)
         try:
             if existing_row is None:
+                decision = classify_quantity_change(
+                    previous=None, proposed=months, field="WaitingPeriod.Quantity"
+                )
+                if _gate_or_skip(
+                    decision,
+                    target=label,
+                    benefit_type="WaitingPeriod",
+                    extra={"cov_cat_num": cov_cat_num, "months": months},
+                ):
+                    return
                 created = client.create_benefit(
                     ODBenefitCreate(
                         PlanNum=plan_num,
@@ -918,17 +1252,39 @@ def run_opendental_benefits_grid_writeback(
                     )
                 )
                 actions.append(
-                    {
-                        "target": label,
-                        "type": "WaitingPeriod",
+                    guard.record(
+                        {
+                            "target": label,
+                            "type": "WaitingPeriod",
+                            "cov_cat_num": cov_cat_num,
+                            "months": months,
+                            "action": "created",
+                            "disposition": "auto",
+                            "benefit_num": created.BenefitNum,
+                        },
+                        benefit_num=created.BenefitNum,
+                    )
+                )
+            else:
+                if _skip_human_edit(existing_row, target=label, benefit_type="WaitingPeriod"):
+                    return
+                decision = classify_quantity_change(
+                    previous=existing_row.Quantity,
+                    proposed=months,
+                    field="WaitingPeriod.Quantity",
+                )
+                agent_owned = existing_row.BenefitNum in guard.agent_benefit_nums
+                if _gate_or_skip(
+                    decision,
+                    target=label,
+                    benefit_type="WaitingPeriod",
+                    extra={
                         "cov_cat_num": cov_cat_num,
                         "months": months,
-                        "action": "created",
-                        "benefit_num": created.BenefitNum,
-                    }
-                )
-            elif (existing_row.Quantity or -1) != months:
-                if _skip_human_edit(existing_row, target=label, benefit_type="WaitingPeriod"):
+                        "benefit_num": existing_row.BenefitNum,
+                    },
+                    agent_owned=agent_owned,
+                ):
                     return
                 client.update_benefit(
                     existing_row.BenefitNum,
@@ -942,22 +1298,12 @@ def run_opendental_benefits_grid_writeback(
                             "cov_cat_num": cov_cat_num,
                             "months": months,
                             "action": "updated",
+                            "disposition": "auto",
                             "benefit_num": existing_row.BenefitNum,
                             "previous_months": existing_row.Quantity,
                         },
                         benefit_num=existing_row.BenefitNum,
                     )
-                )
-            else:
-                actions.append(
-                    {
-                        "target": label,
-                        "type": "WaitingPeriod",
-                        "cov_cat_num": cov_cat_num,
-                        "months": months,
-                        "action": "unchanged",
-                        "benefit_num": existing_row.BenefitNum,
-                    }
                 )
         except Exception as exc:
             logger.warning("OpenDental WaitingPeriod upsert failed (cat %s): %s", cov_cat_num, exc)
@@ -974,6 +1320,17 @@ def run_opendental_benefits_grid_writeback(
         existing_row = _find("Exclusions", cov_cat_num)
         try:
             if existing_row is None:
+                if dry_run:
+                    actions.append(
+                        {
+                            "target": label,
+                            "type": "Exclusions",
+                            "cov_cat_num": cov_cat_num,
+                            "action": "proposed_create",
+                            "disposition": "auto",
+                        }
+                    )
+                    return
                 created = client.create_benefit(
                     ODBenefitCreate(
                         PlanNum=plan_num,
@@ -983,13 +1340,17 @@ def run_opendental_benefits_grid_writeback(
                     )
                 )
                 actions.append(
-                    {
-                        "target": label,
-                        "type": "Exclusions",
-                        "cov_cat_num": cov_cat_num,
-                        "action": "created",
-                        "benefit_num": created.BenefitNum,
-                    }
+                    guard.record(
+                        {
+                            "target": label,
+                            "type": "Exclusions",
+                            "cov_cat_num": cov_cat_num,
+                            "action": "created",
+                            "disposition": "auto",
+                            "benefit_num": created.BenefitNum,
+                        },
+                        benefit_num=created.BenefitNum,
+                    )
                 )
             else:
                 actions.append(
@@ -998,6 +1359,7 @@ def run_opendental_benefits_grid_writeback(
                         "type": "Exclusions",
                         "cov_cat_num": cov_cat_num,
                         "action": "unchanged",
+                        "disposition": "unchanged",
                         "benefit_num": existing_row.BenefitNum,
                     }
                 )
@@ -1012,6 +1374,77 @@ def run_opendental_benefits_grid_writeback(
                 }
             )
 
+    def _upsert_active_coverage(is_active: bool) -> None:
+        if general_num is None:
+            actions.append(
+                {
+                    "target": "active_coverage",
+                    "type": "ActiveCoverage",
+                    "action": "skipped_no_general_covcat",
+                }
+            )
+            return
+        existing_row = _find("ActiveCoverage", general_num)
+        try:
+            if existing_row is None and is_active:
+                if dry_run:
+                    actions.append(
+                        {
+                            "target": "active_coverage",
+                            "type": "ActiveCoverage",
+                            "action": "proposed_create",
+                            "disposition": "auto",
+                            "cov_cat_num": general_num,
+                        }
+                    )
+                    return
+                created = client.create_benefit(
+                    ODBenefitCreate(
+                        PlanNum=plan_num,
+                        BenefitType="ActiveCoverage",
+                        CoverageLevel="None",
+                        CovCatNum=general_num,
+                        TimePeriod="CalendarYear",
+                    )
+                )
+                actions.append(
+                    guard.record(
+                        {
+                            "target": "active_coverage",
+                            "type": "ActiveCoverage",
+                            "action": "created",
+                            "disposition": "auto",
+                            "benefit_num": created.BenefitNum,
+                            "cov_cat_num": general_num,
+                        },
+                        benefit_num=created.BenefitNum,
+                    )
+                )
+            elif existing_row is not None:
+                actions.append(
+                    {
+                        "target": "active_coverage",
+                        "type": "ActiveCoverage",
+                        "action": "unchanged" if is_active else "present_inactive_flag",
+                        "disposition": "unchanged",
+                        "benefit_num": existing_row.BenefitNum,
+                    }
+                )
+            else:
+                actions.append(
+                    {
+                        "target": "active_coverage",
+                        "type": "ActiveCoverage",
+                        "action": "skipped_inactive",
+                        "disposition": "unchanged",
+                    }
+                )
+        except Exception as exc:
+            logger.warning("OpenDental ActiveCoverage upsert failed: %s", exc)
+            actions.append(
+                {"target": "active_coverage", "type": "ActiveCoverage", "error": str(exc)}
+            )
+
     # Coverage percentages per resolved category (dedupe so each CovCatNum is written once).
     seen_cov_cats: set[int] = set()
     for target in targets["coverage"]:
@@ -1022,10 +1455,37 @@ def run_opendental_benefits_grid_writeback(
             seen_cov_cats.add(cov_cat_num)
             _upsert_coinsurance(cov_cat_num, target["percent"], f"{target['label']}/{ebenefit}")
 
+    if targets.get("active_coverage") is not None:
+        _upsert_active_coverage(bool(targets["active_coverage"]))
+
     if targets["annual_max"] is not None:
         _upsert_monetary("Limitations", targets["annual_max"], "annual_max")
     if targets["deductible"] is not None:
         _upsert_monetary("Deductible", targets["deductible"], "general_deductible")
+    if targets.get("ortho_lifetime_max") is not None and ortho_num is not None:
+        _upsert_monetary(
+            "Limitations",
+            float(targets["ortho_lifetime_max"]),
+            "ortho_lifetime_max",
+            cov_cat_num=ortho_num,
+            coverage_level="Individual",
+            time_period="Lifetime",
+        )
+    elif targets.get("ortho_lifetime_max") is not None and ortho_num is None:
+        actions.append(
+            {
+                "target": "ortho_lifetime_max",
+                "type": "Limitations",
+                "action": "skipped_unresolved_covcat",
+            }
+        )
+    if targets.get("copay") is not None:
+        _upsert_monetary(
+            "CoPayment",
+            float(targets["copay"]),
+            "copay",
+            coverage_level="None",
+        )
 
     for target in targets.get("frequency_limitations") or []:
         cov_cat_num = _covcat_for_category(target.get("category"), ebenefit_to_covcat)
@@ -1084,6 +1544,12 @@ def run_opendental_benefits_grid_writeback(
         "actions": actions,
         "mutations": guard.mutations,
         "agent_benefit_nums": sorted(guard.agent_benefit_nums),
+        "dry_run": dry_run,
+        "confidence_gating": confidence_gating,
+        "pre_snapshot": pre_snapshot,
+        "disposition_summary": summarize_dispositions(actions),
+        "plan_clauses": targets.get("plan_clauses") or [],
+        "review_items": extract_review_items_from_grid_actions(actions),
     }
 
 
@@ -1130,6 +1596,9 @@ def run_opendental_writeback(
     write_insadjust: bool = False,
     write_benefits_grid: bool = False,
     respect_manual_edits: bool = True,
+    dry_run_financial: bool = False,
+    od_snapshot: dict[str, Any] | None = None,
+    coverage_order: str = "primary",
     verified_on: date | None = None,
     check_id: str | None = None,
     patient_id: Any = None,
@@ -1140,14 +1609,26 @@ def run_opendental_writeback(
       1. InsSubs.BenefitNotes (primary structured snapshot)
       2. InsVerifies PatientEnrollment + InsuranceBenefit (audit trail)
       3. Commlog (front-desk visibility)
-      4. ClaimProcs InsAdjust (Phase 2 financial sync, opt-in)
+      4. ClaimProcs InsAdjust (Phase 2 financial sync, opt-in; dry-run when shadow-compare)
+      5. Benefits grid (opt-in; dry-run + confidence gating supported)
     """
     verified = verified_on or date.today()
     routing = primary_result.get("routing") or {}
     canonical = primary_result.get("canonical") or {}
     proc_estimates = primary_result.get("procedure_estimates") or []
+    universal_record = primary_result.get("universal_dental_record")
     raw_check = check_id if check_id is not None else primary_result.get("check_id")
     check_id_str = str(raw_check) if raw_check else None
+
+    confidence_gating = False
+    try:
+        from app.eligibility.config import get_settings as _get_elig_settings
+
+        confidence_gating = bool(
+            _get_elig_settings().opendental_write_benefits_grid_confidence_gating
+        )
+    except Exception:
+        confidence_gating = False
 
     audit_rows = _load_patient_audit_rows(patient_id)
     agent_benefit_nums = collect_agent_benefit_nums(audit_rows, primary_plan_num)
@@ -1160,18 +1641,30 @@ def run_opendental_writeback(
         plan_name=plan_name,
         check_id=check_id_str,
     )
+    # Append notes-only plan clauses (downgrade / alternate benefit) into BenefitNotes via snapshot.
+    plan_clauses = _plan_clause_notes(
+        canonical, universal_record if isinstance(universal_record, dict) else None
+    )
 
     result: dict[str, Any] = {
+        "coverage_order": coverage_order,
+        "dry_run_financial": dry_run_financial,
         "benefit_notes": None,
         "subscriber_note": None,
         "insverifies": None,
         "commlog": None,
         "insadjust": None,
         "benefits_grid": None,
+        "fee_schedule_alerts": None,
+        "insplan_drift": None,
+        "review_queue": None,
     }
 
     # 1) PRIMARY: InsSubs.BenefitNotes -------------------------------------------------
     benefit_notes_text = format_benefit_notes(snapshot)
+    if plan_clauses:
+        clause_block = "\nPlan Clauses:\n" + "\n".join(f" - {c}" for c in plan_clauses)
+        benefit_notes_text = _truncate(benefit_notes_text.rstrip() + "\n" + clause_block)
     if write_benefit_notes:
         try:
             resp = client.update_inssub_benefit_notes(
@@ -1287,6 +1780,15 @@ def run_opendental_writeback(
                     "mode": "set",
                     "fingerprint": fp,
                 }
+            elif dry_run_financial:
+                result["insadjust"] = {
+                    "pat_plan_num": primary_pat_plan_num,
+                    "ins_used": ins_used,
+                    "deductible_used": ded_used,
+                    "mode": "proposed",
+                    "dry_run": True,
+                    "fingerprint": fp,
+                }
             else:
                 try:
                     resp = client.put_claimproc_insadjust(
@@ -1317,20 +1819,34 @@ def run_opendental_writeback(
                     logger.warning("OpenDental InsAdjust write failed: %s", exc)
                     result["insadjust"] = {"error": str(exc)}
 
-    # 5) STRUCTURED GRID: Benefits (CoInsurance %, Deductible, Annual Max) -------------
+    # 5) STRUCTURED GRID: Benefits (Edit Benefits + Other Benefits) -------------------
     if write_benefits_grid:
         try:
+            if not dry_run_financial:
+                # Snapshot current OD benefits before mutation (Track C rollback support).
+                try:
+                    persist_benefits_snapshot(
+                        patient_id=patient_id,
+                        check_id=check_id_str,
+                        plan_num=primary_plan_num,
+                        snapshot=snapshot_od_benefits(client.get_benefits(primary_plan_num)),
+                    )
+                except Exception as snap_exc:
+                    logger.warning("OpenDental pre-write snapshot failed: %s", snap_exc)
+
             grid_result = run_opendental_benefits_grid_writeback(
                 client,
                 plan_num=primary_plan_num,
                 canonical=canonical,
-                universal_record=primary_result.get("universal_dental_record"),
+                universal_record=universal_record if isinstance(universal_record, dict) else None,
                 respect_manual_edits=respect_manual_edits,
                 agent_benefit_nums=agent_benefit_nums,
                 check_id=check_id_str,
+                dry_run=dry_run_financial,
+                confidence_gating=confidence_gating,
             )
             result["benefits_grid"] = grid_result
-            if grid_result.get("mutations"):
+            if grid_result.get("mutations") and not dry_run_financial:
                 _persist_audit_event(
                     patient_id,
                     BENEFIT_GRID_MUTATION_EVENT,
@@ -1342,9 +1858,82 @@ def run_opendental_writeback(
                         "agent_benefit_nums": grid_result.get("agent_benefit_nums") or [],
                     },
                 )
+            review_items = list(grid_result.get("review_items") or [])
+            if review_items:
+                persist_review_items(
+                    patient_id=patient_id,
+                    check_id=check_id_str,
+                    plan_num=primary_plan_num,
+                    items=review_items,
+                )
+                result["review_queue"] = {"items": review_items, "count": len(review_items)}
         except Exception as exc:
             logger.warning("OpenDental benefits-grid write failed: %s", exc)
             result["benefits_grid"] = {"error": str(exc)}
+
+    # 6) Track E — fee schedule / network alerts (never mutate FeeSched) --------------
+    try:
+        fee_alerts = detect_fee_schedule_alerts(
+            canonical=canonical,
+            universal_record=universal_record if isinstance(universal_record, dict) else None,
+        )
+        result["fee_schedule_alerts"] = fee_alerts
+        if fee_alerts:
+            persist_review_items(
+                patient_id=patient_id,
+                check_id=check_id_str,
+                plan_num=primary_plan_num,
+                items=fee_alerts,
+                event_type=FEE_ALERT_EVENT_TYPE,
+            )
+    except Exception as exc:
+        logger.warning("Fee schedule intel failed: %s", exc)
+        result["fee_schedule_alerts"] = {"error": str(exc)}
+
+    # 7) Track G — read-only InsPlan metadata drift ----------------------------------
+    try:
+        drift = detect_insplan_drift(
+            od_snapshot=od_snapshot,
+            canonical=canonical,
+            universal_record=universal_record if isinstance(universal_record, dict) else None,
+        )
+        result["insplan_drift"] = drift
+        if drift:
+            persist_review_items(
+                patient_id=patient_id,
+                check_id=check_id_str,
+                plan_num=primary_plan_num,
+                items=drift,
+                event_type=INSPLAN_DRIFT_EVENT_TYPE,
+            )
+    except Exception as exc:
+        logger.warning("InsPlan drift detection failed: %s", exc)
+        result["insplan_drift"] = {"error": str(exc)}
+
+    # Track F — change-only reverify alerts (especially useful in shadow-compare dry-run)
+    try:
+        change_items = material_change_alert_items(
+            benefits_grid=result.get("benefits_grid")
+            if isinstance(result.get("benefits_grid"), dict)
+            else None,
+            insadjust=result.get("insadjust")
+            if isinstance(result.get("insadjust"), dict)
+            else None,
+            insplan_drift=result.get("insplan_drift")
+            if isinstance(result.get("insplan_drift"), list)
+            else None,
+        )
+        if change_items and dry_run_financial:
+            persist_review_items(
+                patient_id=patient_id,
+                check_id=check_id_str,
+                plan_num=primary_plan_num,
+                items=change_items,
+                event_type=REVERIFY_ALERT_EVENT_TYPE,
+            )
+            result["reverify_alerts"] = {"items": change_items, "count": len(change_items)}
+    except Exception as exc:
+        logger.warning("Reverify change alerts failed: %s", exc)
 
     return result
 

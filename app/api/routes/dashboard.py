@@ -579,6 +579,7 @@ class UpdateOpenDentalConnectionBody(BaseModel):
     cdt_codes: str | None = Field(default=None, max_length=500)
     writeback_enabled: bool | None = None
     writeback_full: bool | None = None
+    writeback_shadow_compare: bool | None = None
 
 
 @router.get("/opendental/connections")
@@ -763,3 +764,31 @@ def get_opendental_runs(
     except RuntimeError as exc:
         raise _db_failure(exc, log_message="list opendental runs failure") from exc
     return {"practice_id": tenant.practice_id, "runs": runs}
+
+
+@router.get("/opendental/writeback-review")
+def get_opendental_writeback_review(
+    tenant: PracticeContextDep,
+    patient_id: str = Query(..., min_length=1),
+) -> dict[str, Any]:
+    """Track C exception queue: review / fee / drift / reverify alerts for one patient."""
+    from uuid import UUID
+
+    from app.eligibility.config import get_settings as get_eligibility_settings
+    from app.eligibility.db import get_supabase, list_audit_for_patient
+    from app.integrations.opendental.review_queue import summarize_review_queue
+
+    try:
+        pid = UUID(str(patient_id))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="invalid_patient_id") from exc
+    try:
+        supabase = get_supabase(get_eligibility_settings())
+        rows = list_audit_for_patient(supabase, pid)
+    except Exception as exc:
+        raise _db_failure(exc, log_message="opendental writeback review failure") from exc
+    return {
+        "practice_id": tenant.practice_id,
+        "patient_id": str(pid),
+        "queue": summarize_review_queue(rows),
+    }

@@ -70,8 +70,9 @@ def test_benefits_grid_skips_human_edited_row() -> None:
 
 
 def test_benefits_grid_updates_agent_owned_row() -> None:
+    # Prior agent value within ±5 of proposed 80% so confidence gating allows auto-update.
     existing = [
-        ODBenefit(BenefitNum=192, PlanNum=19, CovCatNum=4, BenefitType="CoInsurance", Percent=50),
+        ODBenefit(BenefitNum=192, PlanNum=19, CovCatNum=4, BenefitType="CoInsurance", Percent=78),
     ]
 
     class _Stub:

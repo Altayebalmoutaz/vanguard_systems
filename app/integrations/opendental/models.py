@@ -24,12 +24,20 @@ class ODInsuranceRow(BaseModel):
     CarrierName: str | None = None
     SubscriberID: str | None = None
     Ordinal: int | None = None
+    # Optional Family Module fields when the OD API returns them (Track G drift).
+    GroupNum: str | None = None
+    Employer: str | None = None
+    Relationship: str | None = None
 
 
 class ODCarrier(BaseModel):
     CarrierNum: int = Field(..., ge=1)
     CarrierName: str | None = None
     ElectID: str | None = None
+    Address: str | None = None
+    City: str | None = None
+    State: str | None = None
+    Zip: str | None = None
 
 
 class ODProcedureLog(BaseModel):
@@ -173,3 +181,5 @@ class ODBenefitUpdate(BaseModel):
     BenefitType: ODBenefitType | None = None
     CoverageLevel: ODCoverageLevel | None = None
     TimePeriod: str | None = None
+    QuantityQualifier: str | None = None
+    Quantity: int | None = None

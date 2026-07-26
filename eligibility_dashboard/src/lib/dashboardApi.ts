@@ -55,6 +55,7 @@ export type OpenDentalConnection = {
   cdt_codes: string;
   writeback_enabled: boolean;
   writeback_full: boolean;
+  writeback_shadow_compare?: boolean;
   last_poll_at: string | null;
   last_poll_status: string | null;
   last_poll_appointments: number | null;
@@ -83,6 +84,7 @@ export type OpenDentalConnectionUpdate = {
   cdt_codes?: string;
   writeback_enabled?: boolean;
   writeback_full?: boolean;
+  writeback_shadow_compare?: boolean;
 };
 
 function errorMessage(payload: { error?: unknown; detail?: unknown }, fallback: string): string {

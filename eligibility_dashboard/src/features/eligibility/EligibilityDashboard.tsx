@@ -570,6 +570,7 @@ function rowFromReadModel(row: EligibilityDashboardRow): DashboardRow {
           routing_status: row.routing_status,
           integrity_warnings: row.integrity_warnings,
           raw_response: row.raw_response,
+          vob_details: row.vob_details ?? null,
           created_at: row.created_at,
         }
       : null,
@@ -651,6 +652,7 @@ function syntheticReadRowFromDashboard(
     integrity_warnings_count: check?.integrity_warnings?.length ?? 0,
     integrity_warnings: check?.integrity_warnings ?? null,
     raw_response: check?.raw_response ?? null,
+    vob_details: check?.vob_details ?? null,
     status_label: statusLabel,
     status_detail: null,
     voice_session_id: null,
@@ -2779,8 +2781,16 @@ export default function EligibilityDashboard() {
                             key={estimate.id}
                             className="grid grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-slate-100 py-2.5 last:border-b-0"
                           >
-                            <div className="text-[13px] font-medium text-slate-700">
-                              {serviceLabelFor(estimate.cdt_code) ?? "\u2014"}
+                            <div className="min-w-0">
+                              <div className="text-[13px] font-medium text-slate-700">
+                                {serviceLabelFor(estimate.cdt_code) ?? "\u2014"}
+                              </div>
+                              {estimate.downgrade_applied &&
+                              estimate.alternate_cdt ? (
+                                <div className="mt-0.5 text-[11px] text-amber-700">
+                                  Alternate benefit as {estimate.alternate_cdt}
+                                </div>
+                              ) : null}
                             </div>
                             <div className="text-right text-[12px] font-medium">
                               <span
@@ -2800,6 +2810,121 @@ export default function EligibilityDashboard() {
                             </div>
                           </div>
                         ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {/* Specialist VOB details */}
+                  {selectedRow.check?.vob_details &&
+                  (selectedRow.check.vob_details.prior_auth_required != null ||
+                    (selectedRow.check.vob_details.last_service_dates?.length ??
+                      0) > 0 ||
+                    (selectedRow.check.vob_details.age_limits?.length ?? 0) >
+                      0 ||
+                    (selectedRow.check.vob_details.downgrades?.length ?? 0) >
+                      0 ||
+                    selectedRow.check.vob_details.deductible_individual !=
+                      null ||
+                    selectedRow.check.vob_details.deductible_family != null) ? (
+                    <div className="card p-5">
+                      <div className="mb-3 flex items-center gap-2">
+                        <FileText
+                          size={16}
+                          className="text-indigo-600"
+                          strokeWidth={2}
+                        />
+                        <h4 className="text-[13px] font-semibold text-slate-900">
+                          Specialist VOB details
+                        </h4>
+                      </div>
+                      <div className="space-y-2.5 border-t border-slate-100 pt-3 text-[12.5px] text-slate-700">
+                        {selectedRow.check.vob_details.prior_auth_required !=
+                        null ? (
+                          <div>
+                            <span className="font-medium text-slate-900">
+                              Prior auth:{" "}
+                            </span>
+                            {selectedRow.check.vob_details.prior_auth_required
+                              ? "Required"
+                              : "Not required"}
+                          </div>
+                        ) : null}
+                        {(selectedRow.check.vob_details.deductible_individual !=
+                          null ||
+                          selectedRow.check.vob_details.deductible_family !=
+                            null) && (
+                          <div>
+                            <span className="font-medium text-slate-900">
+                              Deductible IND/FAM:{" "}
+                            </span>
+                            {formatCurrency(
+                              selectedRow.check.vob_details
+                                .deductible_individual,
+                            )}{" "}
+                            /{" "}
+                            {formatCurrency(
+                              selectedRow.check.vob_details.deductible_family,
+                            )}
+                          </div>
+                        )}
+                        {(selectedRow.check.vob_details.last_service_dates
+                          ?.length ?? 0) > 0 ? (
+                          <div>
+                            <div className="mb-1 font-medium text-slate-900">
+                              Last service dates
+                            </div>
+                            <ul className="list-disc space-y-0.5 pl-4">
+                              {selectedRow.check.vob_details.last_service_dates?.map(
+                                (row, idx) => (
+                                  <li key={`lsd-${idx}`}>
+                                    {row.cdt_code
+                                      ? `${row.cdt_code}: `
+                                      : ""}
+                                    {row.service_date ??
+                                      row.description ??
+                                      "\u2014"}
+                                  </li>
+                                ),
+                              )}
+                            </ul>
+                          </div>
+                        ) : null}
+                        {(selectedRow.check.vob_details.age_limits?.length ??
+                          0) > 0 ? (
+                          <div>
+                            <div className="mb-1 font-medium text-slate-900">
+                              Age limits
+                            </div>
+                            <ul className="list-disc space-y-0.5 pl-4">
+                              {selectedRow.check.vob_details.age_limits?.map(
+                                (row, idx) => (
+                                  <li key={`age-${idx}`}>
+                                    {row.description ??
+                                      `Age ${row.age_min ?? "?"}–${row.age_max ?? "?"}`}
+                                  </li>
+                                ),
+                              )}
+                            </ul>
+                          </div>
+                        ) : null}
+                        {(selectedRow.check.vob_details.downgrades?.length ??
+                          0) > 0 ? (
+                          <div>
+                            <div className="mb-1 font-medium text-slate-900">
+                              Downgrades / alternate benefits
+                            </div>
+                            <ul className="list-disc space-y-0.5 pl-4">
+                              {selectedRow.check.vob_details.downgrades?.map(
+                                (row, idx) => (
+                                  <li key={`dg-${idx}`}>
+                                    {row.description ??
+                                      `${row.cdt_from ?? "?"} → ${row.cdt_to ?? "?"}`}
+                                  </li>
+                                ),
+                              )}
+                            </ul>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   ) : null}

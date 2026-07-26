@@ -303,10 +303,18 @@ Canonical fields include:
 - `stedi_warnings`
 - `response_complete`
 - `missing_fields`
-- `normalization_version`
+- `normalization_version` (currently `1.1` for specialist-parity fields)
 - `normalization_warnings`
-- `dental_benefit_breakdown`
+- `dental_benefit_breakdown` (includes `age_limits`, `downgrades`, `ortho_age_cutoff`)
 - `dental_calculator_ready`
+- `prior_auth_required` (promoted from calculator-ready network buckets)
+- `last_service_dates` (promoted from `latest_visit_or_consultation`)
+- `deductible_individual` / `deductible_family`
+- `annual_max_individual` / `annual_max_family`
+
+These specialist-parity fields are also persisted on `rcm.eligibility_checks.vob_details`
+(jsonb) for dashboard/reload. Procedure estimates may include `downgrade_applied` and
+`alternate_cdt` when Layer 5 applies an alternate-benefit fee.
 
 Procedure-level details:
 
@@ -326,7 +334,12 @@ Layer 3 handles:
 - benefit codes `A`, `B`, `C`, `F`, and `G`
 - deductible totals, met, and remaining
 - annual max totals, used, and remaining
+- IND/FAM coverage-level split for deductible and annual max
 - coinsurance and copay
+- prior authorization / `authOrCertIndicator`
+- last visit / last service dates
+- age limits (sealants, fluoride, ortho, dependents)
+- structured downgrades / alternate benefits
 - top-level `procedureCode`
 - `compositeMedicalProcedureIdentifier`
 - not-covered rows (`N` and `I`)
@@ -335,6 +348,10 @@ Layer 3 handles:
 - Stedi warnings
 
 Layer 3 does not call Supabase.
+
+Voice verification (when escalated for financial/coverage gaps) also asks about and merges
+frequency limitations, waiting periods, last-service dates, age limits, prior auth, and
+downgrades into `dental_benefit_breakdown` / top-level canonical.
 
 ---
 

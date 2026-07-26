@@ -1,8 +1,9 @@
 # OpenDental Integration (Eligibility Agent)
 
-This integration adds `POST /eligibility-agent/eligibility/from-opendental` so the
-eligibility service can pull demographics + insurance from OpenDental, run the
-existing Stedi pipeline, and optionally write verification status back to OpenDental.
+This integration pulls demographics + insurance from Open Dental, runs the Stedi
+270/271 eligibility pipeline, and writes verification results back into the same
+OD objects staff use for estimates (Family Module notes, InsVerify dates, Edit
+Benefits, Other Benefits, and Adjustments to Insurance Benefits).
 
 ## API Modes
 
@@ -10,105 +11,98 @@ existing Stedi pipeline, and optionally write verification status back to OpenDe
 - Service: `http://localhost:30223/api/v1` (Windows service)
 - Remote: `https://api.opendental.com/api/v1`
 
-Auth header is the same in all modes:
+Auth header:
 
 `Authorization: ODFHIR {DeveloperKey}/{CustomerKey}`
 
-## Route Contract
+## Production flow (queue)
 
-Endpoint:
+1. Multi-clinic **poller** (or dashboard **Poll now**) loads appointments across
+   `poll_window_days` (auto-poll defaults toward a 3-day / 48–72h reverify window
+   when the connection is set to today-only).
+2. For each patient: `GET /patients`, `GET /familymodules/{PatNum}/Insurance`,
+   carriers → map to `EligibilityRequest` (primary **and** secondary plan IDs).
+3. Enqueue `rcm.eligibility_requests` → pipeline worker → Stedi.
+4. On completion, `maybe_enqueue_od_writeback` queues `opendental_writeback`
+   pipeline run(s) for primary (and secondary when present + full writeback).
 
-`POST /eligibility-agent/eligibility/from-opendental`
+Legacy synchronous route `POST /eligibility-agent/eligibility/from-opendental`
+still exists for demos; it uses env `OPENDENTAL_WRITE_*` flags instead of the
+per-clinic connection toggles.
 
-Body:
+## Honest Phase 1 vs estimate-driving writeback
 
-```json
-{
-  "pat_num": 1,
-  "trigger_event": "PRE_APPOINTMENT",
-  "cdt_codes": ["D1110"],
-  "practice_id": "vgd_mock_brooklyn",
-  "rendering_provider_npi": "1104023674",
-  "write_back": false
-}
-```
+| Layer | OD target | Default |
+| --- | --- | --- |
+| 1 | InsVerify (PatientEnrollment + InsuranceBenefit) | On with writeback |
+| 2 | `InsSubs.BenefitNotes`, `SubscNote`, Commlog | On |
+| 3 | `POST`/`PUT /benefits` (Edit Benefits + Other Benefits) | Off unless **Full writeback** |
+| 4 | `PUT /claimprocs/InsAdjust` (YTD used) | Off unless **Full writeback** |
 
-Flow:
+**Notes alone do not change Treatment Plan / Account estimates.** Layers 3–4
+populate the native OD estimate engine (same surfaces as VOB Recordation).
 
-1. `GET /patients/{PatNum}`
-2. `GET /familymodules/{PatNum}/Insurance`
-3. `GET /carriers/{CarrierNum}` (for each distinct carrier)
-4. map to `EligibilityRequest` and call existing `run_eligibility_check_endpoint()`
-5. optional write-back (when `write_back=true` and `OPENDENTAL_WRITEBACK_ENABLED=true`)
+We do **not** auto-write fee schedules, InsPlan group/employer metadata, or
+fabricated AR rows. Track G detects InsPlan drift read-only; Track E alerts on
+network/fee mismatches without assigning FeeSched.
 
-## Write-back targets and order
+## Connection toggles (dashboard)
 
-The OD REST API cannot write the structured Benefits grid (per-category coverage %, deductible,
-annual-max rows) — that grid is derived UI, populated only by OD's clearinghouse 271 Import. The
-agent therefore writes to the supported endpoints, in this order, each step independently
-flag-gated and fault-isolated (one failure never aborts the rest):
+| Toggle | Effect |
+| --- | --- |
+| Write-back | Master gate for OD writes after eligibility |
+| Full writeback | Enables benefits grid + InsAdjust (needs **$30 Insurance** API tier) |
+| Shadow compare | With Full: run L3/L4 in **dry-run** (propose diffs + review queue); notes/InsVerify/commlog still write. Default **off** so full writeback applies. |
 
-1. **`PUT /inssubs/{InsSubNum}`** — `BenefitNotes` field (primary persistent storage). Holds a
-   deterministic, ASCII-only eligibility snapshot. Gate: `OPENDENTAL_WRITE_BENEFIT_NOTES_ENABLED`.
-1b. **`PUT /inssubs/{InsSubNum}`** — `SubscNote` field. A one-line summary that renders **bold red
-   directly on the insurance grid** (the most visible note spot). Persists reliably (unlike the
-   InsVerify `Note`). Gate: `OPENDENTAL_WRITE_SUBSCRIBER_NOTE_ENABLED` (on by default; uses the same
-   `InsSubs PUT` permission as `BenefitNotes`).
-2. **`PUT /insverifies`** — `PatientEnrollment` (`FKey=PatPlanNum`) + `InsuranceBenefit`
-   (`FKey=PlanNum`); sets the "Eligibility/Benefits Last Verified" dates + a Note (audit trail).
-3. **`POST /commlogs`** — human-readable summary for the front desk (visibility only).
-   Gate: `OPENDENTAL_WRITE_COMMLOG_ENABLED`.
-4. **`PUT /claimprocs/InsAdjust`** — Phase 2 only; pushes deductible/annual-max *used* so the
-   plan's remaining balances update. Off by default (`OPENDENTAL_WRITE_INSADJUST_ENABLED`) because
-   it alters financial running totals.
-5. **`POST` / `PUT /benefits`** — structured **Benefits grid** (the per-category coverage %,
-   General Deductible, and Annual Max rows shown in the *Benefit Information* area of the Edit
-   Insurance Plan window). Off by default (`OPENDENTAL_WRITE_BENEFITS_GRID_ENABLED`) because it
-   mutates plan-level benefits shared by every subscriber on the plan — the same effect as OD's
-   own "Import Benefits" from a 271.
+Flags are stored on `rcm.opendental_connections` (`writeback_enabled`,
+`writeback_full`, `writeback_shadow_compare`).
 
-### Benefits grid write-back (step 5)
+## Write-back order
 
-This is the structured alternative to the free-text `BenefitNotes` field: it writes real
-`benefit` rows so the values appear in the Benefit Information grid itself (not behind the
-*Notes* button).
+Each step is independently flag-gated and fault-isolated:
 
-- `GET /covcats` resolves `EbenefitCat → CovCatNum` live (numbers differ per database).
-- `GET /benefits?PlanNum={PlanNum}` loads existing rows; the write is an **idempotent upsert**:
-  an existing row whose value already matches is left **unchanged**, a changed value is **PUT**,
-  and a missing row is **POST**-created. Each row is fault-isolated.
-- Mapping from the normalized 271 (`universal_dental_record.categories` + `canonical`):
-  - `CoInsurance` `Percent` per category bucket — `DIAGNOSTIC → Diagnostic/X-Ray/Preventive`,
-    `BASIC → Restorative/Endo/Perio/OralSurgery/Adjunctive`, `MAJOR → Crowns/Prosth/MaxProsth`,
-    `ORTHO → Orthodontics`. `Percent = 100 - patient_coinsurance_pct`.
-  - `Limitations` `MonetaryAmt = annual_max_total` and `Deductible` `MonetaryAmt = deductible_total`,
-    both against the **General** category (`EbenefitCat="General"`). Written only when present in
-    the 271.
+1. **`PUT /inssubs/{InsSubNum}`** — `BenefitNotes` (deterministic ASCII snapshot, `[Verified by ezfi]`)
+1b. **`PUT /inssubs/{InsSubNum}`** — `SubscNote` (bold-red on the insurance grid)
+2. **`PUT /insverifies`** — enrollment + benefits last-verified dates + notes
+3. **`POST /commlogs`** — front-desk summary
+4. **`PUT /claimprocs/InsAdjust`** — insurance/deductible used (or proposed in shadow)
+5. **`POST` / `PUT /benefits`** — structured grid:
+   - `ActiveCoverage`
+   - `CoInsurance` % by category (Diagnostic/Preventive/Basic/Major/Ortho/Endo/Perio/…)
+   - General Deductible + Annual Max
+   - Ortho lifetime max (`Limitations` / Lifetime on Orthodontics)
+   - `CoPayment` when present
+   - Frequency `Limitations`, `WaitingPeriod`, missing-tooth `Exclusions`
+6. **Fee schedule alerts** + **InsPlan drift** (audit/review only)
 
-> **Required OD permission.** `Benefits POST/PUT/DELETE` belong to the **Insurance** API
-> permission tier (see Open Dental's [API Permissions](https://opendental.com/site/apipermissions.html)),
-> which must be enabled on your Customer Key in the Open Dental Developer Portal (a paid API
-> module). If the key lacks it, these calls return `401 "Not Authorized"` while `GET /benefits`
-> and the other write-back steps still succeed; the grid step then logs per-row errors and is
-> skipped without aborting the rest. `BenefitNotes`, `InsVerifies`, and `CommLog` use permissions
-> a standard key already has.
+### Confidence gating (Track C)
 
-The route response includes `opendental.write_back_notes` with per-step results
-(`benefit_notes`, `subscriber_note`, `insverifies`, `commlog`, `insadjust`, `benefits_grid`) and
-`note_sent` text. The `InsVerify` `Note` comes back empty from OD even on success (date is the
-reliable signal), but `BenefitNotes` and `SubscNote` persist; read `note_sent` for full content.
+Large coinsurance (±5 pts) or monetary (±$100) deltas, and any quantity/waiting
+change, are classified `review` and skipped unless shadow-compare dry-run (which
+records proposed actions). Pre-write benefit snapshots are audited for rollback
+comparison. Review items land in eligibility audit events
+(`opendental_writeback_review`, `opendental_reverify_change`, etc.).
 
-### BenefitNotes format (deterministic, ASCII only)
+### Required OD permission
+
+`Benefits POST/PUT/DELETE` require the **Insurance** API permission tier on the
+Customer Key. Without it, grid calls return 401 while notes/InsVerify/Commlog
+still succeed.
+
+## BenefitNotes format (deterministic, ASCII)
 
 ```
-[ELIGIBILITY SNAPSHOT | STEDI]
+[Verified by ezfi]
 Date: YYYY-MM-DD HH:MM
 Plan: PPO - Carrier Name
 Status: CLEARED
+Check: <check_id>
 
 Deductible:
  - Total: $X
  - Remaining: $X
+ - Individual: $X   (when 271 reports IND)
+ - Family: $X       (when 271 reports FAM)
 
 Annual Max:
  - Total: $X
@@ -116,75 +110,104 @@ Annual Max:
 
 Coverage:
  - D1110: 100%
- - D2740: 50%
 
 Frequency:
  - n/a
 
+Waiting Periods:
+ - n/a
+
+Missing Tooth Clause:
+ - n/a
+
+Prior Auth / Predetermination:
+ - Required: yes|no|n/a
+
+Last Service Dates:
+ - D1110: 2024-03-15
+
+Age Limits:
+ - Sealants up to age 14
+
+Downgrades / Alternate Benefits:
+ - Composite downgraded to amalgam
+
 Estimates:
  - Patient estimated responsibility: $XXX
 
-Source: Stedi
-Agent: eligibility-agent-v1
+Plan Clauses:
+ - <downgrade / age / alternate benefit text when present>
+
+Verified by ezfi
 ```
 
-Fields not reliably present in the normalized 271 (frequency limits, deductible total in some
-payers, plan type/name) render as `n/a` rather than being fabricated.
+OpenDental has no InsHist / age / pre-auth API endpoints — those specialist fields are
+written as BenefitNotes/Commlog text and surfaced in the dashboard `vob_details` panel.
+Structured Benefits rows still cover coinsurance, deductible, max, frequency, waiting, and
+exclusions.
 
-## Automatic poller (no manual script)
-
-When `OPENDENTAL_AUTO_POLL_ENABLED=true`, the FastAPI app starts an in-process background task on
-startup that polls `GET /appointments` across the configured date window and runs the same
-`from-opendental` flow (with write-back) for each new patient. It replaces manually running
-`scripts/watch_od_appointments.py`. The loop is idempotent — at most one eligibility run per
-patient per day — enforced by an in-memory set plus a Supabase `eligibility_checks` timestamp
-check (survives restarts). Stedi/OD failures are logged and never stop polling. The task is
-cancelled cleanly on shutdown.
-
-## Environment Variables
-
-Add to `.env`:
+## Environment variables
 
 ```env
 OPENDENTAL_BASE_URL=http://localhost:30222/api/v1
 OPENDENTAL_DEVELOPER_KEY=
 OPENDENTAL_CUSTOMER_KEY=
-OPENDENTAL_TIMEOUT_SECONDS=15
-
-# Master write-back switch + per-target gates
 OPENDENTAL_WRITEBACK_ENABLED=false
 OPENDENTAL_WRITE_BENEFIT_NOTES_ENABLED=true
 OPENDENTAL_WRITE_SUBSCRIBER_NOTE_ENABLED=true
 OPENDENTAL_WRITE_COMMLOG_ENABLED=true
 OPENDENTAL_WRITE_INSADJUST_ENABLED=false
-# Structured Benefits grid (needs the "Insurance" API permission on the Customer Key)
 OPENDENTAL_WRITE_BENEFITS_GRID_ENABLED=false
-
-# Automatic appointment poller (replaces manual watch_od_appointments.py)
+OPENDENTAL_WRITE_BENEFITS_GRID_RESPECT_MANUAL_EDITS=true
+OPENDENTAL_WRITE_BENEFITS_GRID_CONFIDENCE_GATING=false
+OPENDENTAL_REVERIFY_WINDOW_DAYS=3
 OPENDENTAL_AUTO_POLL_ENABLED=false
-OPENDENTAL_AUTO_POLL_INTERVAL_SECONDS=60
-OPENDENTAL_AUTO_POLL_DATE_WINDOW_DAYS=0
-OPENDENTAL_AUTO_POLL_CDT_CODES=D1110
-
-# Optional replay mode
-# OPENDENTAL_REPLAY_DIR=tests/fixtures/opendental
+PILOT_SHADOW_MODE=false
 ```
 
-## Replay Mode
+Per-clinic writeback is controlled on the dashboard connection row; env flags
+apply mainly to the legacy `from-opendental` route. Confidence gating defaults
+**off** for full writeback demos; set `OPENDENTAL_WRITE_BENEFITS_GRID_CONFIDENCE_GATING=true`
+for cautious production pilots.
 
-When `OPENDENTAL_REPLAY_DIR` is set, OpenDental reads fixture JSON from disk instead
-of issuing HTTP requests. This is useful for deterministic tests and demo fallback.
+## Pilot / demo enablement checklist
 
-Capture fixtures:
+1. Enable Insurance ($30) API permission on the clinic Customer Key.
+2. Dashboard: Write-back **on**, Full writeback **on**, Shadow compare **off** (applies L3/L4).
+3. Run a sandbox patient; confirm TP Ins Est + remaining max/deductible update.
+4. Optional caution mode: turn Shadow compare **on** and/or set confidence gating env to `true`.
+5. Set poll window to **3** days for continuous 48–72h reverification under auto-poll.
+
+## Clinic fee-schedule simulation (Layer 5)
+
+To exercise **INN/OON fee paths** and Track E fee alerts without mutating OpenDental
+FeeSched, seed fake economics into Supabase for `vgd_mock_brooklyn` + Cigna `62308`:
 
 ```bash
-python scripts/freeze_od_responses.py --pat-nums 1 2 3
+py -3.12 scripts/seed_clinic_sim.py status
+py -3.12 scripts/seed_clinic_sim.py apply --scenario inn_happy
+py -3.12 scripts/seed_clinic_sim.py apply --scenario oon_ucr
+py -3.12 scripts/seed_clinic_sim.py apply --scenario missing_fees
+py -3.12 scripts/seed_clinic_sim.py reset
 ```
 
-## Demo Runner
+| Scenario | Network | Fees | What to observe |
+| --- | --- | --- | --- |
+| `inn_happy` | INN | Contracted overlays (e.g. D0220 $45) | Layer 5 contracted path |
+| `oon_ucr` | OON | Higher UCR-style overlays | Billed path; higher patient $ |
+| `missing_fees` | INN | Demo CDTs removed for 62308 | Missing-fee flags / Track E alert |
 
-```bash
-python scripts/demo_opendental_eligibility.py --pat-nums 1 2 3 --write-back
-```
+Sim fee overlays use effective date `2026-07-26` (no notes column on
+`payer_fee_schedules`). Network rows are tagged `[clinic_sim]` in
+`contract_label` / `notes`. After apply, re-run
+`POST /eligibility-agent/eligibility/from-opendental` with
+`practice_id=vgd_mock_brooklyn`, `rendering_provider_npi=1104023674`, and
+`write_back=true` (see script `--help`). For `missing_fees`, keep
+`ELIGIBILITY_UCR_FALLBACK_ENABLED` off so fallback does not hide the gap.
 
-The script prints: `pat_num | routing | check_id | insverify_num`.
+## Hard rules
+
+- Never write `adjustment`, `payment`, or fabricated `procedurelog` for eligibility.
+- Never auto-assign OD fee schedules.
+- Prefer OD REST; do not use direct MySQL/eConnector as the default write path.
+- Never invent Implant/Emergency coverage % when the 271 did not return them.

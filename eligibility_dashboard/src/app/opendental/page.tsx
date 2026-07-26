@@ -235,6 +235,24 @@ function ConnectionCard({
                 }
               />
             </div>
+            <div className="flex items-center gap-2 text-[12.5px] text-slate-600">
+              <span title="With Full writeback: propose benefits grid + InsAdjust diffs without applying (notes/verifies still write)">
+                Shadow compare
+              </span>
+              <Toggle
+                enabled={Boolean(connection.writeback_shadow_compare)}
+                disabled={
+                  busy !== null ||
+                  !connection.writeback_enabled ||
+                  !connection.writeback_full
+                }
+                onChange={() =>
+                  void save({
+                    writeback_shadow_compare: !connection.writeback_shadow_compare,
+                  })
+                }
+              />
+            </div>
             <div className="mt-1 flex gap-2">
               <button
                 type="button"
@@ -329,7 +347,7 @@ function ConnectionCard({
             </div>
           )}
           <label className="text-[12px] text-slate-600">
-            Window (days ahead)
+            Window (days ahead; 3 ≈ 48–72h reverify)
             <input
               value={windowDays}
               onChange={(event) => setWindowDays(event.target.value)}

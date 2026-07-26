@@ -31,6 +31,7 @@ UPDATABLE_FIELDS = frozenset(
         "cdt_codes",
         "writeback_enabled",
         "writeback_full",
+        "writeback_shadow_compare",
     }
 )
 

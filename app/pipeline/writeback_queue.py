@@ -27,6 +27,9 @@ def build_opendental_writeback_payload(
     write_insadjust: bool = False,
     write_benefits_grid: bool = False,
     respect_manual_edits: bool = True,
+    dry_run_financial: bool = False,
+    od_snapshot: dict[str, Any] | None = None,
+    coverage_order: str = "primary",
     check_id: str | None = None,
     patient_id: str | None = None,
 ) -> dict[str, Any]:
@@ -44,6 +47,9 @@ def build_opendental_writeback_payload(
         "write_insadjust": write_insadjust,
         "write_benefits_grid": write_benefits_grid,
         "respect_manual_edits": respect_manual_edits,
+        "dry_run_financial": dry_run_financial,
+        "od_snapshot": od_snapshot,
+        "coverage_order": coverage_order,
         "check_id": check_id,
         "patient_id": patient_id,
     }

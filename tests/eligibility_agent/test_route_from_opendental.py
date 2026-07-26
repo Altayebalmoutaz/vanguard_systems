@@ -115,6 +115,19 @@ def test_from_opendental_route(monkeypatch) -> None:  # type: ignore[no-untyped-
             },
         )(),
     )
+    # Force the synchronous writeback path (do not enqueue a pipeline run).
+    monkeypatch.setattr("app.eligibility.main.enqueue_opendental_writeback", lambda *a, **k: None)
+    monkeypatch.setattr(
+        "app.eligibility.main.get_neon_dsn",
+        lambda *_a, **_k: None,
+    )
+    # Stub missing OD client methods used by full writeback path.
+    stub.update_inssub_subscriber_note = (  # type: ignore[attr-defined]
+        lambda ins_sub_num, plan_num, subscriber_note: {
+            "InsSubNum": ins_sub_num,
+            "PlanNum": plan_num,
+        }
+    )
 
     client = TestClient(app)
     resp = client.post(

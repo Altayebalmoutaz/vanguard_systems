@@ -235,12 +235,19 @@ def _execute_opendental_writeback(payload: dict[str, Any]) -> dict[str, Any]:
         write_insadjust=bool(payload.get("write_insadjust", False)),
         write_benefits_grid=bool(payload.get("write_benefits_grid", False)),
         respect_manual_edits=bool(payload.get("respect_manual_edits", True)),
+        dry_run_financial=bool(payload.get("dry_run_financial", False)),
+        od_snapshot=payload.get("od_snapshot")
+        if isinstance(payload.get("od_snapshot"), dict)
+        else None,
+        coverage_order=str(payload.get("coverage_order") or "primary"),
         check_id=payload.get("check_id"),
         patient_id=payload.get("patient_id"),
     )
     return {
         "write_back_result": writeback_result,
         "partial_failure": writeback_has_failures(writeback_result),
+        "dry_run_financial": bool(payload.get("dry_run_financial", False)),
+        "coverage_order": str(payload.get("coverage_order") or "primary"),
     }
 
 

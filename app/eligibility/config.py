@@ -162,6 +162,17 @@ class EligibilitySettings(BaseSettings):
         default=True,
         validation_alias="OPENDENTAL_WRITE_BENEFITS_GRID_RESPECT_MANUAL_EDITS",
     )
+    # Track C: when true, large benefit deltas are skipped (review) instead of auto-applied.
+    # Default off for full writeback demos; set true for cautious production pilots.
+    opendental_write_benefits_grid_confidence_gating: bool = Field(
+        default=False,
+        validation_alias="OPENDENTAL_WRITE_BENEFITS_GRID_CONFIDENCE_GATING",
+    )
+    # Track F: recommended poll window for 48–72h pre-appointment reverify (days ahead of today).
+    opendental_reverify_window_days: int = Field(
+        default=3,
+        validation_alias="OPENDENTAL_REVERIFY_WINDOW_DAYS",
+    )
     # When set, OpenDental client reads fixtures from disk instead of issuing HTTP calls.
     opendental_replay_dir: str = Field(default="", validation_alias="OPENDENTAL_REPLAY_DIR")
 

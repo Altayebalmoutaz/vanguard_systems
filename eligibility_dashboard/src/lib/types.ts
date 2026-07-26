@@ -45,6 +45,33 @@ export type EligibilityRequest = {
   completed_at: string | null;
 };
 
+export type VobDetails = {
+  prior_auth_required?: boolean | null;
+  last_service_dates?: Array<{
+    cdt_code?: string | null;
+    service_date?: string | null;
+    description?: string | null;
+  }>;
+  deductible_individual?: number | null;
+  deductible_family?: number | null;
+  annual_max_individual?: number | null;
+  annual_max_family?: number | null;
+  age_limits?: Array<{
+    category?: string | null;
+    cdt_code?: string | null;
+    age_min?: number | null;
+    age_max?: number | null;
+    description?: string | null;
+  }>;
+  downgrades?: Array<{
+    cdt_from?: string | null;
+    cdt_to?: string | null;
+    category?: string | null;
+    description?: string | null;
+  }>;
+  ortho_age_cutoff?: number | null;
+};
+
 export type EligibilityCheck = {
   id: string;
   patient_id: string;
@@ -69,6 +96,7 @@ export type EligibilityCheck = {
   routing_status: string | null;
   integrity_warnings: string[] | null;
   raw_response: Record<string, unknown> | null;
+  vob_details?: VobDetails | null;
   created_at: string;
 };
 
@@ -83,6 +111,8 @@ export type ProcedureEstimate = {
   allowed_amount: number | null;
   insurance_pays: number | null;
   patient_responsibility: number | null;
+  downgrade_applied?: boolean | null;
+  alternate_cdt?: string | null;
   created_at: string;
 };
 
@@ -169,6 +199,7 @@ export type EligibilityDashboardRow = {
   integrity_warnings_count: number;
   integrity_warnings: string[] | null;
   raw_response: Record<string, unknown> | null;
+  vob_details?: VobDetails | null;
   status_label: DashboardStatusLabel;
   status_detail: string | null;
   voice_session_id: string | null;

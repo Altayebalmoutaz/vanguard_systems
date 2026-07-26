@@ -20,6 +20,13 @@ class MappedEligibility:
     primary_plan_num: int
     primary_ins_sub_num: int
     primary_carrier_name: str | None = None
+    secondary_pat_plan_num: int | None = None
+    secondary_plan_num: int | None = None
+    secondary_ins_sub_num: int | None = None
+    secondary_carrier_name: str | None = None
+    # OD-side plan metadata for read-only drift detection (Track G).
+    primary_od_snapshot: dict | None = None
+    secondary_od_snapshot: dict | None = None
 
 
 def _pick_primary_row(rows: list[ODInsuranceRow]) -> ODInsuranceRow:
@@ -53,6 +60,39 @@ def _payer_id_for_row(row: ODInsuranceRow, carriers_by_num: dict[int, ODCarrier]
     return payer_id
 
 
+def _od_plan_snapshot(
+    row: ODInsuranceRow,
+    carriers_by_num: dict[int, ODCarrier],
+    *,
+    elect_id: str | None,
+) -> dict:
+    carrier = carriers_by_num.get(row.CarrierNum)
+    return {
+        "pat_plan_num": row.PatPlanNum,
+        "plan_num": row.PlanNum,
+        "ins_sub_num": row.InsSubNum,
+        "ordinal": row.Ordinal,
+        "subscriber_id": (row.SubscriberID or "").strip() or None,
+        "group_number": (row.GroupNum or "").strip() or None,
+        "employer": (row.Employer or "").strip() or None,
+        "relationship": (row.Relationship or "").strip() or None,
+        "carrier_name": row.CarrierName or (carrier.CarrierName if carrier else None),
+        "elect_id": elect_id,
+        "claims_address": _claims_address(carrier) if carrier else None,
+    }
+
+
+def _claims_address(carrier: ODCarrier) -> str | None:
+    parts = [
+        (carrier.Address or "").strip(),
+        (carrier.City or "").strip(),
+        (carrier.State or "").strip(),
+        (carrier.Zip or "").strip(),
+    ]
+    text = ", ".join(p for p in parts if p)
+    return text or None
+
+
 def od_to_eligibility_request(
     patient: ODPatient,
     insurance_rows: list[ODInsuranceRow],
@@ -63,11 +103,7 @@ def od_to_eligibility_request(
     practice_id: str | None,
     rendering_provider_npi: str | None,
 ) -> MappedEligibility:
-    """Map OpenDental records to EligibilityRequest plus primary write-back identifiers.
-
-    Returns a ``MappedEligibility`` carrying the request and the primary plan's
-    PatPlanNum, PlanNum, InsSubNum and carrier name (for benefit write-back).
-    """
+    """Map OpenDental records to EligibilityRequest plus primary/secondary write-back IDs."""
     if not insurance_rows:
         raise OpenDentalMappingError("Patient has no insurance rows in OpenDental")
 
@@ -84,6 +120,16 @@ def od_to_eligibility_request(
 
     carrier = carriers_by_num.get(primary_row.CarrierNum)
     carrier_name = primary_row.CarrierName or (carrier.CarrierName if carrier else None) or None
+    secondary_carrier = (
+        carriers_by_num.get(secondary_row.CarrierNum) if secondary_row is not None else None
+    )
+    secondary_carrier_name = None
+    if secondary_row is not None:
+        secondary_carrier_name = (
+            secondary_row.CarrierName
+            or (secondary_carrier.CarrierName if secondary_carrier else None)
+            or None
+        )
 
     patient_uuid = uuid.uuid5(uuid.NAMESPACE_DNS, f"opendental:{patient.PatNum}")
     req = EligibilityRequest(
@@ -105,4 +151,16 @@ def od_to_eligibility_request(
         primary_plan_num=primary_row.PlanNum,
         primary_ins_sub_num=primary_row.InsSubNum,
         primary_carrier_name=carrier_name,
+        secondary_pat_plan_num=secondary_row.PatPlanNum if secondary_row else None,
+        secondary_plan_num=secondary_row.PlanNum if secondary_row else None,
+        secondary_ins_sub_num=secondary_row.InsSubNum if secondary_row else None,
+        secondary_carrier_name=secondary_carrier_name,
+        primary_od_snapshot=_od_plan_snapshot(
+            primary_row, carriers_by_num, elect_id=primary_payer_id
+        ),
+        secondary_od_snapshot=(
+            _od_plan_snapshot(secondary_row, carriers_by_num, elect_id=secondary_payer_id)
+            if secondary_row
+            else None
+        ),
     )

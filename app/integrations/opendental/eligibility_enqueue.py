@@ -41,7 +41,20 @@ def _od_input_json(
         "primary_carrier_name": mapped.primary_carrier_name,
         "writeback_enabled": bool(connection.get("writeback_enabled")),
         "writeback_full": bool(connection.get("writeback_full")),
+        "writeback_shadow_compare": bool(connection.get("writeback_shadow_compare")),
     }
+    secondary_pat_plan = getattr(mapped, "secondary_pat_plan_num", None)
+    if secondary_pat_plan is not None:
+        payload["secondary_pat_plan_num"] = secondary_pat_plan
+        payload["secondary_plan_num"] = getattr(mapped, "secondary_plan_num", None)
+        payload["secondary_ins_sub_num"] = getattr(mapped, "secondary_ins_sub_num", None)
+        payload["secondary_carrier_name"] = getattr(mapped, "secondary_carrier_name", None)
+    primary_od_snapshot = getattr(mapped, "primary_od_snapshot", None)
+    if primary_od_snapshot:
+        payload["primary_od_snapshot"] = primary_od_snapshot
+    secondary_od_snapshot = getattr(mapped, "secondary_od_snapshot", None)
+    if secondary_od_snapshot:
+        payload["secondary_od_snapshot"] = secondary_od_snapshot
     if resolve is not None:
         payload.update(resolve.to_input_json(apt_nums=apt_nums))
     elif apt_nums is not None:

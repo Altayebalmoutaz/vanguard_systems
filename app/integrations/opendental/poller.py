@@ -41,6 +41,7 @@ from app.integrations.opendental.eligibility_enqueue import (
 )
 from app.integrations.opendental.errors import OpenDentalConfigError
 from app.integrations.opendental.models import ODProcedureLog
+from app.integrations.opendental.reverify import effective_poll_window_days
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +124,10 @@ def run_connection_poll(
     clinic_defaults = [
         c.strip() for c in str(connection.get("cdt_codes") or "").split(",") if c.strip()
     ]
-    window_days = int(connection.get("poll_window_days") or 0)
+    window_days = effective_poll_window_days(
+        connection,
+        default_reverify_days=int(getattr(settings, "opendental_reverify_window_days", 3) or 3),
+    )
 
     # Pass 1: collect AptNums per patient across the poll window.
     apts_by_pat: dict[int, list[int]] = {}
@@ -165,9 +169,7 @@ def run_connection_poll(
             proc_rows: list[ODProcedureLog] = []
             for apt_num in apt_nums:
                 proc_rows.extend(client.get_procedurelogs_for_appointment(apt_num))
-            resolved = resolve_appointment_procedures(
-                proc_rows, clinic_defaults=clinic_defaults
-            )
+            resolved = resolve_appointment_procedures(proc_rows, clinic_defaults=clinic_defaults)
             row = enqueue_od_eligibility_check(
                 app_settings,
                 practice_id=practice_id,

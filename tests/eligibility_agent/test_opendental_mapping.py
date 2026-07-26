@@ -48,11 +48,16 @@ class TestOpenDentalMapping(unittest.TestCase):
         self.assertEqual(mapped.primary_pat_plan_num, 101)
         self.assertEqual(mapped.primary_plan_num, 301)
         self.assertEqual(mapped.primary_ins_sub_num, 201)
+        self.assertEqual(mapped.secondary_pat_plan_num, 102)
+        self.assertEqual(mapped.secondary_plan_num, 302)
+        self.assertEqual(mapped.secondary_ins_sub_num, 202)
         self.assertEqual(req.primary_payer_id, "84103")
         self.assertEqual(req.secondary_payer_id, "52133")
         self.assertEqual(req.subscriber_id, "SUB-1")
         self.assertEqual(req.first_name, "Aardvark")
         self.assertFalse(hasattr(req, "SSN"))
+        self.assertIsNotNone(mapped.primary_od_snapshot)
+        self.assertEqual(mapped.primary_od_snapshot["elect_id"], "84103")
 
     def test_missing_primary_subscriber_id_raises(self) -> None:
         patient = ODPatient(PatNum=1, FName="Aardvark", LName="Dent", Birthdate="1970-12-12")
