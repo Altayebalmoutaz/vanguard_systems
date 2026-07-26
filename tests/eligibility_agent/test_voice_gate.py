@@ -44,7 +44,39 @@ def test_canonical_voice_ineligible_verify_subscriber() -> None:
 
 def test_missing_fields_target_is_covered_fallback() -> None:
     canonical = {"missing_fields": [], "is_covered": None}
-    assert missing_fields_target(canonical) == ["is_covered"]
+    targets = missing_fields_target(canonical)
+    assert targets[0] == "is_covered"
+    # Specialist-depth topics append when already escalating for coverage gaps.
+    assert "frequency_limitations" in targets
+    assert "prior_auth_required" in targets
+
+
+def test_missing_fields_target_appends_specialist_depth_to_financial_gaps() -> None:
+    canonical = {
+        "missing_fields": ["annual_max_remaining"],
+        "is_covered": True,
+        "dental_benefit_breakdown": {},
+    }
+    targets = missing_fields_target(canonical)
+    assert targets[0] == "annual_max_remaining"
+    assert "downgrades" in targets
+    assert "last_service_dates" in targets
+
+
+def test_missing_fields_target_empty_when_financially_complete() -> None:
+    canonical = {
+        "missing_fields": [],
+        "is_covered": True,
+        "prior_auth_required": True,
+        "last_service_dates": [{"service_date": "2024-01-01"}],
+        "dental_benefit_breakdown": {
+            "frequency_limitations": [{"description": "2/year"}],
+            "waiting_periods": [{"description": "6 months"}],
+            "age_limits": [{"description": "age 19"}],
+            "downgrades": [{"description": "composite to amalgam"}],
+        },
+    }
+    assert missing_fields_target(canonical) == []
 
 
 def test_format_missing_fields_for_voice_scopes_to_gaps() -> None:

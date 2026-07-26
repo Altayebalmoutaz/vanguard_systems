@@ -17,6 +17,12 @@ EXTRACTION_SCHEMA_HINT = """
 Return a single JSON object with optional keys:
 is_active (bool), is_covered (bool), deductible_remaining (number), annual_max_remaining (number),
 coverage_percent (number), copay (number), coinsurance (number),
+prior_auth_required (bool),
+frequency_limitations (array of {category, cdt_code, quantity, period_months, age_min, age_max, description}),
+waiting_periods (array of {category, cdt_code, months, description}),
+last_service_dates (array of {cdt_code, service_date, description}),
+age_limits (array of {category, cdt_code, age_min, age_max, description}),
+downgrades (array of {cdt_from, cdt_to, category, description}),
 call_reference (string), rep_name (string),
 procedure_details (array of {cdt_code, procedure_covered (bool)}).
 Use null for unknown fields. Do not invent values not stated on the call.

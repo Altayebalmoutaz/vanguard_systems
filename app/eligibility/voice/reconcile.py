@@ -33,6 +33,38 @@ NUMERIC_CANONICAL_FIELDS = (
     "coinsurance",
 )
 
+_BREAKDOWN_LIST_FIELDS = (
+    "frequency_limitations",
+    "waiting_periods",
+    "age_limits",
+    "downgrades",
+)
+
+
+def _merge_breakdown_list(
+    existing: list[Any] | None, incoming: list[Any] | None
+) -> list[dict[str, Any]]:
+    """Append voice-sourced rows that are not already present (by description)."""
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for row in existing or []:
+        if not isinstance(row, dict):
+            continue
+        out.append(row)
+        key = str(row.get("description") or "").strip().lower()
+        if key:
+            seen.add(key)
+    for row in incoming or []:
+        if not isinstance(row, dict):
+            continue
+        key = str(row.get("description") or "").strip().lower()
+        if key and key in seen:
+            continue
+        if key:
+            seen.add(key)
+        out.append(row)
+    return out
+
 
 def merge_voice_extraction(
     base_canonical: dict[str, Any],
@@ -49,6 +81,35 @@ def merge_voice_extraction(
     for field in ("is_active", "is_covered", "in_network"):
         if field in extracted and extracted[field] is not None:
             patched[field] = extracted[field]
+
+    if extracted.get("prior_auth_required") is not None:
+        patched["prior_auth_required"] = bool(extracted["prior_auth_required"])
+
+    last_service = extracted.get("last_service_dates")
+    if isinstance(last_service, list) and last_service:
+        patched["last_service_dates"] = _merge_breakdown_list(
+            patched.get("last_service_dates"), last_service
+        )
+
+    breakdown = patched.get("dental_benefit_breakdown")
+    if not isinstance(breakdown, dict):
+        breakdown = {}
+        patched["dental_benefit_breakdown"] = breakdown
+    for field in _BREAKDOWN_LIST_FIELDS:
+        incoming = extracted.get(field)
+        if isinstance(incoming, list) and incoming:
+            breakdown[field] = _merge_breakdown_list(breakdown.get(field), incoming)
+
+    # Mirror age limits into frequency rows / ortho cutoff when voice provides them.
+    for age_row in breakdown.get("age_limits") or []:
+        if not isinstance(age_row, dict):
+            continue
+        if (
+            str(age_row.get("category") or "").upper() == "ORTHO"
+            and age_row.get("age_max") is not None
+            and breakdown.get("ortho_age_cutoff") is None
+        ):
+            breakdown["ortho_age_cutoff"] = age_row.get("age_max")
 
     proc_details = list(patched.get("procedure_details") or [])
     extracted_procs = extracted.get("procedure_details")

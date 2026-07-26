@@ -33,6 +33,12 @@ BLAND_ANALYSIS_SCHEMA: dict[str, str] = {
     "coverage_percent": "number",
     "copay": "number",
     "coinsurance": "number",
+    "prior_auth_required": "boolean",
+    "frequency_limitations": "string",
+    "waiting_periods": "string",
+    "last_service_dates": "string",
+    "age_limits": "string",
+    "downgrades": "string",
     "call_reference": "string",
     "representative_name": "string",
     "notes": "string",
@@ -64,7 +70,10 @@ def _build_task_prompt(ctx: dict[str, Any]) -> str:
             "the remaining annual maximum, the coverage percentage, and any copay or "
             "coinsurance. "
             f"Also confirm coverage for these procedures: {procedures}. "
-            "Ask for exact dollar amounts and percentages where they apply.\n\n"
+            "Ask for exact dollar amounts and percentages where they apply. "
+            "When time allows, also ask about frequency limitations, waiting periods, "
+            "date of last cleaning/exam/x-rays, age limits, prior authorization or "
+            "predetermination requirements, and any downgrades or alternate benefits.\n\n"
         )
 
     return (
@@ -277,6 +286,23 @@ def _coerce_bool(value: Any) -> bool | None:
     return None
 
 
+def _as_structured_list(value: Any) -> list[dict[str, Any]] | None:
+    """Normalize Bland string/list analysis fields into a list of dicts."""
+    if value is None:
+        return None
+    if isinstance(value, list):
+        return [x for x in value if isinstance(x, dict)]
+    if isinstance(value, dict):
+        return [value]
+    if isinstance(value, str):
+        text = value.strip()
+        if not text or text.lower() in ("null", "none", "n/a", "unknown"):
+            return None
+        # Keep free-text as a single description row for downstream merge.
+        return [{"description": text}]
+    return None
+
+
 def map_bland_analysis_to_extracted(analysis: dict[str, Any] | None) -> dict[str, Any]:
     """Translate Bland ``analysis_schema`` output into the canonical extracted shape."""
     out: dict[str, Any] = {}
@@ -300,6 +326,21 @@ def map_bland_analysis_to_extracted(analysis: dict[str, Any] | None) -> dict[str
         num = _coerce_number(analysis.get(key))
         if num is not None:
             out[key] = num
+
+    prior = _coerce_bool(analysis.get("prior_auth_required"))
+    if prior is not None:
+        out["prior_auth_required"] = prior
+
+    for key in (
+        "frequency_limitations",
+        "waiting_periods",
+        "last_service_dates",
+        "age_limits",
+        "downgrades",
+    ):
+        rows = _as_structured_list(analysis.get(key))
+        if rows:
+            out[key] = rows
 
     ref = analysis.get("call_reference")
     if ref:
@@ -326,6 +367,8 @@ def map_bland_variables_to_extracted(variables: dict[str, Any] | None) -> dict[s
     """Map the Pathway's own extractVars (string dollar amounts) to canonical fields.
 
     Used as a fallback when the call-level analysis_schema did not populate values.
+    Also maps pathway specialist-depth vars (frequency_limitations, waiting_periods,
+    other_limitations) when present — update the Bland pathway extract vars to match.
     """
     out: dict[str, Any] = {}
     if not isinstance(variables, dict):
@@ -346,5 +389,34 @@ def map_bland_variables_to_extracted(variables: dict[str, Any] | None) -> dict[s
         out["deductible_remaining"] = max(ded_individual - ded_met, 0.0)
     elif ded_individual is not None:
         out["deductible_remaining"] = ded_individual
+
+    prior = _coerce_bool(variables.get("prior_auth_required"))
+    if prior is not None:
+        out["prior_auth_required"] = prior
+
+    for key in ("frequency_limitations", "waiting_periods", "last_service_dates", "age_limits"):
+        rows = _as_structured_list(variables.get(key))
+        if rows:
+            out[key] = rows
+
+    # Pathway often packs downgrades/age into ``other_limitations``.
+    other = _as_structured_list(variables.get("other_limitations"))
+    if other:
+        # Split heuristically: rows mentioning downgrade → downgrades; age → age_limits.
+        downgrades: list[dict[str, Any]] = []
+        age_limits: list[dict[str, Any]] = list(out.get("age_limits") or [])
+        for row in other:
+            desc = str(row.get("description") or "").lower()
+            if "downgrade" in desc or "alternate" in desc or "paid as" in desc:
+                downgrades.append(row)
+            elif "age" in desc:
+                age_limits.append(row)
+            else:
+                # Keep as downgrade-adjacent plan clause if neither keyword matches.
+                downgrades.append(row)
+        if downgrades:
+            out["downgrades"] = downgrades
+        if age_limits:
+            out["age_limits"] = age_limits
 
     return out

@@ -30,12 +30,20 @@ def _primary_stedi_action(canonical: dict[str, Any]) -> str | None:
 
 
 def missing_fields_target(canonical: dict[str, Any]) -> list[str]:
-    """Fields the voice agent should ask the payer rep about."""
+    """Fields the voice agent should ask the payer rep about.
+
+    Specialist-depth topics (frequencies, history, age, pre-auth, downgrades) are appended
+    when we are already escalating for a financial/coverage gap — not used alone to trigger
+    a call on an otherwise CLEARED check.
+    """
     missing = [str(f) for f in (canonical.get("missing_fields") or []) if f]
     if missing:
+        for field in specialist_depth_targets(canonical):
+            if field not in missing:
+                missing.append(field)
         return missing
     if canonical.get("is_covered") is None:
-        return ["is_covered"]
+        return ["is_covered", *specialist_depth_targets(canonical)]
     return []
 
 
@@ -49,7 +57,34 @@ MISSING_FIELD_VOICE_LABELS: dict[str, str] = {
     "coverage_percent": "coverage percentage for the procedures of interest",
     "copay": "copay amount if applicable",
     "coinsurance": "coinsurance percentage if applicable",
+    "prior_auth_required": "whether prior authorization or predetermination is required",
+    "frequency_limitations": "frequency limitations (how often cleanings, exams, x-rays, etc. are covered)",
+    "waiting_periods": "waiting periods by category or procedure",
+    "last_service_dates": "date of last cleaning, exam, bitewings, or other recent services on file",
+    "age_limits": "age limits for sealants, fluoride, ortho, or dependents",
+    "downgrades": "downgrades or alternate benefits (e.g. composite paid as amalgam)",
 }
+
+
+def specialist_depth_targets(canonical: dict[str, Any]) -> list[str]:
+    """Extra VOB topics to ask when electronic check is thin on specialist fields."""
+    targets: list[str] = []
+    breakdown = canonical.get("dental_benefit_breakdown")
+    if not isinstance(breakdown, dict):
+        breakdown = {}
+    if canonical.get("prior_auth_required") is None:
+        targets.append("prior_auth_required")
+    if not (breakdown.get("frequency_limitations") or []):
+        targets.append("frequency_limitations")
+    if not (breakdown.get("waiting_periods") or []):
+        targets.append("waiting_periods")
+    if not (canonical.get("last_service_dates") or []):
+        targets.append("last_service_dates")
+    if not (breakdown.get("age_limits") or []):
+        targets.append("age_limits")
+    if not (breakdown.get("downgrades") or []):
+        targets.append("downgrades")
+    return targets
 
 
 def format_missing_fields_for_voice(

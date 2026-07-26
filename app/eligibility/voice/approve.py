@@ -88,6 +88,8 @@ def approve_voice_verification_session(
                         "allowed_amount": e["allowed_amount"],
                         "insurance_pays": e["insurance_pays"],
                         "patient_responsibility": e["patient_responsibility"],
+                        "downgrade_applied": bool(e.get("downgrade_applied")),
+                        "alternate_cdt": e.get("alternate_cdt"),
                     }
                 )
             if proc_rows:
