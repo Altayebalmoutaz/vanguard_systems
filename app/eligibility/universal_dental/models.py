@@ -60,6 +60,11 @@ class FinancialSummary(BaseModel):
     deductible_remaining: DataPoint[float]
     ortho_lifetime_max: DataPoint[float]
     ortho_lifetime_used: DataPoint[float]
+    # IND/FAM split when the 271 reports coverage-level-specific amounts.
+    deductible_individual: DataPoint[float] | None = None
+    deductible_family: DataPoint[float] | None = None
+    annual_max_individual: DataPoint[float] | None = None
+    annual_max_family: DataPoint[float] | None = None
 
 
 class CategoryBenefit(BaseModel):
@@ -82,6 +87,8 @@ class FrequencyLimitation(BaseModel):
     quantity: int | None = None
     quantity_qualifier: str | None = None
     period_months: int | None = None
+    age_min: int | None = None
+    age_max: int | None = None
     description: str
     confidence: ConfidenceLevel = ConfidenceLevel.EXPLICIT
 
@@ -99,6 +106,37 @@ class MissingToothClause(BaseModel):
     present: bool = False
     description: str | None = None
     confidence: ConfidenceLevel = ConfidenceLevel.UNKNOWN
+
+
+class AgeLimit(BaseModel):
+    """Age restriction for a benefit category or CDT (sealants, fluoride, ortho, dependents)."""
+
+    category: BenefitCategory | None = None
+    cdt_code: str | None = None
+    age_min: int | None = None
+    age_max: int | None = None
+    description: str
+    confidence: ConfidenceLevel = ConfidenceLevel.EXPLICIT
+
+
+class DowngradeClause(BaseModel):
+    """Alternate-benefit / downgrade rule (e.g. composite → amalgam)."""
+
+    cdt_from: str | None = None
+    cdt_to: str | None = None
+    category: BenefitCategory | None = None
+    description: str
+    confidence: ConfidenceLevel = ConfidenceLevel.EXPLICIT
+
+
+class LastServiceDate(BaseModel):
+    """Last visit / last service date from 271 benefitsDateInformation."""
+
+    source_benefit_index: int | None = None
+    cdt_code: str | None = None
+    category: BenefitCategory | None = None
+    service_date: date | None = None
+    description: str | None = None
 
 
 class UniversalDentalRecord(BaseModel):
@@ -125,6 +163,10 @@ class UniversalDentalRecord(BaseModel):
     missing_tooth_clause: MissingToothClause | None = None
     waiting_periods_present: bool = False
     limitation_notes: list[str] = Field(default_factory=list)
+    prior_auth_required: bool | None = None
+    last_service_dates: list[LastServiceDate] = Field(default_factory=list)
+    age_limits: list[AgeLimit] = Field(default_factory=list)
+    downgrades: list[DowngradeClause] = Field(default_factory=list)
     normalization_method: NormalizationMethod = NormalizationMethod.HEURISTIC
     normalization_timestamp: datetime
     raw_payload_hash: str

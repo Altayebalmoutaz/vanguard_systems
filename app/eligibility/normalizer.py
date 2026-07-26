@@ -462,7 +462,49 @@ def _collect_ortho_lifetime_max_stc38(benefits: list[dict[str, Any]]) -> float |
     return max(pos) if pos else max(amounts)
 
 
-_LIMITATION_NOTE_KEYWORDS = ("frequency", "limit", "waiting", "missing tooth", "missing teeth")
+_LIMITATION_NOTE_KEYWORDS = (
+    "frequency",
+    "limit",
+    "waiting",
+    "missing tooth",
+    "missing teeth",
+    "downgrade",
+    "downgraded",
+    "alternate benefit",
+    "alternate benefits",
+    "age",
+)
+
+
+_AGE_LIMIT_PATTERNS = (
+    re.compile(r"\bup\s+to\s+age\s+(\d{1,2})\b", re.I),
+    re.compile(r"\bage\s+(\d{1,2})\s*(?:and\s+under|or\s+under|and\s+younger)\b", re.I),
+    re.compile(r"\bthrough\s+age\s+(\d{1,2})\b", re.I),
+    re.compile(r"\bunder\s+(\d{1,2})\s*years?\b", re.I),
+    re.compile(r"\bage\s+(\d{1,2})\s*[-–to]+\s*(\d{1,2})\b", re.I),
+    re.compile(r"\bdependent(?:s)?\s+(?:to|until|through)?\s*age\s+(\d{1,2})\b", re.I),
+)
+
+_DOWNGRADE_KEYWORDS = (
+    "downgrade",
+    "downgraded",
+    "alternate benefit",
+    "paid as",
+    "benefit at the",
+    "composite to amalgam",
+    "porcelain",
+    "posterior",
+)
+
+# Common CDT alternate-benefit pairs (from → to) when text alone is ambiguous.
+_COMMON_DOWNGRADE_PAIRS: tuple[tuple[str, str, str], ...] = (
+    ("D2391", "D2140", "composite"),
+    ("D2392", "D2150", "composite"),
+    ("D2393", "D2160", "composite"),
+    ("D2394", "D2161", "composite"),
+    ("D2740", "D2750", "porcelain"),
+    ("D2751", "D2750", "porcelain"),
+)
 
 
 def _collect_dental_limitation_notes(benefits: list[dict[str, Any]]) -> list[str]:
@@ -488,6 +530,257 @@ def _collect_dental_limitation_notes(benefits: list[dict[str, Any]]) -> list[str
                 seen.add(line)
                 out.append(line)
     return out
+
+
+def _collect_ind_fam_financials(benefits: list[dict[str, Any]]) -> dict[str, float | None]:
+    """Split deductible / annual-max totals by IND vs FAM coverage level."""
+    out: dict[str, float | None] = {
+        "deductible_individual": None,
+        "deductible_family": None,
+        "annual_max_individual": None,
+        "annual_max_family": None,
+    }
+    for b in benefits:
+        if not _is_dental_calculator_benefit(b):
+            continue
+        level = _coverage_level_for_benefit(b)
+        if level not in ("IND", "FAM"):
+            continue
+        code = str(b.get("code") or "").strip().upper()
+        amt = _benefit_amount_if_present(b)
+        if amt is None:
+            continue
+        full_text = _benefit_text_blob(b)
+        # Prefer plan totals (not remaining/met) for the IND/FAM split fields.
+        if (
+            code == "C"
+            and not _benefit_row_implies_remaining(b, full_text)
+            and not _benefit_row_implies_met_amount(full_text)
+        ):
+            key = "deductible_individual" if level == "IND" else "deductible_family"
+            out[key] = amt
+        elif (
+            code == "F"
+            and not _benefit_row_implies_remaining(b, full_text)
+            and "used" not in full_text
+            and "met" not in full_text
+        ):
+            key = "annual_max_individual" if level == "IND" else "annual_max_family"
+            out[key] = amt
+    return out
+
+
+def _promote_prior_auth(dental_calculator_ready: dict[str, Any]) -> bool | None:
+    """Collapse per-network prior_auth flags into a single top-level bool."""
+    buckets = dental_calculator_ready.get("network_status")
+    if not isinstance(buckets, dict):
+        return None
+    found_true = False
+    found_false = False
+    for bucket in buckets.values():
+        if not isinstance(bucket, dict):
+            continue
+        val = bucket.get("prior_auth_required")
+        if val is True:
+            found_true = True
+        elif val is False:
+            found_false = True
+    if found_true:
+        return True
+    if found_false:
+        return False
+    return None
+
+
+def _promote_last_service_dates(
+    dental_calculator_ready: dict[str, Any],
+    benefits: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Promote latest-visit rows into a structured last_service_dates list."""
+    raw_visits = dental_calculator_ready.get("latest_visit_or_consultation") or []
+    out: list[dict[str, Any]] = []
+    if not isinstance(raw_visits, list):
+        return out
+    for row in raw_visits:
+        if not isinstance(row, dict):
+            continue
+        idx = row.get("source_benefit_index")
+        visit = row.get("latest_visit_or_consultation")
+        if visit is None:
+            continue
+        cdt: str | None = None
+        category: str | None = None
+        if isinstance(idx, int) and 0 <= idx < len(benefits):
+            benefit = benefits[idx]
+            cdt = procedure_identifier_from_benefit(benefit)
+            stcs = list(_service_type_codes_from(benefit))
+            category = _category_from_stcs(stcs)
+        service_date = visit.isoformat() if isinstance(visit, date) else str(visit)
+        out.append(
+            {
+                "source_benefit_index": idx,
+                "cdt_code": cdt,
+                "category": category,
+                "service_date": service_date,
+                "description": "latest_visit_or_consultation",
+            }
+        )
+    return out
+
+
+def _parse_age_bounds(text: str) -> tuple[int | None, int | None]:
+    """Extract (age_min, age_max) from free-text age limitation language."""
+    low = text.strip()
+    if not low:
+        return None, None
+    for pat in _AGE_LIMIT_PATTERNS:
+        match = pat.search(low)
+        if not match:
+            continue
+        groups = match.groups()
+        if len(groups) == 2 and groups[1] is not None:
+            try:
+                a, b = int(groups[0]), int(groups[1])
+            except ValueError:
+                continue
+            return (min(a, b), max(a, b))
+        try:
+            age = int(groups[0])
+        except (TypeError, ValueError, IndexError):
+            continue
+        return None, age
+    return None, None
+
+
+def _collect_age_limits(benefits: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Parse age cutoffs (sealants, fluoride, ortho, dependents) from benefit text."""
+    out: list[dict[str, Any]] = []
+    seen: set[tuple[Any, ...]] = set()
+    for idx, benefit in enumerate(benefits):
+        texts = [str(benefit.get("name") or "").strip(), *_additional_info_strings(benefit)]
+        stcs = list(_service_type_codes_from(benefit))
+        category = _category_from_stcs(stcs)
+        cdt = procedure_identifier_from_benefit(benefit)
+        for text in texts:
+            if not text or "age" not in text.lower():
+                continue
+            age_min, age_max = _parse_age_bounds(text)
+            if age_min is None and age_max is None:
+                continue
+            key = (cdt or "", category or "", age_min, age_max, text.strip().lower())
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(
+                {
+                    "source_benefit_index": idx,
+                    "cdt_code": cdt,
+                    "category": category,
+                    "age_min": age_min,
+                    "age_max": age_max,
+                    "description": text.strip(),
+                }
+            )
+    return out
+
+
+def _infer_downgrade_pair(text: str, cdt: str | None) -> tuple[str | None, str | None]:
+    """Best-effort CDT from→to inference from downgrade text."""
+    low = text.lower()
+    codes = re.findall(r"\bD\d{4}\b", text.upper())
+    if len(codes) >= 2:
+        return codes[0], codes[1]
+    if cdt and len(codes) == 1 and codes[0] != cdt.upper():
+        return cdt.upper(), codes[0]
+    for cdt_from, cdt_to, keyword in _COMMON_DOWNGRADE_PAIRS:
+        if keyword in low:
+            if cdt and cdt.upper() == cdt_from:
+                return cdt_from, cdt_to
+            if cdt is None or keyword in low:
+                return cdt_from if keyword in low else cdt, cdt_to
+    if "composite" in low and "amalgam" in low:
+        return cdt.upper() if cdt else "D2391", "D2140"
+    if "porcelain" in low and ("metal" in low or "pfm" in low or "crown" in low):
+        return cdt.upper() if cdt else "D2740", "D2750"
+    return (cdt.upper() if cdt else None), None
+
+
+def _collect_downgrades(benefits: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Structured alternate-benefit / downgrade clauses from MSG / additionalInformation."""
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for idx, benefit in enumerate(benefits):
+        texts = [*_additional_info_strings(benefit)]
+        name = str(benefit.get("name") or "").strip()
+        if name:
+            texts.append(name)
+        stcs = list(_service_type_codes_from(benefit))
+        category = _category_from_stcs(stcs)
+        cdt = procedure_identifier_from_benefit(benefit)
+        for text in texts:
+            low = text.lower()
+            if not any(k in low for k in _DOWNGRADE_KEYWORDS):
+                continue
+            # Require an explicit downgrade/alternate cue (avoid catching every "posterior").
+            if not any(
+                k in low
+                for k in (
+                    "downgrade",
+                    "downgraded",
+                    "alternate benefit",
+                    "paid as",
+                    "composite to amalgam",
+                    "benefit at the",
+                )
+            ):
+                if "porcelain" in low and "downgrade" not in low and "paid as" not in low:
+                    continue
+                if "posterior" in low and "downgrade" not in low:
+                    continue
+            cdt_from, cdt_to = _infer_downgrade_pair(text, cdt)
+            key = text.strip().lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(
+                {
+                    "source_benefit_index": idx,
+                    "cdt_from": cdt_from,
+                    "cdt_to": cdt_to,
+                    "category": category,
+                    "description": text.strip(),
+                }
+            )
+    return out
+
+
+def _attach_age_to_frequency_rows(
+    frequency_rows: list[dict[str, Any]], age_limits: list[dict[str, Any]]
+) -> None:
+    """Enrich frequency limitation rows with matching age_min/age_max when categories align."""
+    if not age_limits:
+        return
+    by_cat: dict[str, dict[str, Any]] = {}
+    by_cdt: dict[str, dict[str, Any]] = {}
+    for age in age_limits:
+        cat = str(age.get("category") or "").upper()
+        cdt = str(age.get("cdt_code") or "").upper()
+        if cat and cat not in by_cat:
+            by_cat[cat] = age
+        if cdt and cdt not in by_cdt:
+            by_cdt[cdt] = age
+    for row in frequency_rows:
+        if not isinstance(row, dict):
+            continue
+        cdt = str(row.get("cdt_code") or "").upper()
+        cat = str(row.get("category") or "").upper()
+        match = by_cdt.get(cdt) or by_cat.get(cat)
+        if not match:
+            continue
+        if row.get("age_min") is None:
+            row["age_min"] = match.get("age_min")
+        if row.get("age_max") is None:
+            row["age_max"] = match.get("age_max")
 
 
 def _calendar_date_from_yyyymmdd(value: Any) -> date | None:
@@ -1539,12 +1832,18 @@ def normalize(raw_271: dict[str, Any], coverage_order: str) -> dict[str, Any]:
     if any(stc35_oop.get(k) is not None for k in stc35_oop):
         _merge_financials_with_stc35_oop(fin, stc35_oop)
 
+    age_limits = _collect_age_limits(benefits)
+    downgrades = _collect_downgrades(benefits)
+    frequency_limitations = _collect_structured_frequency_limitations(benefits)
+    _attach_age_to_frequency_rows(frequency_limitations, age_limits)
     dental_benefit_breakdown: dict[str, Any] = {
         "coinsurance_patient_pct_by_stc": _collect_dental_coinsurance_by_stc(benefits),
         "ortho_lifetime_max": _collect_ortho_lifetime_max_stc38(benefits),
         "limitation_notes": _collect_dental_limitation_notes(benefits),
-        "frequency_limitations": _collect_structured_frequency_limitations(benefits),
+        "frequency_limitations": frequency_limitations,
         "missing_tooth_clause": _detect_missing_tooth_clause(benefits),
+        "age_limits": age_limits,
+        "downgrades": downgrades,
     }
     ded_rem, ded_warn = _derive_remaining(
         fin["deductible_total"],
@@ -1642,6 +1941,20 @@ def normalize(raw_271: dict[str, Any], coverage_order: str) -> dict[str, Any]:
     )
     warnings.extend(calculator_warnings)
 
+    ind_fam = _collect_ind_fam_financials(benefits)
+    prior_auth_required = _promote_prior_auth(dental_calculator_ready)
+    last_service_dates = _promote_last_service_dates(dental_calculator_ready, benefits)
+    ortho_age = next(
+        (
+            a.get("age_max")
+            for a in age_limits
+            if str(a.get("category") or "").upper() == "ORTHO" and a.get("age_max") is not None
+        ),
+        None,
+    )
+    if ortho_age is not None:
+        dental_benefit_breakdown["ortho_age_cutoff"] = ortho_age
+
     canonical: dict[str, Any] = {
         "payer_id": payer_id or None,
         "checked_at": checked_at,
@@ -1659,6 +1972,12 @@ def normalize(raw_271: dict[str, Any], coverage_order: str) -> dict[str, Any]:
         "annual_max_total": fin["annual_max_total"],
         "annual_max_used": fin["annual_max_used"],
         "annual_max_remaining": max_rem,
+        "deductible_individual": ind_fam["deductible_individual"],
+        "deductible_family": ind_fam["deductible_family"],
+        "annual_max_individual": ind_fam["annual_max_individual"],
+        "annual_max_family": ind_fam["annual_max_family"],
+        "prior_auth_required": prior_auth_required,
+        "last_service_dates": last_service_dates,
         "out_of_pocket_max_total": fin["out_of_pocket_max_total"],
         "out_of_pocket_max_used": fin["out_of_pocket_max_used"],
         "out_of_pocket_max_remaining": oop_rem,
@@ -1677,7 +1996,7 @@ def normalize(raw_271: dict[str, Any], coverage_order: str) -> dict[str, Any]:
         "stedi_warnings": stedi_warnings,
         "response_complete": False,
         "missing_fields": [],
-        "normalization_version": "1.0",
+        "normalization_version": "1.1",
         "normalization_warnings": warnings,
         "dental_benefit_breakdown": dental_benefit_breakdown,
         "dental_calculator_ready": dental_calculator_ready,

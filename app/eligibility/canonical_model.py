@@ -17,6 +17,11 @@ _NULLABLE_FIELD_NAMES = (
     "copay",
     "coinsurance",
     "patient_responsibility",
+    "prior_auth_required",
+    "deductible_individual",
+    "deductible_family",
+    "annual_max_individual",
+    "annual_max_family",
 )
 
 
@@ -39,6 +44,11 @@ class EligibilityCanonicalRecord(BaseModel):
     copay: float | None = None
     coinsurance: float | None = None
     patient_responsibility: float | None = None
+    prior_auth_required: bool | None = None
+    deductible_individual: float | None = None
+    deductible_family: float | None = None
+    annual_max_individual: float | None = None
+    annual_max_family: float | None = None
     coverage_confidence: str | None = None
     missing_fields: list[str] = Field(default_factory=list)
     response_complete: bool

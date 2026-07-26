@@ -10,11 +10,14 @@ from typing import Any
 from uuid import uuid4
 
 from app.eligibility.universal_dental.models import (
+    AgeLimit,
     BenefitCategory,
     CategoryBenefit,
     ConfidenceLevel,
+    DowngradeClause,
     FinancialSummary,
     FrequencyLimitation,
+    LastServiceDate,
     MissingToothClause,
     NetworkStatus,
     NormalizationMethod,
@@ -163,14 +166,29 @@ def _build_ortho(canonical: dict[str, Any], _warnings: list[str]) -> OrthoDetail
     lt = br.get("ortho_lifetime_max")
     by_stc = br.get("coinsurance_patient_pct_by_stc") or {}
     o38 = by_stc.get("38") if isinstance(by_stc, dict) else None
+    age_cutoff_raw = br.get("ortho_age_cutoff")
+    if age_cutoff_raw is None:
+        for age_row in br.get("age_limits") or []:
+            if not isinstance(age_row, dict):
+                continue
+            if (
+                str(age_row.get("category") or "").upper() == "ORTHO"
+                and age_row.get("age_max") is not None
+            ):
+                age_cutoff_raw = age_row.get("age_max")
+                break
 
-    if lt is None and o38 is None:
+    if lt is None and o38 is None and age_cutoff_raw is None:
         return None
 
     try:
         lt_f = float(lt) if lt is not None else None
     except (TypeError, ValueError):
         lt_f = None
+    try:
+        age_cutoff = int(age_cutoff_raw) if age_cutoff_raw is not None else None
+    except (TypeError, ValueError):
+        age_cutoff = None
 
     return OrthoDetail(
         eligible=data_point_bool(
@@ -184,7 +202,11 @@ def _build_ortho(canonical: dict[str, Any], _warnings: list[str]) -> OrthoDetail
             source_field="dental_benefit_breakdown/ortho_lifetime_max",
         ),
         age_cutoff=data_point_int(
-            None, confidence=ConfidenceLevel.UNKNOWN, source_field="not_extracted_v1"
+            age_cutoff,
+            confidence=ConfidenceLevel.EXPLICIT
+            if age_cutoff is not None
+            else ConfidenceLevel.UNKNOWN,
+            source_field="dental_benefit_breakdown/ortho_age_cutoff",
         ),
         in_progress_treatment=data_point_bool(
             None, confidence=ConfidenceLevel.UNKNOWN, source_field="not_extracted_v1"
@@ -222,6 +244,8 @@ def _build_frequency_limitations(breakdown: dict[str, Any]) -> list[FrequencyLim
             if qty is not None or period is not None
             else ConfidenceLevel.INFERRED
         )
+        age_min = row.get("age_min")
+        age_max = row.get("age_max")
         out.append(
             FrequencyLimitation(
                 category=_category_enum(row.get("category")),
@@ -229,8 +253,86 @@ def _build_frequency_limitations(breakdown: dict[str, Any]) -> list[FrequencyLim
                 quantity=int(qty) if qty is not None else None,
                 quantity_qualifier=row.get("quantity_qualifier"),
                 period_months=int(period) if period is not None else None,
+                age_min=int(age_min) if age_min is not None else None,
+                age_max=int(age_max) if age_max is not None else None,
                 description=desc,
                 confidence=confidence,
+            )
+        )
+    return out
+
+
+def _build_age_limits(breakdown: dict[str, Any]) -> list[AgeLimit]:
+    rows = breakdown.get("age_limits") or []
+    out: list[AgeLimit] = []
+    if not isinstance(rows, list):
+        return out
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        desc = str(row.get("description") or "").strip()
+        if not desc:
+            continue
+        age_min = row.get("age_min")
+        age_max = row.get("age_max")
+        out.append(
+            AgeLimit(
+                category=_category_enum(row.get("category")),
+                cdt_code=row.get("cdt_code"),
+                age_min=int(age_min) if age_min is not None else None,
+                age_max=int(age_max) if age_max is not None else None,
+                description=desc,
+                confidence=ConfidenceLevel.EXPLICIT,
+            )
+        )
+    return out
+
+
+def _build_downgrades(breakdown: dict[str, Any]) -> list[DowngradeClause]:
+    rows = breakdown.get("downgrades") or []
+    out: list[DowngradeClause] = []
+    if not isinstance(rows, list):
+        return out
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        desc = str(row.get("description") or "").strip()
+        if not desc:
+            continue
+        out.append(
+            DowngradeClause(
+                cdt_from=row.get("cdt_from"),
+                cdt_to=row.get("cdt_to"),
+                category=_category_enum(row.get("category")),
+                description=desc,
+                confidence=ConfidenceLevel.EXPLICIT,
+            )
+        )
+    return out
+
+
+def _build_last_service_dates(canonical: dict[str, Any]) -> list[LastServiceDate]:
+    rows = canonical.get("last_service_dates") or []
+    out: list[LastServiceDate] = []
+    if not isinstance(rows, list):
+        return out
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        raw_date = row.get("service_date")
+        service_date = _parse_yyyymmdd(str(raw_date)) if raw_date else None
+        if service_date is None and isinstance(raw_date, str) and "-" in raw_date:
+            try:
+                service_date = date.fromisoformat(raw_date[:10])
+            except ValueError:
+                service_date = None
+        out.append(
+            LastServiceDate(
+                source_benefit_index=row.get("source_benefit_index"),
+                cdt_code=row.get("cdt_code"),
+                category=_category_enum(row.get("category")),
+                service_date=service_date,
+                description=row.get("description"),
             )
         )
     return out
@@ -379,15 +481,47 @@ def build_universal_dental_record(
             confidence=ConfidenceLevel.UNKNOWN,
             source_field="not_extracted_v1",
         ),
+        deductible_individual=data_point_float(
+            canonical.get("deductible_individual"),
+            confidence=ConfidenceLevel.EXPLICIT
+            if canonical.get("deductible_individual") is not None
+            else ConfidenceLevel.UNKNOWN,
+            source_field="canonical/deductible_individual",
+        ),
+        deductible_family=data_point_float(
+            canonical.get("deductible_family"),
+            confidence=ConfidenceLevel.EXPLICIT
+            if canonical.get("deductible_family") is not None
+            else ConfidenceLevel.UNKNOWN,
+            source_field="canonical/deductible_family",
+        ),
+        annual_max_individual=data_point_float(
+            canonical.get("annual_max_individual"),
+            confidence=ConfidenceLevel.EXPLICIT
+            if canonical.get("annual_max_individual") is not None
+            else ConfidenceLevel.UNKNOWN,
+            source_field="canonical/annual_max_individual",
+        ),
+        annual_max_family=data_point_float(
+            canonical.get("annual_max_family"),
+            confidence=ConfidenceLevel.EXPLICIT
+            if canonical.get("annual_max_family") is not None
+            else ConfidenceLevel.UNKNOWN,
+            source_field="canonical/annual_max_family",
+        ),
     )
 
     br_notes = dbreak.get("limitation_notes") if isinstance(dbreak, dict) else []
     if not isinstance(br_notes, list):
         br_notes = []
     notes_str = [str(x) for x in br_notes]
-    frequency_limitations = _build_frequency_limitations(dbreak if isinstance(dbreak, dict) else {})
-    waiting_periods = _build_waiting_periods(dbreak if isinstance(dbreak, dict) else {})
-    missing_tooth = _build_missing_tooth_clause(dbreak if isinstance(dbreak, dict) else {})
+    breakdown = dbreak if isinstance(dbreak, dict) else {}
+    frequency_limitations = _build_frequency_limitations(breakdown)
+    waiting_periods = _build_waiting_periods(breakdown)
+    missing_tooth = _build_missing_tooth_clause(breakdown)
+    age_limits = _build_age_limits(breakdown)
+    downgrades = _build_downgrades(breakdown)
+    last_service_dates = _build_last_service_dates(canonical)
     waiting = (
         bool(waiting_periods)
         or any("waiting" in n.lower() for n in notes_str)
@@ -399,6 +533,9 @@ def build_universal_dental_record(
     )
 
     ortho = _build_ortho(canonical, warnings)
+    prior_auth = canonical.get("prior_auth_required")
+    if prior_auth is not None:
+        prior_auth = bool(prior_auth)
 
     return UniversalDentalRecord(
         record_id=uuid4(),
@@ -417,6 +554,10 @@ def build_universal_dental_record(
         missing_tooth_clause=missing_tooth,
         waiting_periods_present=waiting,
         limitation_notes=notes_str,
+        prior_auth_required=prior_auth,
+        last_service_dates=last_service_dates,
+        age_limits=age_limits,
+        downgrades=downgrades,
         normalization_method=NormalizationMethod.HEURISTIC,
         normalization_timestamp=datetime.now(UTC),
         raw_payload_hash=_hash_raw(raw_stored_271),

@@ -284,7 +284,8 @@ select
   ec.missing_fields,
   ec.routing_status,
   coalesce(array_length(ec.integrity_warnings, 1), 0) as integrity_warnings_count,
-  ec.integrity_warnings
+  ec.integrity_warnings,
+  coalesce(ec.vob_details, '{}'::jsonb) as vob_details
 from rcm.eligibility_requests er
 left join rcm.eligibility_checks ec on ec.id = er.primary_check_id
 left join estimate_summary es on es.eligibility_check_id = ec.id

@@ -102,6 +102,76 @@ def _reconcile_line_benefit_caps(
     return ins, pat, _dedupe_flags(flags)
 
 
+# Rough CDT → STC mapping for per-category coverage % (patient share from 271).
+_CDT_PREFIX_TO_STC: dict[str, str] = {
+    "D0": "23",  # diagnostic / preventive-ish
+    "D1": "23",
+    "D2": "25",  # restorative / basic
+    "D3": "25",  # endo
+    "D4": "25",  # perio
+    "D5": "36",  # prosth / major
+    "D6": "36",  # crowns / major
+    "D7": "36",  # oral surgery often major-adjacent
+    "D8": "38",  # ortho
+}
+
+
+def _coverage_percent_for_cdt(canonical: dict[str, Any], cdt: str, default: float) -> float:
+    """Prefer per-STC coinsurance from dental_benefit_breakdown; fall back to plan %.
+
+    ``coinsurance_patient_pct_by_stc`` stores patient share 0–100; insurer % is 100 - patient.
+    """
+    breakdown = canonical.get("dental_benefit_breakdown")
+    if not isinstance(breakdown, dict):
+        return default
+    by_stc = breakdown.get("coinsurance_patient_pct_by_stc")
+    if not isinstance(by_stc, dict):
+        return default
+    prefix = (cdt or "")[:2].upper()
+    stc = _CDT_PREFIX_TO_STC.get(prefix)
+    if not stc:
+        return default
+    patient_pct = by_stc.get(stc)
+    if patient_pct is None:
+        return default
+    try:
+        patient_f = float(patient_pct)
+    except (TypeError, ValueError):
+        return default
+    # Values may already be 0–100 or 0–1.
+    if patient_f <= 1.0:
+        patient_f *= 100.0
+    return max(0.0, min(100.0, 100.0 - patient_f))
+
+
+def _downgrade_map(canonical: dict[str, Any]) -> dict[str, str]:
+    """cdt_from → cdt_to for alternate-benefit rules."""
+    breakdown = canonical.get("dental_benefit_breakdown")
+    if not isinstance(breakdown, dict):
+        return {}
+    out: dict[str, str] = {}
+    for row in breakdown.get("downgrades") or []:
+        if not isinstance(row, dict):
+            continue
+        cdt_from = str(row.get("cdt_from") or "").strip().upper()
+        cdt_to = str(row.get("cdt_to") or "").strip().upper()
+        if cdt_from and cdt_to and cdt_from != cdt_to:
+            out[cdt_from] = cdt_to
+    return out
+
+
+def _fee_for_cdt(
+    *,
+    cdt: str,
+    in_network: bool,
+    payer_map: dict[str, Any],
+    billed: dict[str, Any],
+) -> float:
+    if in_network:
+        return _money(float(payer_map.get(cdt) or billed.get(cdt) or 0.0))
+    return _money(float(billed.get(cdt) or 0.0))
+
+
 def calculate_responsibility(
     canonical: dict[str, Any], fee_schedule: dict[str, Any]
 ) -> list[dict[str, Any]]:
@@ -129,6 +199,10 @@ def calculate_responsibility(
     cannot both be satisfied, annual max wins for insurer dollars and
     ``benefit_caps_conflict_am_priority`` is recorded (patient share may still exceed an OOP
     remainder on paper — inspect flags).
+
+    Alternate-benefit / downgrade: when ``dental_benefit_breakdown.downgrades`` maps a CDT
+    to an alternate code, insurer share is computed from the alternate fee and the patient
+    pays the difference vs. the billed/allowed amount for the requested CDT.
     """
     if not canonical.get("response_complete") or not canonical.get("is_active"):
         raise ValueError("calculate_responsibility requires response_complete and is_active")
@@ -141,6 +215,7 @@ def calculate_responsibility(
     deductible_remaining = float(canonical.get("deductible_remaining") or 0.0)
     coverage_percent = float(canonical.get("coverage_percent") or 0.0)
     annual_max_remaining = float(canonical.get("annual_max_remaining") or 0.0)
+    downgrades = _downgrade_map(canonical)
 
     def _optional_float(key: str) -> float | None:
         v = canonical.get(key)
@@ -164,6 +239,8 @@ def calculate_responsibility(
         cdt = str(proc.get("cdt_code") or "").strip().upper()
         procedure_covered = proc.get("procedure_covered")
         estimate_flags: list[str] = []
+        alternate_cdt: str | None = None
+        downgrade_applied = False
 
         if procedure_covered is False:
             ucr = _money(float(billed.get(cdt) or 0.0))
@@ -176,23 +253,43 @@ def calculate_responsibility(
                     "insurance_pays": 0.0,
                     "patient_responsibility": ucr,
                     "estimate_flags": estimate_flags,
+                    "downgrade_applied": False,
+                    "alternate_cdt": None,
                 }
             )
             continue
 
-        if in_network:
-            allowed = _money(float(payer_map.get(cdt) or billed.get(cdt) or 0.0))
-        else:
-            allowed = _money(float(billed.get(cdt) or 0.0))
+        line_coverage = _coverage_percent_for_cdt(canonical, cdt, coverage_percent)
+        if abs(line_coverage - coverage_percent) > 0.01:
+            estimate_flags.append("per_category_coverage_percent_applied")
 
+        billed_allowed = _fee_for_cdt(
+            cdt=cdt, in_network=in_network, payer_map=payer_map, billed=billed
+        )
+        benefit_allowed = billed_allowed
+        alt = downgrades.get(cdt)
+        if alt:
+            alt_fee = _fee_for_cdt(
+                cdt=alt, in_network=in_network, payer_map=payer_map, billed=billed
+            )
+            if alt_fee > 0.0:
+                benefit_allowed = alt_fee
+                alternate_cdt = alt
+                downgrade_applied = True
+                estimate_flags.append("alternate_benefit_downgrade_applied")
+
+        allowed = billed_allowed
         if allowed <= 0.0:
             estimate_flags.append("missing_fee_schedule_or_billed_amount")
 
-        deductible_applied = _money(min(ded_left, allowed))
-        post_deductible = _money(allowed - deductible_applied)
-        insurance_raw = _money(post_deductible * (coverage_percent / 100.0))
+        # Deductible and insurer share apply to the (possibly downgraded) benefit amount.
+        deductible_applied = _money(min(ded_left, benefit_allowed))
+        post_deductible = _money(benefit_allowed - deductible_applied)
+        insurance_raw = _money(post_deductible * (line_coverage / 100.0))
         insurance_pays = _money(min(insurance_raw, max_left))
-        patient_share = _money(deductible_applied + (post_deductible - insurance_pays))
+        # Patient pays deductible + coinsurance on benefit amount + any fee delta above alternate.
+        fee_delta = _money(max(0.0, billed_allowed - benefit_allowed)) if downgrade_applied else 0.0
+        patient_share = _money(deductible_applied + (post_deductible - insurance_pays) + fee_delta)
 
         copay_this_row = 0.0
         if flat_copay > 0.0 and not copay_applied and procedure_covered is not False:
@@ -201,7 +298,8 @@ def calculate_responsibility(
             estimate_flags.append("flat_visit_copay_from_271_applied_once")
             copay_applied = True
 
-        reconcile_total = _money(allowed + copay_this_row)
+        # Reconcile against the amount the patient is actually charged (billed/allowed + copay).
+        reconcile_total = _money(billed_allowed + copay_this_row)
 
         cap_flags: list[str] = []
         if oop_left is not None or sd_left is not None or cc_left is not None:
@@ -248,6 +346,8 @@ def calculate_responsibility(
                 "insurance_pays": insurance_pays,
                 "patient_responsibility": patient_share,
                 "estimate_flags": _dedupe_flags(estimate_flags),
+                "downgrade_applied": downgrade_applied,
+                "alternate_cdt": alternate_cdt,
             }
         )
 

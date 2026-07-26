@@ -27,6 +27,11 @@ _NULL_REASONS: dict[str, str] = {
     "copay": "not_present_in_normalized_271",
     "coinsurance": "not_present_in_normalized_271",
     "patient_responsibility": "computed_in_layer_5_fee_schedule_not_run",
+    "prior_auth_required": "not_present_in_normalized_271",
+    "deductible_individual": "coverage_level_IND_not_present_in_271",
+    "deductible_family": "coverage_level_FAM_not_present_in_271",
+    "annual_max_individual": "coverage_level_IND_not_present_in_271",
+    "annual_max_family": "coverage_level_FAM_not_present_in_271",
 }
 
 
@@ -55,6 +60,13 @@ def attach_eligibility_canonical_record(canonical: dict[str, Any]) -> None:
     cp = _float_or_none(canonical.get("copay"))
     co = _float_or_none(canonical.get("coinsurance"))
     pr = _float_or_none(canonical.get("patient_responsibility"))
+    prior_auth = canonical.get("prior_auth_required")
+    if prior_auth is not None:
+        prior_auth = bool(prior_auth)
+    ded_ind = _float_or_none(canonical.get("deductible_individual"))
+    ded_fam = _float_or_none(canonical.get("deductible_family"))
+    max_ind = _float_or_none(canonical.get("annual_max_individual"))
+    max_fam = _float_or_none(canonical.get("annual_max_family"))
     cov_conf = canonical.get("coverage_confidence")
     cov_conf_s: str | None = (
         str(cov_conf).strip() if isinstance(cov_conf, str) and cov_conf.strip() else None
@@ -75,6 +87,11 @@ def attach_eligibility_canonical_record(canonical: dict[str, Any]) -> None:
         ("copay", cp),
         ("coinsurance", co),
         ("patient_responsibility", pr),
+        ("prior_auth_required", prior_auth),
+        ("deductible_individual", ded_ind),
+        ("deductible_family", ded_fam),
+        ("annual_max_individual", max_ind),
+        ("annual_max_family", max_fam),
     ):
         if val is None:
             null_reasons[key] = _NULL_REASONS[key]
@@ -91,6 +108,11 @@ def attach_eligibility_canonical_record(canonical: dict[str, Any]) -> None:
         copay=cp,
         coinsurance=co,
         patient_responsibility=pr,
+        prior_auth_required=prior_auth,
+        deductible_individual=ded_ind,
+        deductible_family=ded_fam,
+        annual_max_individual=max_ind,
+        annual_max_family=max_fam,
         coverage_confidence=cov_conf_s,
         missing_fields=missing,
         response_complete=response_complete,

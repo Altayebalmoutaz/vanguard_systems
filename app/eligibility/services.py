@@ -84,6 +84,24 @@ def _apply_coverage_ambiguous_canonical_enrichment(canonical: dict[str, Any]) ->
             canonical["patient_responsibility"] = float(cp)
 
 
+def _vob_details_from_canonical(canonical: dict[str, Any]) -> dict[str, Any]:
+    """Compact specialist-parity payload persisted on eligibility_checks.vob_details."""
+    breakdown = canonical.get("dental_benefit_breakdown")
+    if not isinstance(breakdown, dict):
+        breakdown = {}
+    return {
+        "prior_auth_required": canonical.get("prior_auth_required"),
+        "last_service_dates": canonical.get("last_service_dates") or [],
+        "deductible_individual": canonical.get("deductible_individual"),
+        "deductible_family": canonical.get("deductible_family"),
+        "annual_max_individual": canonical.get("annual_max_individual"),
+        "annual_max_family": canonical.get("annual_max_family"),
+        "age_limits": breakdown.get("age_limits") or [],
+        "downgrades": breakdown.get("downgrades") or [],
+        "ortho_age_cutoff": breakdown.get("ortho_age_cutoff"),
+    }
+
+
 def canonical_to_row(
     patient_id: UUID,
     canonical: dict[str, Any],
@@ -119,6 +137,7 @@ def canonical_to_row(
         "normalization_version": canonical.get("normalization_version") or "1.0",
         "routing_status": routing_status,
         "integrity_warnings": canonical.get("integrity_warnings") or [],
+        "vob_details": _vob_details_from_canonical(canonical),
     }
 
 
@@ -231,6 +250,8 @@ def run_realtime_pipeline(
                         "allowed_amount": e["allowed_amount"],
                         "insurance_pays": e["insurance_pays"],
                         "patient_responsibility": e["patient_responsibility"],
+                        "downgrade_applied": bool(e.get("downgrade_applied")),
+                        "alternate_cdt": e.get("alternate_cdt"),
                     }
                 )
             insert_procedure_estimates(

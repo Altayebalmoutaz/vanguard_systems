@@ -36,6 +36,7 @@ _JSONB_KEYS = frozenset(
         "detail",
         "input_json",
         "output_json",
+        "vob_details",
     }
 )
 
