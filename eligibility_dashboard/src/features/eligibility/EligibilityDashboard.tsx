@@ -52,7 +52,9 @@ import {
   X,
 } from "lucide-react";
 import { ConfidenceGauge, RadialDonut } from "@/components/ui/Gauges";
+import { SpotlightCard } from "@/components/ui/SpotlightCard";
 import { useClientValue } from "@/hooks/useClientValue";
+import { useCountUp } from "@/hooks/useCountUp";
 import { staffDisplayName, useStaffSession } from "@/hooks/useStaffSession";
 import {
   FormEvent,
@@ -754,22 +756,6 @@ function humanizeEventType(eventType: string): string {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-function eventToActivityLine(
-  event: EligibilityRequestEvent,
-  rowsById: Map<string, EligibilityDashboardRow>,
-): { label: string; subject: string; payer: string | null } {
-  const row = rowsById.get(event.request_id);
-  const subject = row
-    ? row.patient_name.trim() || row.subscriber_id
-    : "Unknown patient";
-  const payer = row?.payer_label ?? null;
-  return {
-    label: humanizeEventType(event.event_type),
-    subject,
-    payer,
-  };
-}
-
 type DailyBucket = {
   bucket_date: string;
   total_count: number;
@@ -1024,165 +1010,358 @@ function VoiceWaveIcon({ size = 28 }: { size?: number }) {
   );
 }
 
-function activityIconStyle(eventType: string): {
-  Icon: typeof Sparkles;
-  bg: string;
-  fg: string;
-} {
-  const t = eventType.toLowerCase();
-  if (
-    t.includes("fail") ||
-    t.includes("error") ||
-    t.includes("attention") ||
-    t.includes("low")
-  ) {
-    return { Icon: AlertTriangle, bg: "bg-amber-50", fg: "text-amber-600" };
-  }
-  if (
-    t.includes("invoked") ||
-    t.includes("calling") ||
-    t.includes("retry") ||
-    t.includes("voice")
-  ) {
-    return { Icon: Phone, bg: "bg-blue-50", fg: "text-blue-600" };
-  }
-  return { Icon: Sparkles, bg: "bg-indigo-50", fg: "text-indigo-600" };
+type StageState = "complete" | "active" | "pending" | "error";
+
+type PipelineStage = {
+  id: string;
+  label: string;
+  state: StageState;
+  caption: string | null;
+};
+
+const IN_FLIGHT_STATUSES: DashboardStatusLabel[] = [
+  "Queued",
+  "Processing",
+  "Retrying",
+];
+
+function hasBenefitsParsed(row: EligibilityDashboardRow): boolean {
+  return (
+    Boolean(row.check_id) ||
+    row.response_complete === true ||
+    Boolean(row.checked_at) ||
+    row.coverage_status === "active" ||
+    row.coverage_status === "inactive" ||
+    row.status_label === "Verified"
+  );
 }
 
-function activitySubPill(
-  eventType: string,
-): { label: string; cls: string } | null {
-  const t = eventType.toLowerCase();
-  if (t.includes("fail") || t.includes("attention") || t.includes("low")) {
-    return {
-      label: "Needs Review",
-      cls: "border-amber-200 bg-amber-50 text-amber-700",
-    };
+function computeStages(
+  row: EligibilityDashboardRow | null,
+  latestEvent: EligibilityRequestEvent | null,
+): PipelineStage[] {
+  const workingCaption = latestEvent
+    ? humanizeEventType(latestEvent.event_type)
+    : null;
+
+  if (!row) {
+    return [
+      { id: "queued", label: "Queued", state: "pending", caption: null },
+      {
+        id: "checking",
+        label: "Checking payer",
+        state: "pending",
+        caption: null,
+      },
+      {
+        id: "benefits",
+        label: "Benefits parsed",
+        state: "pending",
+        caption: null,
+      },
+      {
+        id: "outcome",
+        label: "Outcome",
+        state: "pending",
+        caption: "Waiting for next check…",
+      },
+    ];
   }
-  if (
-    t.includes("invoked") ||
-    t.includes("calling") ||
-    t.includes("processing") ||
-    t.includes("retry") ||
-    t.includes("voice")
+
+  const includeVoice = Boolean(row.voice_session_id);
+  const voiceStatus = (row.voice_session_status ?? "").toLowerCase();
+  const status = row.status_label;
+  const benefitsReady = hasBenefitsParsed(row);
+
+  type Progress =
+    | "queued"
+    | "checking"
+    | "benefits"
+    | "voice"
+    | "outcome_ok"
+    | "outcome_err";
+
+  let progress: Progress;
+  if (status === "Queued") {
+    progress = "queued";
+  } else if (status === "Verified") {
+    progress = "outcome_ok";
+  } else if (
+    status === "Needs Attention" ||
+    status === "Failed" ||
+    status === "Inactive"
   ) {
-    return {
-      label: "In Progress",
-      cls: "border-blue-200 bg-blue-50 text-blue-700",
-    };
+    progress = "outcome_err";
+  } else if (
+    includeVoice &&
+    ["queued", "calling", "in_progress"].includes(voiceStatus)
+  ) {
+    progress = "voice";
+  } else if (
+    includeVoice &&
+    ["rejected", "failed"].includes(voiceStatus)
+  ) {
+    progress = "outcome_err";
+  } else if (
+    includeVoice &&
+    ["completed", "approved", "auto_approved", "skipped"].includes(voiceStatus)
+  ) {
+    // Voice finished; keep outcome as the active node until overall Verified.
+    progress = "outcome_ok";
+  } else if (benefitsReady) {
+    progress = includeVoice ? "voice" : "benefits";
+  } else {
+    progress = "checking";
   }
-  if (t.includes("pending_review")) {
+
+  const order: Progress[] = includeVoice
+    ? ["queued", "checking", "benefits", "voice", "outcome_ok"]
+    : ["queued", "checking", "benefits", "outcome_ok"];
+
+  // When voice finished but request isn't Verified yet, land on outcome as active
+  // (not complete). Only mark outcome complete when status is Verified.
+  const voiceDoneAwaitingOutcome =
+    includeVoice &&
+    ["completed", "approved", "auto_approved", "skipped"].includes(voiceStatus) &&
+    status !== "Verified" &&
+    progress === "outcome_ok";
+
+  const activeKey: Progress =
+    progress === "outcome_err" ? "outcome_ok" : progress;
+  const activeIdx = order.indexOf(activeKey);
+
+  const labels: Record<string, string> = {
+    queued: "Queued",
+    checking: status === "Retrying" ? "Retrying payer" : "Checking payer",
+    benefits: "Benefits parsed",
+    voice: "Voice verification",
+    outcome_ok:
+      progress === "outcome_err"
+        ? status === "Inactive"
+          ? "Inactive"
+          : status === "Failed"
+            ? "Failed"
+            : "Needs review"
+        : voiceDoneAwaitingOutcome
+          ? "Staff review"
+          : "Verified",
+  };
+
+  const stageIds = includeVoice
+    ? (["queued", "checking", "benefits", "voice", "outcome_ok"] as const)
+    : (["queued", "checking", "benefits", "outcome_ok"] as const);
+
+  return stageIds.map((id, idx) => {
+    const isOutcome = id === "outcome_ok";
+    let state: StageState;
+    if (progress === "outcome_ok" && !voiceDoneAwaitingOutcome) {
+      state = "complete";
+    } else if (isOutcome && progress === "outcome_err") {
+      state = "error";
+    } else if (voiceDoneAwaitingOutcome && isOutcome) {
+      state = "active";
+    } else if (idx < activeIdx) {
+      state = "complete";
+    } else if (idx === activeIdx) {
+      state = "active";
+    } else {
+      state = "pending";
+    }
+
+    const caption =
+      state === "active"
+        ? workingCaption
+        : state === "pending" && isOutcome && !row
+          ? "Waiting for next check…"
+          : null;
+
     return {
-      label: "Pending Review",
-      cls: "border-violet-200 bg-violet-50 text-violet-700",
+      id,
+      label: labels[id] ?? id,
+      state,
+      caption,
     };
-  }
-  if (t.includes("complet") || t.includes("verified")) {
-    return {
-      label: "Verified – High Confidence",
-      cls: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    };
-  }
-  return null;
+  });
+}
+
+function LiveJobStepper({
+  stages,
+  patientName,
+  payer,
+  idle,
+  inFlight,
+}: {
+  stages: PipelineStage[];
+  patientName: string | null;
+  payer: string | null;
+  idle: boolean;
+  inFlight: boolean;
+}) {
+  return (
+    <SpotlightCard
+      className={`flex min-h-[22rem] flex-1 flex-col rounded-xl border border-[var(--accent-primary-soft-strong)] bg-[var(--accent-primary-soft)]/40 p-4 ${
+        idle || !inFlight ? "opacity-80" : ""
+      }`}
+      glowColor="rgba(24, 128, 240, 0.16)"
+    >
+      <div className="mb-4 flex items-start justify-between gap-2 border-b border-[var(--accent-primary-soft-strong)] pb-3">
+        <div className="min-w-0">
+          <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-[var(--accent-primary)]">
+            {idle ? "Next job" : inFlight ? "Active job" : "Latest job"}
+          </div>
+          <div className="mt-1 truncate text-[15px] font-bold tracking-tight text-slate-900">
+            {idle
+              ? "Waiting for next check…"
+              : (patientName ?? "Unknown patient")}
+          </div>
+          {payer && !idle ? (
+            <div className="mt-0.5 truncate text-[12px] font-medium text-slate-600">
+              {payer}
+            </div>
+          ) : null}
+        </div>
+      </div>
+      <ol
+        className="relative flex flex-1 flex-col justify-between gap-0 py-1"
+        aria-label="Eligibility pipeline stages"
+      >
+        {stages.map((stage, idx) => {
+          const isLast = idx === stages.length - 1;
+          const connectorComplete =
+            stage.state === "complete" ||
+            (stages[idx + 1]?.state !== "pending" &&
+              stages[idx + 1] != null);
+          return (
+            <li
+              key={stage.id}
+              className="relative flex min-h-[3.25rem] flex-1 gap-3 last:min-h-0 last:flex-none"
+            >
+              {!isLast ? (
+                <span
+                  className={`stepper-connector absolute left-[11px] top-7 h-[calc(100%-10px)] w-[3px] rounded-full ${
+                    connectorComplete
+                      ? "bg-[var(--accent-primary)]"
+                      : "bg-[var(--accent-primary-soft-strong)]"
+                  }`}
+                  aria-hidden
+                />
+              ) : null}
+              <div className="relative z-[1] flex h-6 w-6 shrink-0 items-center justify-center">
+                {stage.state === "complete" ? (
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--accent-primary)] text-white shadow-sm shadow-[var(--accent-primary)]/30">
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      className="check-draw"
+                      aria-hidden
+                    >
+                      <path
+                        d="M5 13l4 4L19 7"
+                        stroke="currentColor"
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </span>
+                ) : null}
+                {stage.state === "active" ? (
+                  <span className="relative flex h-6 w-6 items-center justify-center rounded-full border-[2.5px] border-[var(--accent-primary)] bg-white text-[var(--accent-primary)] shadow-sm shadow-[var(--accent-primary)]/25">
+                    <span className="status-dot-pulse absolute inset-0 rounded-full text-[var(--accent-primary)]" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-[var(--accent-primary)]" />
+                  </span>
+                ) : null}
+                {stage.state === "pending" ? (
+                  <span className="h-6 w-6 rounded-full border-[2.5px] border-[var(--accent-primary-soft-strong)] bg-white" />
+                ) : null}
+                {stage.state === "error" ? (
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-500 text-white shadow-sm shadow-amber-500/30">
+                    <AlertTriangle size={13} strokeWidth={2.75} />
+                  </span>
+                ) : null}
+              </div>
+              <div className="min-w-0 flex-1 pt-0.5">
+                <div
+                  className={`text-[13.5px] leading-tight tracking-tight ${
+                    stage.state === "active"
+                      ? "font-bold text-[var(--accent-primary)]"
+                      : stage.state === "pending"
+                        ? "font-semibold text-slate-400"
+                        : stage.state === "error"
+                          ? "font-bold text-amber-700"
+                          : "font-bold text-slate-800"
+                  }`}
+                >
+                  {stage.label}
+                </div>
+                {stage.caption ? (
+                  <div className="mt-1 flex items-center gap-1.5 text-[12px] font-medium text-slate-600">
+                    {stage.state === "active" ? (
+                      <span className="spinner-soft text-[var(--accent-primary)]" />
+                    ) : null}
+                    <span className="truncate">{stage.caption}</span>
+                  </div>
+                ) : null}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    </SpotlightCard>
+  );
 }
 
 function AgentActivityRail({
-  items,
-  rowsById,
   pollingActive,
-  expanded,
-  onToggleExpand,
+  activeJob,
+  latestEventForJob,
 }: {
-  items: EligibilityRequestEvent[];
-  rowsById: Map<string, EligibilityDashboardRow>;
   pollingActive: boolean;
-  expanded: boolean;
-  onToggleExpand: () => void;
+  activeJob: EligibilityDashboardRow | null;
+  latestEventForJob: EligibilityRequestEvent | null;
 }) {
-  const wrapClass = expanded
-    ? "max-h-[32rem]"
-    : "max-h-[26rem] overflow-hidden";
+  const stages = useMemo(
+    () => computeStages(activeJob, latestEventForJob),
+    [activeJob, latestEventForJob],
+  );
+  const idle = activeJob == null;
+  const inFlight =
+    activeJob != null && IN_FLIGHT_STATUSES.includes(activeJob.status_label);
+
   return (
-    <aside className="card flex h-fit flex-col p-4">
+    <aside className="card flex h-full min-h-[28rem] flex-col p-4">
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Activity size={16} className="text-indigo-600" strokeWidth={2} />
-          <span className="text-[14px] font-semibold text-slate-900">
-            Activity Feed
+          <Activity
+            size={16}
+            className="text-[var(--accent-primary)]"
+            strokeWidth={2.25}
+          />
+          <span className="text-[14px] font-bold text-slate-900">
+            Agent Activity
           </span>
         </div>
-        <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600">
-          <span className="relative flex h-2 w-2 text-emerald-500">
-            <span className="status-dot-pulse relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-[var(--accent-primary)]">
+          <span className="relative flex h-2 w-2 text-[var(--accent-primary)]">
+            <span className="status-dot-pulse relative inline-flex h-2 w-2 rounded-full bg-[var(--accent-primary)]" />
           </span>
           {pollingActive ? "Live" : "Idle"}
         </span>
       </div>
-      {items.length === 0 ? (
-        <div className="text-[12px] font-normal text-slate-500">
-          Waiting for the next agent action…
-        </div>
-      ) : (
-        <ul className={`space-y-3 ${wrapClass} overflow-y-auto pr-1`}>
-          {items.map((event, evIdx) => {
-            const line = eventToActivityLine(event, rowsById);
-            const { Icon, bg, fg } = activityIconStyle(event.event_type);
-            const sub = activitySubPill(event.event_type);
-            const clock = new Date(event.created_at).toLocaleTimeString([], {
-              hour: "numeric",
-              minute: "2-digit",
-            });
-            return (
-              <li
-                key={event.id}
-                className="slide-in-right flex gap-3"
-                style={{ animationDelay: `${Math.min(evIdx, 12) * 30}ms` }}
-              >
-                <div
-                  className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${bg} ${fg}`}
-                >
-                  <Icon size={16} strokeWidth={2} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1 text-[13px] font-semibold leading-tight text-slate-900">
-                      {line.label}
-                      {line.subject ? (
-                        <span className="font-normal text-slate-700">
-                          {" "}
-                          for {line.subject}
-                        </span>
-                      ) : null}
-                    </div>
-                    <span className="shrink-0 text-[11px] text-slate-500">
-                      {clock}
-                    </span>
-                  </div>
-                  {line.payer ? (
-                    <div className="mt-0.5 text-[12px] leading-tight text-slate-500">
-                      {line.payer}
-                    </div>
-                  ) : null}
-                  {sub ? (
-                    <span
-                      className={`mt-1.5 inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-semibold ${sub.cls}`}
-                    >
-                      {sub.label}
-                    </span>
-                  ) : null}
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-      <button
-        type="button"
-        className="mt-4 w-full rounded-lg py-2 text-[13px] font-semibold text-indigo-600 transition hover:bg-indigo-50"
-        onClick={onToggleExpand}
-      >
-        {expanded ? "Show less" : "View all activity"}
-      </button>
+
+      <LiveJobStepper
+        stages={stages}
+        patientName={
+          activeJob
+            ? activeJob.patient_name.trim() || activeJob.subscriber_id
+            : null
+        }
+        payer={activeJob?.payer_label ?? null}
+        idle={idle}
+        inFlight={inFlight}
+      />
     </aside>
   );
 }
@@ -1195,7 +1374,6 @@ export default function EligibilityDashboard() {
   const [estimates, setEstimates] = useState<ProcedureEstimate[]>([]);
   const [events, setEvents] = useState<EligibilityRequestEvent[]>([]);
   const [activity, setActivity] = useState<EligibilityRequestEvent[]>([]);
-  const [activityExpanded, setActivityExpanded] = useState(false);
   const [pollingActive, setPollingActive] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [panelMode, setPanelMode] = useState<PanelMode>(null);
@@ -1248,15 +1426,40 @@ export default function EligibilityDashboard() {
     () => new Map(readRows.map((row) => [row.request_id, row])),
     [readRows],
   );
+
+  const activeJob = useMemo(() => {
+    if (!readRows.length) return null;
+    const inFlight = readRows
+      .filter((row) => IN_FLIGHT_STATUSES.includes(row.status_label))
+      .sort(
+        (a, b) =>
+          new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
+      );
+    if (inFlight[0]) return inFlight[0];
+    // Briefly show the most recently updated row so a just-finished job remains visible.
+    return [...readRows].sort(
+      (a, b) =>
+        new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
+    )[0] ?? null;
+  }, [readRows]);
+
+  const latestEventForJob = useMemo(() => {
+    if (!activeJob) return null;
+    const forJob = activity.filter(
+      (event) => event.request_id === activeJob.request_id,
+    );
+    if (!forJob.length) return null;
+    return [...forJob].sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    )[0] ?? null;
+  }, [activeJob, activity]);
+
   const parsedCdtCodes = useMemo(
     () => parseCodes(form.cdt_codes),
     [form.cdt_codes],
   );
   const activityCapRef = useRef(25);
-
-  useEffect(() => {
-    activityCapRef.current = activityExpanded ? 100 : 25;
-  }, [activityExpanded]);
 
   const loadRows = useCallback(async () => {
     setBanner(null);
@@ -1334,12 +1537,11 @@ export default function EligibilityDashboard() {
   }, [loadRows]);
 
   useEffect(() => {
-    const limit = activityExpanded ? 100 : 25;
     const id = window.setTimeout(() => {
-      void loadActivity(limit);
+      void loadActivity(25);
     }, 0);
     return () => window.clearTimeout(id);
-  }, [activityExpanded, loadActivity]);
+  }, [loadActivity]);
 
   useEffect(() => {
     if (!deepLinkRequestId || rows.length === 0) return;
@@ -1520,6 +1722,10 @@ export default function EligibilityDashboard() {
       attentionSeries,
     };
   }, [readRows]);
+
+  const kpiRateDisplay = useCountUp(kpi.rate);
+  const kpiVerifiedDisplay = useCountUp(kpi.verifiedToday);
+  const kpiAttentionDisplay = useCountUp(kpi.attention);
 
   const openDetails = (row: DashboardRow) => {
     setSelectedId(row.request.id);
@@ -1731,7 +1937,10 @@ export default function EligibilityDashboard() {
         ) : null}
 
         <section className="mb-5 grid gap-3 md:grid-cols-3">
-          <div className="card flex flex-col p-4">
+          <SpotlightCard
+            className="card flex flex-col p-4"
+            glowColor="rgba(92, 200, 44, 0.12)"
+          >
             <div className="flex items-start gap-2.5">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--success-bg)]">
                 <ShieldCheck
@@ -1743,7 +1952,7 @@ export default function EligibilityDashboard() {
               <div className="flex flex-1 items-start justify-between">
                 <div>
                   <div className="text-[26px] font-bold leading-none tabular-nums tracking-tight text-slate-900">
-                    {kpi.rate}%
+                    {kpiRateDisplay.toFixed(1)}%
                   </div>
                   <div className="mt-1 text-[10.5px] font-semibold uppercase tracking-[0.07em] text-slate-500">
                     Verification Success
@@ -1767,9 +1976,12 @@ export default function EligibilityDashboard() {
               </span>
               <span className="font-normal text-slate-400">vs prior week</span>
             </div>
-          </div>
+          </SpotlightCard>
 
-          <div className="card flex flex-col p-4">
+          <SpotlightCard
+            className="card flex flex-col p-4"
+            glowColor="rgba(24, 128, 240, 0.12)"
+          >
             <div className="flex items-start gap-2.5">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--accent-primary-soft)]">
                 <Users size={15} className="text-[var(--accent-primary)]" strokeWidth={2.2} />
@@ -1777,7 +1989,7 @@ export default function EligibilityDashboard() {
               <div className="flex flex-1 items-start justify-between">
                 <div>
                   <div className="text-[26px] font-bold leading-none tabular-nums tracking-tight text-slate-900">
-                    {kpi.verifiedToday}
+                    {Math.round(kpiVerifiedDisplay)}
                   </div>
                   <div className="mt-1 text-[10.5px] font-semibold uppercase tracking-[0.07em] text-slate-500">
                     Verified Today
@@ -1802,9 +2014,12 @@ export default function EligibilityDashboard() {
               </span>
               <span className="font-normal text-slate-400">vs yesterday</span>
             </div>
-          </div>
+          </SpotlightCard>
 
-          <div className="card flex flex-col p-4">
+          <SpotlightCard
+            className="card flex flex-col p-4"
+            glowColor="rgba(245, 158, 11, 0.12)"
+          >
             <div className="flex items-start gap-2.5">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50">
                 <AlertTriangle
@@ -1815,7 +2030,7 @@ export default function EligibilityDashboard() {
               </div>
               <div className="flex-1">
                 <div className="text-[26px] font-bold leading-none tabular-nums tracking-tight text-slate-900">
-                  {kpi.attention}
+                  {Math.round(kpiAttentionDisplay)}
                 </div>
                 <div className="mt-1 text-[10.5px] font-semibold uppercase tracking-[0.07em] text-slate-500">
                   Needs Attention
@@ -1832,10 +2047,10 @@ export default function EligibilityDashboard() {
             >
               View all <ChevronRight size={12} />
             </button>
-          </div>
+          </SpotlightCard>
         </section>
 
-        <section className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_300px]">
+        <section className="grid items-stretch gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="card overflow-hidden">
             <div className="flex flex-wrap items-center justify-between gap-2.5 border-b border-slate-100 bg-slate-50/50 px-4 py-3">
               <div className="flex items-center gap-2">
@@ -2153,11 +2368,9 @@ export default function EligibilityDashboard() {
             </div>
           </div>
           <AgentActivityRail
-            items={activity}
-            rowsById={readRowById}
             pollingActive={pollingActive}
-            expanded={activityExpanded}
-            onToggleExpand={() => setActivityExpanded((e) => !e)}
+            activeJob={activeJob}
+            latestEventForJob={latestEventForJob}
           />
         </section>
       </main>

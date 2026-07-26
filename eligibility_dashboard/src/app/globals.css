@@ -448,6 +448,54 @@ button {
 }
 
 /* ────────────────────────────────────────────────────────────────
+   Vertical live-job stepper (Activity rail)
+   ──────────────────────────────────────────────────────────────── */
+@keyframes grow-down {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+.stepper-connector {
+  transform-origin: top center;
+  animation: grow-down 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* Cursor-follow spotlight card (overlay child, not ::before — keeps .card::before intact) */
+.spotlight-card {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.spotlight-card__glow {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  background: radial-gradient(
+    420px circle at var(--mx, 50%) var(--my, 50%),
+    var(--spotlight-color, rgba(99, 102, 241, 0.12)),
+    transparent 55%
+  );
+}
+
+.spotlight-card--active .spotlight-card__glow {
+  opacity: 1;
+}
+
+.spotlight-card > *:not(.spotlight-card__glow) {
+  position: relative;
+  z-index: 1;
+}
+
+/* ────────────────────────────────────────────────────────────────
    Reduced motion
    ──────────────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
@@ -463,6 +511,13 @@ button {
     background: rgba(226, 232, 240, 0.4);
   }
   .status-dot-pulse::after {
+    display: none;
+  }
+  .stepper-connector {
+    animation: none;
+    transform: none;
+  }
+  .spotlight-card__glow {
     display: none;
   }
 }
