@@ -293,6 +293,7 @@ def run_from_opendental(
             write_benefit_notes=settings.opendental_write_benefit_notes_enabled,
             write_subscriber_note=settings.opendental_write_subscriber_note_enabled,
             write_commlog=settings.opendental_write_commlog_enabled,
+            write_inshist=settings.opendental_write_inshist_enabled,
             write_insadjust=settings.opendental_write_insadjust_enabled,
             write_benefits_grid=settings.opendental_write_benefits_grid_enabled,
             respect_manual_edits=settings.opendental_write_benefits_grid_respect_manual_edits,

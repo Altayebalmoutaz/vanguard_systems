@@ -106,6 +106,7 @@ def test_from_opendental_route(monkeypatch) -> None:  # type: ignore[no-untyped-
                 "opendental_write_benefit_notes_enabled": True,
                 "opendental_write_subscriber_note_enabled": True,
                 "opendental_write_commlog_enabled": True,
+                "opendental_write_inshist_enabled": False,
                 "opendental_write_insadjust_enabled": False,
                 "opendental_write_benefits_grid_enabled": False,
                 "opendental_write_benefits_grid_respect_manual_edits": True,

@@ -5,8 +5,9 @@ Write-back order (each step independently flag-gated and fault-isolated):
 1b. InsSubs.SubscNote - one-line summary, renders bold-red on the insurance grid
 2. InsVerifies (PatientEnrollment + InsuranceBenefit) - audit timestamp + note
 3. Commlog - human-readable summary for front-desk visibility
-4. ClaimProcs InsAdjust - optional Phase 2 financial sync (used amounts)
-5. Benefits grid (POST/PUT /benefits) - structured CoInsurance %, Deductible & Annual Max rows
+4. ProcedureLogs InsuranceHistory (InsHist) - last service dates for frequency
+5. ClaimProcs InsAdjust - optional Phase 2 financial sync (used amounts)
+6. Benefits grid (POST/PUT /benefits) - structured CoInsurance %, Deductible & Annual Max rows
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ import contextlib
 import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from typing import Any
+from typing import Any, cast
 
 from app.integrations.opendental.benefit_diff import (
     classify_coinsurance_change,
@@ -39,6 +40,8 @@ from app.integrations.opendental.models import (
     ODBenefit,
     ODBenefitCreate,
     ODBenefitUpdate,
+    ODInsHistCreate,
+    ODInsHistPrefName,
     ODInsVerifyCreate,
     ODInsVerifyResponse,
 )
@@ -83,6 +86,32 @@ _CATEGORY_PRIMARY_EBENEFIT: dict[str, str] = {
 }
 
 _MISSING_TOOTH_EXCLUSION_CATS: tuple[str, ...] = ("Prosthodontics", "MaxillofacialProsth")
+
+# OpenDental Insurance History PrefNames (ProcedureLogs POST InsuranceHistory).
+_CDT_TO_INSHIST_PREF: dict[str, str] = {
+    "D0120": "InsHistExamCodes",
+    "D0140": "InsHistExamCodes",
+    "D0150": "InsHistExamCodes",
+    "D0160": "InsHistExamCodes",
+    "D0180": "InsHistExamCodes",
+    "D1110": "InsHistProphyCodes",
+    "D1120": "InsHistProphyCodes",
+    "D0270": "InsHistBWCodes",
+    "D0272": "InsHistBWCodes",
+    "D0273": "InsHistBWCodes",
+    "D0274": "InsHistBWCodes",
+    "D0330": "InsHistPanoCodes",
+    "D4910": "InsHistPerioMaintCodes",
+    "D4355": "InsHistDebridementCodes",
+}
+
+# Coarse canonical categories → InsHist pref when CDT is missing/unmapped.
+_CATEGORY_TO_INSHIST_PREF: dict[str, str] = {
+    "PREVENTIVE": "InsHistProphyCodes",
+    "DIAGNOSTIC": "InsHistExamCodes",
+}
+
+_INSHIST_EMPTY_DATES = frozenset({"", "no history", "not set", "n/a", "none"})
 
 # Open Dental note field length is not documented; keep notes concise but specific.
 _MAX_NOTE_CHARS = 3500
@@ -462,6 +491,150 @@ def build_commlog_summary(snapshot: CanonicalBenefitSnapshot) -> str:
         + f". Verified {snapshot.timestamp.strftime('%Y-%m-%d %H:%M')}."
     )
     return _truncate(summary).encode("ascii", "replace").decode("ascii")
+
+
+def _normalize_inshist_proc_date(value: Any) -> str | None:
+    """Return yyyy-MM-dd or None when the value is empty / not a usable date."""
+    if value is None:
+        return None
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    text = str(value).strip()
+    if not text or text.lower() in _INSHIST_EMPTY_DATES:
+        return None
+    # Accept ISO datetime or date prefixes.
+    if "T" in text:
+        text = text.split("T", 1)[0]
+    if " " in text and len(text) > 10:
+        text = text.split(" ", 1)[0]
+    try:
+        return date.fromisoformat(text[:10]).isoformat()
+    except ValueError:
+        return None
+
+
+def _inshist_pref_for_row(row: dict[str, Any]) -> str | None:
+    cdt = str(row.get("cdt_code") or "").strip().upper()
+    if cdt in _CDT_TO_INSHIST_PREF:
+        return _CDT_TO_INSHIST_PREF[cdt]
+    category = str(row.get("category") or "").strip().upper()
+    return _CATEGORY_TO_INSHIST_PREF.get(category)
+
+
+def build_inshist_targets(canonical: dict[str, Any]) -> list[dict[str, str]]:
+    """Map canonical last_service_dates to OD InsHist PrefName + ProcDate targets.
+
+    One target per PrefName (latest date wins when multiple rows map to the same Hist category).
+    """
+    by_pref: dict[str, str] = {}
+    for row in canonical.get("last_service_dates") or []:
+        if not isinstance(row, dict):
+            continue
+        pref = _inshist_pref_for_row(row)
+        proc_date = _normalize_inshist_proc_date(row.get("service_date"))
+        if not pref or not proc_date:
+            continue
+        prior = by_pref.get(pref)
+        if prior is None or proc_date > prior:
+            by_pref[pref] = proc_date
+    return [
+        {"ins_hist_pref_name": pref, "proc_date": proc_date}
+        for pref, proc_date in sorted(by_pref.items())
+    ]
+
+
+def run_opendental_inshist_writeback(
+    client: OpenDentalClient,
+    *,
+    pat_num: int,
+    ins_sub_num: int,
+    canonical: dict[str, Any],
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Write last service dates into OD Insurance History (Family Module Hist)."""
+    targets = build_inshist_targets(canonical)
+    if not targets:
+        return {"skipped": "no_mappable_last_service_dates", "actions": []}
+
+    existing_by_pref: dict[str, str] = {}
+    try:
+        for row in client.get_insurance_history(pat_num, ins_sub_num):
+            pref = (row.insHistPrefName or "").strip()
+            existing_date = _normalize_inshist_proc_date(row.procDate)
+            if pref and existing_date:
+                existing_by_pref[pref] = existing_date
+    except Exception as exc:
+        logger.warning("OpenDental GET InsuranceHistory failed: %s", exc)
+        return {"error": str(exc), "actions": [], "targets": targets}
+
+    actions: list[dict[str, Any]] = []
+    for target in targets:
+        pref = target["ins_hist_pref_name"]
+        proc_date = target["proc_date"]
+        existing = existing_by_pref.get(pref)
+        if existing == proc_date:
+            actions.append(
+                {
+                    "pref": pref,
+                    "proc_date": proc_date,
+                    "action": "skipped_unchanged",
+                    "existing": existing,
+                }
+            )
+            continue
+        if dry_run:
+            actions.append(
+                {
+                    "pref": pref,
+                    "proc_date": proc_date,
+                    "action": "proposed",
+                    "existing": existing,
+                    "dry_run": True,
+                }
+            )
+            continue
+        try:
+            resp = client.create_insurance_history(
+                ODInsHistCreate(
+                    PatNum=pat_num,
+                    InsSubNum=ins_sub_num,
+                    insHistPrefName=cast(ODInsHistPrefName, pref),
+                    ProcDate=proc_date,
+                )
+            )
+            actions.append(
+                {
+                    "pref": pref,
+                    "proc_date": proc_date,
+                    "action": "created" if existing is None else "updated",
+                    "existing": existing,
+                    "response": resp,
+                }
+            )
+        except Exception as exc:
+            logger.warning("OpenDental InsHist write failed (%s): %s", pref, exc)
+            actions.append(
+                {
+                    "pref": pref,
+                    "proc_date": proc_date,
+                    "action": "error",
+                    "existing": existing,
+                    "error": str(exc),
+                }
+            )
+
+    errors = [a for a in actions if a.get("action") == "error"]
+    out: dict[str, Any] = {
+        "pat_num": pat_num,
+        "ins_sub_num": ins_sub_num,
+        "targets": targets,
+        "actions": actions,
+    }
+    if errors:
+        out["error"] = str(errors[0].get("error") or "inshist_write_failed")
+    return out
 
 
 def build_enrollment_note(
@@ -1593,6 +1766,7 @@ def run_opendental_writeback(
     write_benefit_notes: bool = True,
     write_subscriber_note: bool = True,
     write_commlog: bool = True,
+    write_inshist: bool = False,
     write_insadjust: bool = False,
     write_benefits_grid: bool = False,
     respect_manual_edits: bool = True,
@@ -1609,8 +1783,9 @@ def run_opendental_writeback(
       1. InsSubs.BenefitNotes (primary structured snapshot)
       2. InsVerifies PatientEnrollment + InsuranceBenefit (audit trail)
       3. Commlog (front-desk visibility)
-      4. ClaimProcs InsAdjust (Phase 2 financial sync, opt-in; dry-run when shadow-compare)
-      5. Benefits grid (opt-in; dry-run + confidence gating supported)
+      4. Insurance History / InsHist (last service dates for frequency)
+      5. ClaimProcs InsAdjust (Phase 2 financial sync, opt-in; dry-run when shadow-compare)
+      6. Benefits grid (opt-in; dry-run + confidence gating supported)
     """
     verified = verified_on or date.today()
     routing = primary_result.get("routing") or {}
@@ -1653,6 +1828,7 @@ def run_opendental_writeback(
         "subscriber_note": None,
         "insverifies": None,
         "commlog": None,
+        "inshist": None,
         "insadjust": None,
         "benefits_grid": None,
         "fee_schedule_alerts": None,
@@ -1754,6 +1930,20 @@ def run_opendental_writeback(
         except Exception as exc:
             logger.warning("OpenDental Commlog write failed: %s", exc)
             result["commlog"] = {"error": str(exc), "note_sent": commlog_note}
+
+    # 3b) FREQUENCY HISTORY: Insurance History (InsHist) -------------------------------
+    if write_inshist:
+        try:
+            result["inshist"] = run_opendental_inshist_writeback(
+                client,
+                pat_num=pat_num,
+                ins_sub_num=primary_ins_sub_num,
+                canonical=canonical,
+                dry_run=dry_run_financial,
+            )
+        except Exception as exc:
+            logger.warning("OpenDental InsHist write failed: %s", exc)
+            result["inshist"] = {"error": str(exc)}
 
     # 4) PHASE 2: ClaimProcs InsAdjust -------------------------------------------------
     if write_insadjust:
@@ -1943,6 +2133,7 @@ _WRITEBACK_STEP_KEYS = (
     "subscriber_note",
     "insverifies",
     "commlog",
+    "inshist",
     "insadjust",
     "benefits_grid",
 )

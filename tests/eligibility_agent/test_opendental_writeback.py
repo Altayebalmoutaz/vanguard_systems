@@ -4,6 +4,7 @@ from app.integrations.opendental.models import (
     ODBenefit,
     ODCommlogResponse,
     ODCovCat,
+    ODInsHistRow,
     ODInsVerifyResponse,
 )
 from app.integrations.opendental.writeback import (
@@ -12,8 +13,10 @@ from app.integrations.opendental.writeback import (
     build_benefits_note,
     build_commlog_summary,
     build_enrollment_note,
+    build_inshist_targets,
     format_benefit_notes,
     run_opendental_benefits_grid_writeback,
+    run_opendental_inshist_writeback,
     run_opendental_writeback,
 )
 
@@ -227,6 +230,101 @@ def test_run_writeback_order_and_isolation() -> None:
     assert result["commlog"]["pat_num"] == 24
     assert result["write_back_result"]["InsVerifyNum"] == 1
     assert result["insadjust"] is None  # default off
+    assert result["inshist"] is None  # default off
+
+
+def test_build_inshist_targets_maps_cdt_and_keeps_latest() -> None:
+    targets = build_inshist_targets(
+        {
+            "last_service_dates": [
+                {"cdt_code": "D1110", "service_date": "2024-01-01"},
+                {"cdt_code": "D1110", "service_date": "2024-06-15"},
+                {"cdt_code": "D0274", "service_date": "2023-11-02"},
+                {"cdt_code": "D9999", "category": "PREVENTIVE", "service_date": "2022-01-01"},
+                {"cdt_code": "D2740", "service_date": "2024-02-01"},  # unmapped
+            ]
+        }
+    )
+    by_pref = {t["ins_hist_pref_name"]: t["proc_date"] for t in targets}
+    assert by_pref["InsHistProphyCodes"] == "2024-06-15"
+    assert by_pref["InsHistBWCodes"] == "2023-11-02"
+    assert "InsHistExamCodes" not in by_pref
+
+
+def test_run_inshist_writeback_skips_unchanged_and_posts_new() -> None:
+    class _HistStub:
+        def __init__(self) -> None:
+            self.created: list[object] = []
+
+        def get_insurance_history(self, pat_num, ins_sub_num):  # type: ignore[no-untyped-def]
+            assert pat_num == 24
+            assert ins_sub_num == 201
+            return [
+                ODInsHistRow(
+                    insHistPrefName="InsHistProphyCodes",
+                    procDate="2024-06-15",
+                    ProcNum=1,
+                ),
+                ODInsHistRow(
+                    insHistPrefName="InsHistExamCodes",
+                    procDate="No History",
+                    ProcNum=0,
+                ),
+            ]
+
+        def create_insurance_history(self, payload):  # type: ignore[no-untyped-def]
+            self.created.append(payload)
+            return {"ok": True}
+
+    stub = _HistStub()
+    result = run_opendental_inshist_writeback(
+        stub,  # type: ignore[arg-type]
+        pat_num=24,
+        ins_sub_num=201,
+        canonical={
+            "last_service_dates": [
+                {"cdt_code": "D1110", "service_date": "2024-06-15"},
+                {"cdt_code": "D0150", "service_date": "2024-03-01"},
+            ]
+        },
+    )
+    actions = {a["pref"]: a["action"] for a in result["actions"]}
+    assert actions["InsHistProphyCodes"] == "skipped_unchanged"
+    assert actions["InsHistExamCodes"] == "created"
+    assert len(stub.created) == 1
+    assert stub.created[0].insHistPrefName == "InsHistExamCodes"
+    assert stub.created[0].ProcDate == "2024-03-01"
+
+
+def test_run_writeback_inshist_opt_in() -> None:
+    class _WithHist(_WBStub):
+        def get_insurance_history(self, pat_num, ins_sub_num):  # type: ignore[no-untyped-def]
+            return []
+
+        def create_insurance_history(self, payload):  # type: ignore[no-untyped-def]
+            self.calls.append("inshist")
+            return {"ok": True}
+
+    stub = _WithHist()
+    result = run_opendental_writeback(
+        stub,  # type: ignore[arg-type]
+        pat_num=24,
+        primary_pat_plan_num=101,
+        primary_plan_num=301,
+        primary_ins_sub_num=201,
+        primary_result={
+            "check_id": "c1",
+            "routing": {"status": "CLEARED"},
+            "canonical": {
+                **_CANONICAL,
+                "last_service_dates": [{"cdt_code": "D1110", "service_date": "2024-06-01"}],
+            },
+            "procedure_estimates": _ESTIMATES,
+        },
+        write_inshist=True,
+    )
+    assert "inshist" in stub.calls
+    assert result["inshist"]["actions"][0]["action"] == "created"
 
 
 def test_run_writeback_isolates_benefit_notes_failure() -> None:

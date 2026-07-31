@@ -232,6 +232,7 @@ def _execute_opendental_writeback(payload: dict[str, Any]) -> dict[str, Any]:
         write_benefit_notes=bool(payload.get("write_benefit_notes", True)),
         write_subscriber_note=bool(payload.get("write_subscriber_note", True)),
         write_commlog=bool(payload.get("write_commlog", True)),
+        write_inshist=bool(payload.get("write_inshist", False)),
         write_insadjust=bool(payload.get("write_insadjust", False)),
         write_benefits_grid=bool(payload.get("write_benefits_grid", False)),
         respect_manual_edits=bool(payload.get("respect_manual_edits", True)),

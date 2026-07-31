@@ -115,6 +115,38 @@ class ODClaimProcInsAdjust(BaseModel):
     date: str | None = None
 
 
+# PrefName values accepted by ProcedureLogs POST InsuranceHistory (case-sensitive).
+ODInsHistPrefName = Literal[
+    "InsHistBWCodes",
+    "InsHistPanoCodes",
+    "InsHistExamCodes",
+    "InsHistProphyCodes",
+    "InsHistPerioURCodes",
+    "InsHistPerioULCodes",
+    "InsHistPerioLRCodes",
+    "InsHistPerioLLCodes",
+    "InsHistPerioMaintCodes",
+    "InsHistDebridementCodes",
+]
+
+
+class ODInsHistRow(BaseModel):
+    """GET /procedurelogs/InsuranceHistory row."""
+
+    insHistPrefName: str | None = None
+    procDate: str | None = None
+    ProcNum: int | None = None
+
+
+class ODInsHistCreate(BaseModel):
+    """POST /procedurelogs/InsuranceHistory - same path as Family Module Hist UI."""
+
+    PatNum: int = Field(..., ge=1)
+    InsSubNum: int = Field(..., ge=1)
+    insHistPrefName: ODInsHistPrefName
+    ProcDate: str  # yyyy-MM-dd
+
+
 class ODCovCat(BaseModel):
     """GET /covcats row - coverage category lookup (maps EbenefitCat -> CovCatNum)."""
 

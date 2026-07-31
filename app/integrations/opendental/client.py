@@ -21,6 +21,8 @@ from app.integrations.opendental.models import (
     ODCommlogCreate,
     ODCommlogResponse,
     ODCovCat,
+    ODInsHistCreate,
+    ODInsHistRow,
     ODInsSubBenefitNotesUpdate,
     ODInsSubSubscNoteUpdate,
     ODInsuranceRow,
@@ -333,6 +335,29 @@ class OpenDentalClient:
             date=(on_date or date.today()).isoformat(),
         ).model_dump(mode="json", exclude_none=True)
         out = self._send_json("PUT", "/claimprocs/InsAdjust", payload)
+        return out if isinstance(out, dict) else {"response": out}
+
+    def get_insurance_history(self, pat_num: int, ins_sub_num: int) -> list[ODInsHistRow]:
+        """GET /procedurelogs/InsuranceHistory?PatNum=&InsSubNum=."""
+        path = f"/procedurelogs/InsuranceHistory?PatNum={pat_num}&InsSubNum={ins_sub_num}"
+        if self.replay_dir:
+            payload = self._read_fixture(f"inshist_{pat_num}_{ins_sub_num}")
+        else:
+            payload = self._get_json(path)
+        if not isinstance(payload, list):
+            raise OpenDentalAPIError("OpenDental InsuranceHistory payload was not a list")
+        return [ODInsHistRow.model_validate(row) for row in payload]
+
+    def create_insurance_history(self, payload: ODInsHistCreate) -> dict[str, object]:
+        """POST /procedurelogs/InsuranceHistory - creates EO proc + InsHist like the Hist UI."""
+        if self.replay_dir:
+            logger.warning("OpenDental replay mode active: skipping POST InsuranceHistory")
+            return {**payload.model_dump(mode="json"), "_replay": True}
+        out = self._send_json(
+            "POST",
+            "/procedurelogs/InsuranceHistory",
+            payload.model_dump(mode="json"),
+        )
         return out if isinstance(out, dict) else {"response": out}
 
     def get_covcats(self) -> list[ODCovCat]:

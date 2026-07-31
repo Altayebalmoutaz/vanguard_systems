@@ -12,6 +12,7 @@ _LAYER_LABELS = {
     "subscriber_note": "L2 SubscNote",
     "insverifies": "L1 InsVerify",
     "commlog": "L2 Commlog",
+    "inshist": "L2b InsHist",
     "benefits_grid": "L3 Benefits grid",
     "insadjust": "L4 InsAdjust",
 }
@@ -40,6 +41,23 @@ def _layer_status(notes: dict[str, object], key: str) -> str:
                 if isinstance(a, dict) and a.get("action") == "skipped_human_edit"
             )
             return f"ok c={created} u={updated} skip={skipped}"
+    if key == "inshist":
+        actions = block.get("actions") or []
+        if isinstance(actions, list) and actions:
+            written = sum(
+                1
+                for a in actions
+                if isinstance(a, dict) and a.get("action") in ("created", "updated")
+            )
+            skipped = sum(
+                1
+                for a in actions
+                if isinstance(a, dict) and str(a.get("action") or "").startswith("skipped")
+            )
+            proposed = sum(
+                1 for a in actions if isinstance(a, dict) and a.get("action") == "proposed"
+            )
+            return f"ok w={written} skip={skipped} prop={proposed}"
     return "ok"
 
 
@@ -58,6 +76,7 @@ def _row(result: dict) -> tuple[str, str, str, str, str]:
             "benefit_notes",
             "subscriber_note",
             "commlog",
+            "inshist",
             "benefits_grid",
             "insadjust",
         )

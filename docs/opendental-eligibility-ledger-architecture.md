@@ -63,6 +63,7 @@ Pipeline source fields: `app/eligibility/canonical_model.py`, `app/eligibility/u
 | Frequency limitations | 271 EB segments + service delivery + quantity | `benefit Limitations` with QuantityQualifier | **Parsed** → `dental_benefit_breakdown.frequency_limitations` |
 | Waiting periods | 271 limitation text + procedure details | `benefit WaitingPeriod` per CovCat | **Parsed** → `dental_benefit_breakdown.waiting_periods` |
 | Missing tooth clause | 271 exclusion text | `benefit Exclusions` row + `BenefitNotes` line | **Detected** → `dental_benefit_breakdown.missing_tooth_clause` |
+| Last service dates | `canonical.last_service_dates` | `POST /procedurelogs/InsuranceHistory` (InsHist) + BenefitNotes | Available (InsHist writeback) |
 
 Anything we cannot reliably parse is rendered `n/a` in notes and simply not written to `benefit` — never fabricated.
 
@@ -149,6 +150,7 @@ Per-patient sequence (each step flag-gated + try/except):
 | 2 | `PUT /inssubs/{InsSubNum}` BenefitNotes | `inssub.BenefitNotes` | 2 |
 | 3 | `PUT /inssubs/{InsSubNum}` SubscNote | `inssub.SubscNote` | 2 |
 | 4 | `POST /commlogs` | `commlog` | 2 |
+| 4b | `POST /procedurelogs/InsuranceHistory` | InsHist / Existing Other | 2b |
 | 5 | `GET /covcats` | resolve EbenefitCat → CovCatNum | 3 |
 | 6 | `GET /benefits?PlanNum=` | existing rows for idempotent upsert | 3 |
 | 7 | `POST` / `PUT /benefits/{BenefitNum}` | `benefit` rows (CoInsurance, Deductible, Limitations, WaitingPeriod, Exclusions) | 3 |

@@ -152,6 +152,12 @@ class EligibilitySettings(BaseSettings):
         default=False,
         validation_alias="OPENDENTAL_WRITE_INSADJUST_ENABLED",
     )
+    # Insurance History (InsHist) last-service dates via ProcedureLogs POST InsuranceHistory.
+    # Creates Existing Other procedures like the Family Module Hist UI; default off.
+    opendental_write_inshist_enabled: bool = Field(
+        default=False,
+        validation_alias="OPENDENTAL_WRITE_INSHIST_ENABLED",
+    )
     # Structured Benefits grid (CoInsurance %, Deductible, Annual Max). Mutates plan-level
     # benefits shared by all subscribers on the plan, so default off.
     opendental_write_benefits_grid_enabled: bool = Field(

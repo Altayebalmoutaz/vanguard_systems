@@ -24,7 +24,8 @@ def _writeback_flags(input_json: dict[str, Any]) -> dict[str, bool]:
             "write_benefit_notes": True,
             "write_subscriber_note": True,
             "write_commlog": True,
-            # Shadow-compare still *runs* L3/L4 but in dry-run (see writeback dry_run flag).
+            # Shadow-compare still *runs* L3/L4/InsHist but in dry-run (see writeback dry_run flag).
+            "write_inshist": True,
             "write_insadjust": True,
             "write_benefits_grid": True,
             "dry_run_financial": shadow,
@@ -33,6 +34,7 @@ def _writeback_flags(input_json: dict[str, Any]) -> dict[str, bool]:
         "write_benefit_notes": True,
         "write_subscriber_note": True,
         "write_commlog": True,
+        "write_inshist": False,
         "write_insadjust": False,
         "write_benefits_grid": False,
         "dry_run_financial": False,
@@ -70,6 +72,7 @@ def _enqueue_one(
         write_benefit_notes=flags["write_benefit_notes"],
         write_subscriber_note=flags["write_subscriber_note"],
         write_commlog=flags["write_commlog"],
+        write_inshist=flags["write_inshist"],
         write_insadjust=flags["write_insadjust"],
         write_benefits_grid=flags["write_benefits_grid"],
         respect_manual_edits=respect_manual_edits,

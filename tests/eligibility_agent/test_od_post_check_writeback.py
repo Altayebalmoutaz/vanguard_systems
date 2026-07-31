@@ -112,6 +112,7 @@ def test_maybe_enqueue_full_writeback_sets_all_flags(monkeypatch) -> None:
     assert captured[0]["write_commlog"] is True
     assert captured[0]["write_insadjust"] is True
     assert captured[0]["write_benefits_grid"] is True
+    assert captured[0]["write_inshist"] is True
     assert captured[0]["dry_run_financial"] is False
 
 
@@ -224,3 +225,4 @@ def test_maybe_enqueue_partial_writeback_omits_grid(monkeypatch) -> None:
 
     assert captured[0]["write_insadjust"] is False
     assert captured[0]["write_benefits_grid"] is False
+    assert captured[0]["write_inshist"] is False

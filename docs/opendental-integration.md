@@ -36,6 +36,7 @@ per-clinic connection toggles.
 | --- | --- | --- |
 | 1 | InsVerify (PatientEnrollment + InsuranceBenefit) | On with writeback |
 | 2 | `InsSubs.BenefitNotes`, `SubscNote`, Commlog | On |
+| 2b | Insurance History (`POST /procedurelogs/InsuranceHistory`) | Off unless **Full writeback** (or `OPENDENTAL_WRITE_INSHIST_ENABLED`) |
 | 3 | `POST`/`PUT /benefits` (Edit Benefits + Other Benefits) | Off unless **Full writeback** |
 | 4 | `PUT /claimprocs/InsAdjust` (YTD used) | Off unless **Full writeback** |
 
@@ -51,7 +52,7 @@ network/fee mismatches without assigning FeeSched.
 | Toggle | Effect |
 | --- | --- |
 | Write-back | Master gate for OD writes after eligibility |
-| Full writeback | Enables benefits grid + InsAdjust (needs **$30 Insurance** API tier) |
+| Full writeback | Enables benefits grid + InsAdjust + InsHist (needs **$30 Insurance** API tier for grid; InsHist needs ProcedureLogs write) |
 | Shadow compare | With Full: run L3/L4 in **dry-run** (propose diffs + review queue); notes/InsVerify/commlog still write. Default **off** so full writeback applies. |
 
 Flags are stored on `rcm.opendental_connections` (`writeback_enabled`,
@@ -65,6 +66,7 @@ Each step is independently flag-gated and fault-isolated:
 1b. **`PUT /inssubs/{InsSubNum}`** — `SubscNote` (bold-red on the insurance grid)
 2. **`PUT /insverifies`** — enrollment + benefits last-verified dates + notes
 3. **`POST /commlogs`** — front-desk summary
+3b. **`POST /procedurelogs/InsuranceHistory`** — last service dates (InsHist / Existing Other), from `canonical.last_service_dates`
 4. **`PUT /claimprocs/InsAdjust`** — insurance/deductible used (or proposed in shadow)
 5. **`POST` / `PUT /benefits`** — structured grid:
    - `ActiveCoverage`
@@ -141,8 +143,10 @@ Plan Clauses:
 Verified by ezfi
 ```
 
-OpenDental has no InsHist / age / pre-auth API endpoints — those specialist fields are
+OpenDental has no dedicated age / pre-auth API endpoints — those specialist fields are
 written as BenefitNotes/Commlog text and surfaced in the dashboard `vob_details` panel.
+**Last service dates** map to Insurance History via `POST /procedurelogs/InsuranceHistory`
+when InsHist writeback is enabled (CDT → `InsHist*Codes` PrefName).
 Structured Benefits rows still cover coinsurance, deductible, max, frequency, waiting, and
 exclusions.
 
@@ -156,6 +160,7 @@ OPENDENTAL_WRITEBACK_ENABLED=false
 OPENDENTAL_WRITE_BENEFIT_NOTES_ENABLED=true
 OPENDENTAL_WRITE_SUBSCRIBER_NOTE_ENABLED=true
 OPENDENTAL_WRITE_COMMLOG_ENABLED=true
+OPENDENTAL_WRITE_INSHIST_ENABLED=false
 OPENDENTAL_WRITE_INSADJUST_ENABLED=false
 OPENDENTAL_WRITE_BENEFITS_GRID_ENABLED=false
 OPENDENTAL_WRITE_BENEFITS_GRID_RESPECT_MANUAL_EDITS=true
