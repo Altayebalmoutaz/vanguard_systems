@@ -45,11 +45,35 @@ export type EligibilityRequest = {
   completed_at: string | null;
 };
 
+export type VobFrequencyLimitation = {
+  cdt_code?: string | null;
+  category?: string | null;
+  quantity?: number | null;
+  quantity_qualifier?: string | null;
+  period_months?: number | null;
+  time_period?: string | null;
+  description?: string | null;
+};
+
+export type VobWaitingPeriod = {
+  cdt_code?: string | null;
+  category?: string | null;
+  months?: number | null;
+  end_date?: string | null;
+  description?: string | null;
+};
+
+export type VobMissingToothClause = {
+  present?: boolean | null;
+  description?: string | null;
+};
+
 export type VobDetails = {
   prior_auth_required?: boolean | null;
   last_service_dates?: Array<{
     cdt_code?: string | null;
     service_date?: string | null;
+    category?: string | null;
     description?: string | null;
   }>;
   deductible_individual?: number | null;
@@ -70,6 +94,9 @@ export type VobDetails = {
     description?: string | null;
   }>;
   ortho_age_cutoff?: number | null;
+  frequency_limitations?: VobFrequencyLimitation[];
+  waiting_periods?: VobWaitingPeriod[];
+  missing_tooth_clause?: VobMissingToothClause | null;
 };
 
 export type EligibilityCheck = {

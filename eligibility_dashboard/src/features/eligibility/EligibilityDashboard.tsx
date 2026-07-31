@@ -53,6 +53,7 @@ import {
 } from "lucide-react";
 import { ConfidenceGauge, RadialDonut } from "@/components/ui/Gauges";
 import { SpotlightCard } from "@/components/ui/SpotlightCard";
+import { PlanRulesCard } from "@/features/eligibility/PlanRulesCard";
 import { useClientValue } from "@/hooks/useClientValue";
 import { useCountUp } from "@/hooks/useCountUp";
 import { staffDisplayName, useStaffSession } from "@/hooks/useStaffSession";
@@ -169,6 +170,55 @@ const demoRows: DashboardRow[] = [
       routing_status: "CLEARED",
       integrity_warnings: [],
       raw_response: null,
+      vob_details: {
+        prior_auth_required: false,
+        deductible_individual: 50,
+        deductible_family: 150,
+        annual_max_individual: 1500,
+        annual_max_family: 3000,
+        last_service_dates: [
+          { cdt_code: "D1110", service_date: "2024-06-15" },
+          { cdt_code: "D0274", service_date: "2023-11-02" },
+        ],
+        frequency_limitations: [
+          {
+            cdt_code: "D1110",
+            quantity: 2,
+            period_months: 12,
+            quantity_qualifier: "Visits",
+            description: "Prophy 2 per 12 months",
+          },
+          {
+            cdt_code: "D0274",
+            quantity: 1,
+            period_months: 12,
+            description: "Bitewings once per year",
+          },
+        ],
+        waiting_periods: [
+          {
+            category: "MAJOR",
+            months: 12,
+            end_date: "2024-01-01",
+            description: "Major services 12 month waiting period",
+          },
+        ],
+        missing_tooth_clause: { present: false },
+        age_limits: [
+          {
+            category: "PREVENTIVE",
+            age_max: 14,
+            description: "Sealants up to age 14",
+          },
+        ],
+        downgrades: [
+          {
+            cdt_from: "D2391",
+            cdt_to: "D2140",
+            description: "Composite downgraded to amalgam",
+          },
+        ],
+      },
       created_at: new Date().toISOString(),
     },
   },
@@ -277,6 +327,11 @@ const demoRows: DashboardRow[] = [
 function formatCurrency(value: number | null | undefined): string {
   if (value === null || value === undefined) return "-";
   return `$${Math.round(value)}`;
+}
+
+function formatPercent(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return "-";
+  return `${Math.round(value)}%`;
 }
 
 function timeAgo(value: string | null | undefined): string {
@@ -2780,6 +2835,11 @@ export default function EligibilityDashboard() {
                               )}
                             </span>
                           </div>
+                          {selectedRow.check?.annual_max_used != null ? (
+                            <div className="mt-1 text-center text-[11px] text-slate-500">
+                              Used {formatCurrency(selectedRow.check.annual_max_used)}
+                            </div>
+                          ) : null}
                         </div>
                         <div className="flex flex-col items-center">
                           <div className="mb-2 text-[11px] font-medium text-slate-500">
@@ -2806,8 +2866,34 @@ export default function EligibilityDashboard() {
                               )}
                             </span>
                           </div>
+                          {selectedRow.check?.deductible_met != null ? (
+                            <div className="mt-1 text-center text-[11px] text-slate-500">
+                              Met {formatCurrency(selectedRow.check.deductible_met)}
+                            </div>
+                          ) : null}
                         </div>
                       </div>
+                      {(selectedRow.check?.coverage_percent != null ||
+                        selectedRow.check?.coinsurance != null) && (
+                        <div className="mt-4 grid grid-cols-2 gap-2">
+                          <div className="rounded-lg bg-slate-50 px-3 py-2 text-center">
+                            <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+                              Coverage
+                            </div>
+                            <div className="mt-0.5 text-[14px] font-semibold text-slate-900">
+                              {formatPercent(selectedRow.check?.coverage_percent)}
+                            </div>
+                          </div>
+                          <div className="rounded-lg bg-slate-50 px-3 py-2 text-center">
+                            <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+                              Coinsurance
+                            </div>
+                            <div className="mt-0.5 text-[14px] font-semibold text-slate-900">
+                              {formatPercent(selectedRow.check?.coinsurance)}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                       <div className="mt-4 flex items-center gap-1.5 rounded-lg bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
                         <ShieldCheck
                           size={12}
@@ -3004,18 +3090,36 @@ export default function EligibilityDashboard() {
                                   Alternate benefit as {estimate.alternate_cdt}
                                 </div>
                               ) : null}
+                              {estimate.waiting_period_end ? (
+                                <div className="mt-0.5 text-[11px] text-amber-700">
+                                  Waiting until{" "}
+                                  {formatShortDate(estimate.waiting_period_end)}
+                                  {estimate.waiting_period_category
+                                    ? ` (${estimate.waiting_period_category})`
+                                    : ""}
+                                </div>
+                              ) : null}
+                              {estimate.non_covered_reason ? (
+                                <div className="mt-0.5 text-[11px] text-slate-500">
+                                  {estimate.non_covered_reason}
+                                </div>
+                              ) : null}
                             </div>
                             <div className="text-right text-[12px] font-medium">
                               <span
                                 className={
                                   estimate.procedure_covered === false
                                     ? "text-red-600"
-                                    : "text-emerald-600"
+                                    : estimate.waiting_period_end
+                                      ? "text-amber-700"
+                                      : "text-emerald-600"
                                 }
                               >
                                 {estimate.procedure_covered === false
                                   ? "Not covered"
-                                  : "Covered"}
+                                  : estimate.waiting_period_end
+                                    ? "Waiting"
+                                    : "Covered"}
                               </span>
                             </div>
                             <div className="mono w-16 text-right text-[12px] text-slate-500">
@@ -3027,18 +3131,17 @@ export default function EligibilityDashboard() {
                     </div>
                   ) : null}
 
-                  {/* Specialist VOB details */}
+                  <PlanRulesCard vob={selectedRow.check?.vob_details} />
+
+                  {/* Patient-specific VOB facts */}
                   {selectedRow.check?.vob_details &&
                   (selectedRow.check.vob_details.prior_auth_required != null ||
-                    (selectedRow.check.vob_details.last_service_dates?.length ??
-                      0) > 0 ||
-                    (selectedRow.check.vob_details.age_limits?.length ?? 0) >
-                      0 ||
-                    (selectedRow.check.vob_details.downgrades?.length ?? 0) >
-                      0 ||
                     selectedRow.check.vob_details.deductible_individual !=
                       null ||
-                    selectedRow.check.vob_details.deductible_family != null) ? (
+                    selectedRow.check.vob_details.deductible_family != null ||
+                    selectedRow.check.vob_details.annual_max_individual !=
+                      null ||
+                    selectedRow.check.vob_details.annual_max_family != null) ? (
                     <div className="card p-5">
                       <div className="mb-3 flex items-center gap-2">
                         <FileText
@@ -3047,7 +3150,7 @@ export default function EligibilityDashboard() {
                           strokeWidth={2}
                         />
                         <h4 className="text-[13px] font-semibold text-slate-900">
-                          Specialist VOB details
+                          Patient VOB details
                         </h4>
                       </div>
                       <div className="space-y-2.5 border-t border-slate-100 pt-3 text-[12.5px] text-slate-700">
@@ -3080,64 +3183,24 @@ export default function EligibilityDashboard() {
                             )}
                           </div>
                         )}
-                        {(selectedRow.check.vob_details.last_service_dates
-                          ?.length ?? 0) > 0 ? (
+                        {(selectedRow.check.vob_details.annual_max_individual !=
+                          null ||
+                          selectedRow.check.vob_details.annual_max_family !=
+                            null) && (
                           <div>
-                            <div className="mb-1 font-medium text-slate-900">
-                              Last service dates
-                            </div>
-                            <ul className="list-disc space-y-0.5 pl-4">
-                              {selectedRow.check.vob_details.last_service_dates?.map(
-                                (row, idx) => (
-                                  <li key={`lsd-${idx}`}>
-                                    {row.cdt_code
-                                      ? `${row.cdt_code}: `
-                                      : ""}
-                                    {row.service_date ??
-                                      row.description ??
-                                      "\u2014"}
-                                  </li>
-                                ),
-                              )}
-                            </ul>
+                            <span className="font-medium text-slate-900">
+                              Annual max IND/FAM:{" "}
+                            </span>
+                            {formatCurrency(
+                              selectedRow.check.vob_details
+                                .annual_max_individual,
+                            )}{" "}
+                            /{" "}
+                            {formatCurrency(
+                              selectedRow.check.vob_details.annual_max_family,
+                            )}
                           </div>
-                        ) : null}
-                        {(selectedRow.check.vob_details.age_limits?.length ??
-                          0) > 0 ? (
-                          <div>
-                            <div className="mb-1 font-medium text-slate-900">
-                              Age limits
-                            </div>
-                            <ul className="list-disc space-y-0.5 pl-4">
-                              {selectedRow.check.vob_details.age_limits?.map(
-                                (row, idx) => (
-                                  <li key={`age-${idx}`}>
-                                    {row.description ??
-                                      `Age ${row.age_min ?? "?"}–${row.age_max ?? "?"}`}
-                                  </li>
-                                ),
-                              )}
-                            </ul>
-                          </div>
-                        ) : null}
-                        {(selectedRow.check.vob_details.downgrades?.length ??
-                          0) > 0 ? (
-                          <div>
-                            <div className="mb-1 font-medium text-slate-900">
-                              Downgrades / alternate benefits
-                            </div>
-                            <ul className="list-disc space-y-0.5 pl-4">
-                              {selectedRow.check.vob_details.downgrades?.map(
-                                (row, idx) => (
-                                  <li key={`dg-${idx}`}>
-                                    {row.description ??
-                                      `${row.cdt_from ?? "?"} → ${row.cdt_to ?? "?"}`}
-                                  </li>
-                                ),
-                              )}
-                            </ul>
-                          </div>
-                        ) : null}
+                        )}
                       </div>
                     </div>
                   ) : null}

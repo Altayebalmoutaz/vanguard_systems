@@ -99,6 +99,9 @@ def _vob_details_from_canonical(canonical: dict[str, Any]) -> dict[str, Any]:
         "age_limits": breakdown.get("age_limits") or [],
         "downgrades": breakdown.get("downgrades") or [],
         "ortho_age_cutoff": breakdown.get("ortho_age_cutoff"),
+        "frequency_limitations": breakdown.get("frequency_limitations") or [],
+        "waiting_periods": breakdown.get("waiting_periods") or [],
+        "missing_tooth_clause": breakdown.get("missing_tooth_clause"),
     }
 
 

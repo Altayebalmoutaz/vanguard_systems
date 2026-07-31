@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from app.eligibility.cost_calculator import calculate_responsibility
 from app.eligibility.normalizer import normalize
+from app.eligibility.services import _vob_details_from_canonical
 from app.eligibility.universal_dental.build import build_universal_dental_record
 from app.eligibility.voice.bland import (
     map_bland_analysis_to_extracted,
@@ -231,6 +232,46 @@ def test_bland_maps_pathway_specialist_vars() -> None:
     )
     assert analysis["prior_auth_required"] is False
     assert analysis["downgrades"]
+
+
+def test_vob_details_forwards_plan_rules_fields() -> None:
+    canonical = {
+        "prior_auth_required": True,
+        "last_service_dates": [{"cdt_code": "D1110", "service_date": "2024-03-15"}],
+        "deductible_individual": 50.0,
+        "deductible_family": 150.0,
+        "annual_max_individual": 1500.0,
+        "annual_max_family": 3000.0,
+        "dental_benefit_breakdown": {
+            "age_limits": [{"description": "Sealants up to age 14"}],
+            "downgrades": [{"description": "Composite downgraded to amalgam"}],
+            "ortho_age_cutoff": 19,
+            "frequency_limitations": [
+                {
+                    "cdt_code": "D1110",
+                    "quantity": 2,
+                    "period_months": 12,
+                    "description": "Prophy 2 per 12 months",
+                }
+            ],
+            "waiting_periods": [
+                {"category": "MAJOR", "months": 12, "description": "Major 12 months"}
+            ],
+            "missing_tooth_clause": {
+                "present": True,
+                "description": "Missing tooth clause applies to prosthetics",
+            },
+        },
+    }
+    details = _vob_details_from_canonical(canonical)
+    assert details["prior_auth_required"] is True
+    assert details["last_service_dates"]
+    assert details["frequency_limitations"][0]["cdt_code"] == "D1110"
+    assert details["waiting_periods"][0]["months"] == 12
+    assert details["missing_tooth_clause"]["present"] is True
+    assert details["age_limits"]
+    assert details["downgrades"]
+    assert details["ortho_age_cutoff"] == 19
 
 
 def test_od_benefit_notes_include_specialist_sections() -> None:
