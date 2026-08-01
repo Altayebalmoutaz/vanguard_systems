@@ -159,7 +159,8 @@ def test_from_opendental_route(monkeypatch) -> None:  # type: ignore[no-untyped-
     bn = stub.benefit_notes[0]
     assert bn["ins_sub_num"] == 201
     assert bn["plan_num"] == 301
-    assert "[Verified by ezfi]" in str(bn["note"])
+    assert "Verified by ezfi" in str(bn["note"])
+    assert "Treatment Plan estimates (Ins Est / Pat)" in str(bn["note"])
     assert "Aetna PPO" in str(bn["note"])
 
     # Front-desk Commlog summary written.

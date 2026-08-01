@@ -14,6 +14,7 @@ from app.integrations.opendental.writeback import (
     build_commlog_summary,
     build_enrollment_note,
     build_inshist_targets,
+    build_subscriber_note,
     format_benefit_notes,
     run_opendental_benefits_grid_writeback,
     run_opendental_inshist_writeback,
@@ -104,13 +105,14 @@ def test_format_benefit_notes_is_deterministic_ascii() -> None:
         now=__import__("datetime").datetime(2026, 5, 29, 10, 49),
     )
     note = format_benefit_notes(snapshot)
-    assert note.startswith("[Verified by ezfi]")
-    assert "Date: 2026-05-29 10:49" in note
+    assert note.startswith("Eligibility verification summary")
+    assert "Verified: 2026-05-29 10:49" in note
     assert "Plan: PPO - Aetna" in note
-    assert "Total: $100.00" in note
-    assert "Remaining: $1356.00" in note
-    assert "D1110: 58%" in note  # 70/120
-    assert "D2740: 50%" in note  # 400/800
+    assert "Treatment Plan estimates (Ins Est / Pat)" in note
+    assert "D1110" in note and "$120.00" in note and "$70.00" in note and "$50.00" in note
+    assert "D2740" in note and "$800.00" in note
+    assert "Total estimated patient portion: $450.00" in note
+    assert "Annual maximum: $1500.00 total / $1356.00 remaining" in note
     assert "Verified by ezfi" in note
     # ASCII only (no encoding artifacts in OD/PowerShell).
     note.encode("ascii")
@@ -124,10 +126,10 @@ def test_format_benefit_notes_renders_na_for_missing_fields() -> None:
     )
     note = format_benefit_notes(snapshot)
     assert "Plan: n/a" in note
-    assert "Coverage:\n - n/a" in note
-    assert "Frequency:\n - n/a" in note
-    assert "Waiting Periods:\n - n/a" in note
-    assert "Missing Tooth Clause:\n - n/a" in note
+    assert "No procedure estimates for this check." in note
+    assert "Frequency: n/a" in note
+    assert "Waiting periods: n/a" in note
+    assert "Missing tooth clause: n/a" in note
 
 
 def test_build_benefit_snapshot_surfaces_structured_limitations() -> None:
@@ -182,6 +184,25 @@ def test_commlog_summary_is_concise_ascii() -> None:
     summary.encode("ascii")
 
 
+def test_subscriber_note_is_formal_and_quiet() -> None:
+    snapshot = build_benefit_snapshot(
+        routing={"status": "CLEARED"},
+        canonical=_CANONICAL,
+        procedure_estimates=_ESTIMATES,
+        now=__import__("datetime").datetime(2026, 5, 29, 10, 49),
+    )
+    note = build_subscriber_note(snapshot, _CANONICAL)
+    assert note.startswith("Eligibility verified 2026-05-29")
+    assert "Coverage active" in note
+    assert "Deductible remaining $50.00" in note
+    assert "Annual max remaining $1356.00" in note
+    assert "Est. patient portion $450.00" in note
+    assert "CLEARED" not in note
+    assert "Verified by ezfi" not in note
+    assert "|" not in note
+    note.encode("ascii")
+
+
 class _WBStub:
     def __init__(self) -> None:
         self.calls: list[str] = []
@@ -226,7 +247,9 @@ def test_run_writeback_order_and_isolation() -> None:
     assert set(stub.insverifies) == {"PatientEnrollment", "InsuranceBenefit"}
     assert result["benefit_notes"]["ins_sub_num"] == 201
     assert result["subscriber_note"]["ins_sub_num"] == 201
-    assert "Eligibility CLEARED" in result["subscriber_note"]["note_sent"]
+    assert "Eligibility verified" in result["subscriber_note"]["note_sent"]
+    assert "Coverage active" in result["subscriber_note"]["note_sent"]
+    assert "CLEARED" not in result["subscriber_note"]["note_sent"]
     assert result["commlog"]["pat_num"] == 24
     assert result["write_back_result"]["InsVerifyNum"] == 1
     assert result["insadjust"] is None  # default off

@@ -91,56 +91,52 @@ comparison. Review items land in eligibility audit events
 Customer Key. Without it, grid calls return 401 while notes/InsVerify/Commlog
 still succeed.
 
-## BenefitNotes format (deterministic, ASCII)
+## BenefitNotes format (readable, TP-oriented)
 
 ```
-[Verified by ezfi]
-Date: YYYY-MM-DD HH:MM
+Eligibility verification summary
+Verified: YYYY-MM-DD HH:MM
 Plan: PPO - Carrier Name
-Status: CLEARED
-Check: <check_id>
+Coverage: Active
+Routing status: CLEARED
+Check ID: <check_id>
 
-Deductible:
- - Total: $X
- - Remaining: $X
- - Individual: $X   (when 271 reports IND)
- - Family: $X       (when 271 reports FAM)
+Treatment Plan estimates (Ins Est / Pat)
+--------------------------------------------------------
+Code    Allowed     Ins Est     Pat Est     Status
+D1110   $120.00     $70.00      $50.00      Covered
+D2740   $800.00     $400.00     $400.00     Covered
 
-Annual Max:
- - Total: $X
- - Remaining: $X
+Total estimated patient portion: $450.00
 
-Coverage:
- - D1110: 100%
+Plan accumulators
+--------------------------------------------------------
+Deductible: $X total / $X remaining
+Annual maximum: $X total / $X remaining
 
-Frequency:
- - n/a
+Coverage by code
+--------------------------------------------------------
+  D1110: 58%
 
-Waiting Periods:
- - n/a
+Plan rules
+--------------------------------------------------------
+Frequency / waiting / missing tooth / prior auth /
+last service dates / age limits / downgrades when present
 
-Missing Tooth Clause:
- - n/a
-
-Prior Auth / Predetermination:
- - Required: yes|no|n/a
-
-Last Service Dates:
- - D1110: 2024-03-15
-
-Age Limits:
- - Sealants up to age 14
-
-Downgrades / Alternate Benefits:
- - Composite downgraded to amalgam
-
-Estimates:
- - Patient estimated responsibility: $XXX
-
-Plan Clauses:
- - <downgrade / age / alternate benefit text when present>
-
+Note: Structured benefits and usage writeback update native Treatment Plan
+Ins Est / Pat when full writeback is enabled.
 Verified by ezfi
+```
+
+### Subscriber note (SubscNote)
+
+Quiet formal sentence(s) for the insurance grid. OpenDental still renders
+`SubscNote` in bold red (product UI behavior we cannot change); we avoid shouty
+status banners like `Eligibility CLEARED` or `[Verified by ezfi]` prefixes:
+
+```
+Eligibility verified YYYY-MM-DD. Coverage active. Deductible remaining $X.
+Annual max remaining $X. Est. patient portion $X.
 ```
 
 OpenDental has no dedicated age / pre-auth API endpoints — those specialist fields are

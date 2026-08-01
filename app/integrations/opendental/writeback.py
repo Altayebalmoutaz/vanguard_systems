@@ -216,6 +216,18 @@ def _to_float(value: Any) -> float | None:
 
 
 @dataclass(frozen=True)
+class ProcedureEstimateLine:
+    """One CDT row aligned with Treatment Plan Ins Est / Pat columns."""
+
+    cdt_code: str
+    allowed_amount: float | None = None
+    insurance_pays: float | None = None
+    patient_responsibility: float | None = None
+    procedure_covered: bool | None = None
+    waiting_period_end: str | None = None
+
+
+@dataclass(frozen=True)
 class CanonicalBenefitSnapshot:
     """Deterministic eligibility snapshot rendered into OD BenefitNotes / Commlog."""
 
@@ -244,6 +256,8 @@ class CanonicalBenefitSnapshot:
     deductible_family: float | None = None
     annual_max_individual: float | None = None
     annual_max_family: float | None = None
+    procedure_estimates: list[ProcedureEstimateLine] = field(default_factory=list)
+    coverage_active: bool | None = None
 
 
 def build_benefit_snapshot(
@@ -264,6 +278,7 @@ def build_benefit_snapshot(
     coverage_by_cdt: dict[str, float] = {}
     checked_cdts: list[str] = []
     checked_seen: set[str] = set()
+    estimate_lines: list[ProcedureEstimateLine] = []
     plan_coverage = _to_float(canonical.get("coverage_percent"))
     total_patient = 0.0
     saw_patient = False
@@ -284,6 +299,23 @@ def build_benefit_snapshot(
             coverage_by_cdt[cdt] = round(ins / allowed * 100)
         elif plan_coverage is not None:
             coverage_by_cdt[cdt] = round(plan_coverage)
+        covered_raw = row.get("procedure_covered")
+        covered: bool | None
+        if covered_raw is None:
+            covered = None
+        else:
+            covered = bool(covered_raw)
+        wait_end = row.get("waiting_period_end")
+        estimate_lines.append(
+            ProcedureEstimateLine(
+                cdt_code=cdt,
+                allowed_amount=allowed,
+                insurance_pays=ins,
+                patient_responsibility=pat_val,
+                procedure_covered=covered,
+                waiting_period_end=str(wait_end).strip() if wait_end else None,
+            )
+        )
 
     breakdown = canonical.get("dental_benefit_breakdown")
     if not isinstance(breakdown, dict):
@@ -314,6 +346,8 @@ def build_benefit_snapshot(
     prior_auth = canonical.get("prior_auth_required")
     if prior_auth is not None:
         prior_auth = bool(prior_auth)
+    active_raw = canonical.get("is_active")
+    coverage_active = None if active_raw is None else bool(active_raw)
 
     return CanonicalBenefitSnapshot(
         timestamp=now or datetime.now(),
@@ -340,6 +374,8 @@ def build_benefit_snapshot(
         deductible_family=_to_float(canonical.get("deductible_family")),
         annual_max_individual=_to_float(canonical.get("annual_max_individual")),
         annual_max_family=_to_float(canonical.get("annual_max_family")),
+        procedure_estimates=estimate_lines,
+        coverage_active=coverage_active,
     )
 
 
@@ -349,127 +385,156 @@ def _plan_line(snapshot: CanonicalBenefitSnapshot) -> str:
     return snapshot.plan_name or snapshot.carrier_name or "n/a"
 
 
+def _estimate_status(line: ProcedureEstimateLine) -> str:
+    if line.waiting_period_end:
+        return f"Waiting until {line.waiting_period_end}"
+    if line.procedure_covered is False:
+        return "Not covered"
+    if line.procedure_covered is True:
+        return "Covered"
+    return "Reviewed"
+
+
+def _pad(text: str, width: int) -> str:
+    return text.ljust(width)[:width]
+
+
 def format_benefit_notes(snapshot: CanonicalBenefitSnapshot) -> str:
-    """Deterministic, ASCII-only, timestamped BenefitNotes block (no free-form narrative)."""
+    """Readable BenefitNotes block oriented around Treatment Plan Ins Est / Pat."""
     lines: list[str] = []
-    lines.append(f"[{VERIFIED_BY_EZFI}]")
-    lines.append(f"Date: {snapshot.timestamp.strftime('%Y-%m-%d %H:%M')}")
+    lines.append("Eligibility verification summary")
+    lines.append(f"Verified: {snapshot.timestamp.strftime('%Y-%m-%d %H:%M')}")
     lines.append(f"Plan: {_plan_line(snapshot)}")
-    lines.append(f"Status: {snapshot.routing_status}")
+    if snapshot.coverage_active is not None:
+        lines.append(f"Coverage: {'Active' if snapshot.coverage_active else 'Inactive'}")
+    lines.append(f"Routing status: {snapshot.routing_status}")
     if snapshot.check_id:
-        lines.append(f"Check: {snapshot.check_id}")
+        lines.append(f"Check ID: {snapshot.check_id}")
     lines.append("")
 
-    lines.append("Deductible:")
-    lines.append(f" - Total: {_money(snapshot.deductible_total)}")
-    lines.append(f" - Remaining: {_money(snapshot.deductible_remaining)}")
-    if snapshot.deductible_individual is not None:
-        lines.append(f" - Individual: {_money(snapshot.deductible_individual)}")
-    if snapshot.deductible_family is not None:
-        lines.append(f" - Family: {_money(snapshot.deductible_family)}")
+    lines.append("Treatment Plan estimates (Ins Est / Pat)")
+    lines.append("-" * 56)
+    if snapshot.procedure_estimates:
+        lines.append(
+            f"{_pad('Code', 8)}{_pad('Allowed', 12)}{_pad('Ins Est', 12)}"
+            f"{_pad('Pat Est', 12)}Status"
+        )
+        for row in snapshot.procedure_estimates:
+            lines.append(
+                f"{_pad(row.cdt_code, 8)}"
+                f"{_pad(_money(row.allowed_amount), 12)}"
+                f"{_pad(_money(row.insurance_pays), 12)}"
+                f"{_pad(_money(row.patient_responsibility), 12)}"
+                f"{_estimate_status(row)}"
+            )
+        if snapshot.patient_estimated_responsibility is not None:
+            lines.append("")
+            lines.append(
+                f"Total estimated patient portion: "
+                f"{_money(snapshot.patient_estimated_responsibility)}"
+            )
+    else:
+        lines.append("No procedure estimates for this check.")
+        lines.append(
+            "After benefits grid / InsAdjust writeback, open Treatment Plan "
+            "to review Ins Est and Pat columns."
+        )
     lines.append("")
 
-    lines.append("Annual Max:")
-    lines.append(f" - Total: {_money(snapshot.annual_max_total)}")
-    lines.append(f" - Remaining: {_money(snapshot.annual_max_remaining)}")
-    if snapshot.annual_max_individual is not None:
-        lines.append(f" - Individual: {_money(snapshot.annual_max_individual)}")
-    if snapshot.annual_max_family is not None:
-        lines.append(f" - Family: {_money(snapshot.annual_max_family)}")
+    lines.append("Plan accumulators")
+    lines.append("-" * 56)
+    lines.append(
+        f"Deductible: {_money(snapshot.deductible_total)} total / "
+        f"{_money(snapshot.deductible_remaining)} remaining"
+    )
+    if snapshot.deductible_individual is not None or snapshot.deductible_family is not None:
+        lines.append(
+            f"  Individual {_money(snapshot.deductible_individual)} | "
+            f"Family {_money(snapshot.deductible_family)}"
+        )
+    lines.append(
+        f"Annual maximum: {_money(snapshot.annual_max_total)} total / "
+        f"{_money(snapshot.annual_max_remaining)} remaining"
+    )
+    if snapshot.annual_max_individual is not None or snapshot.annual_max_family is not None:
+        lines.append(
+            f"  Individual {_money(snapshot.annual_max_individual)} | "
+            f"Family {_money(snapshot.annual_max_family)}"
+        )
+    if snapshot.copay is not None:
+        lines.append(f"Copay: {_money(snapshot.copay)}")
     lines.append("")
 
-    lines.append("Coverage:")
+    lines.append("Coverage by code")
+    lines.append("-" * 56)
     if snapshot.coverage_percent_by_cdt:
         for cdt in sorted(snapshot.coverage_percent_by_cdt):
-            lines.append(f" - {cdt}: {_pct(snapshot.coverage_percent_by_cdt[cdt])}")
+            lines.append(f"  {cdt}: {_pct(snapshot.coverage_percent_by_cdt[cdt])}")
     else:
-        lines.append(" - n/a")
+        lines.append("  n/a")
     lines.append("")
 
-    lines.append("Frequency:")
+    lines.append("Plan rules")
+    lines.append("-" * 56)
     if snapshot.frequency_limits:
+        lines.append("Frequency:")
         for label in sorted(snapshot.frequency_limits):
-            lines.append(f" - {label}: {snapshot.frequency_limits[label]}")
+            lines.append(f"  - {label}: {snapshot.frequency_limits[label]}")
     else:
-        lines.append(" - n/a")
-    lines.append("")
-
-    lines.append("Waiting Periods:")
+        lines.append("Frequency: n/a")
     if snapshot.waiting_periods:
+        lines.append("Waiting periods:")
         for label in sorted(snapshot.waiting_periods):
-            lines.append(f" - {label}: {snapshot.waiting_periods[label]}")
+            lines.append(f"  - {label}: {snapshot.waiting_periods[label]}")
     else:
-        lines.append(" - n/a")
-    lines.append("")
-
-    lines.append("Missing Tooth Clause:")
-    lines.append(f" - {snapshot.missing_tooth_clause or 'n/a'}")
-    lines.append("")
-
-    lines.append("Prior Auth / Predetermination:")
+        lines.append("Waiting periods: n/a")
+    lines.append(f"Missing tooth clause: {snapshot.missing_tooth_clause or 'n/a'}")
     if snapshot.prior_auth_required is None:
-        lines.append(" - n/a")
+        lines.append("Prior authorization: n/a")
     else:
-        lines.append(f" - Required: {'yes' if snapshot.prior_auth_required else 'no'}")
-    lines.append("")
-
-    lines.append("Last Service Dates:")
-    if snapshot.last_service_dates:
-        for item in snapshot.last_service_dates:
-            lines.append(f" - {item}")
-    else:
-        lines.append(" - n/a")
-    lines.append("")
-
-    lines.append("Age Limits:")
-    if snapshot.age_limits:
-        for item in snapshot.age_limits:
-            lines.append(f" - {item}")
-    else:
-        lines.append(" - n/a")
-    lines.append("")
-
-    lines.append("Downgrades / Alternate Benefits:")
-    if snapshot.downgrade_notes:
-        for item in snapshot.downgrade_notes:
-            lines.append(f" - {item}")
-    else:
-        lines.append(" - n/a")
-    lines.append("")
-
-    lines.append("Estimates:")
-    if snapshot.patient_estimated_responsibility is not None:
         lines.append(
-            f" - Patient estimated responsibility: {_money(snapshot.patient_estimated_responsibility)}"
+            f"Prior authorization: {'required' if snapshot.prior_auth_required else 'not required'}"
         )
-    else:
-        lines.append(" - n/a")
-    if snapshot.copay is not None:
-        lines.append(f" - Copay: {_money(snapshot.copay)}")
+    if snapshot.last_service_dates:
+        lines.append("Last service dates:")
+        for item in snapshot.last_service_dates:
+            lines.append(f"  - {item}")
+    if snapshot.age_limits:
+        lines.append("Age limits:")
+        for item in snapshot.age_limits:
+            lines.append(f"  - {item}")
+    if snapshot.downgrade_notes:
+        lines.append("Downgrades / alternate benefits:")
+        for item in snapshot.downgrade_notes:
+            lines.append(f"  - {item}")
     lines.append("")
-
+    lines.append(
+        "Note: Structured benefits and usage writeback update native Treatment Plan "
+        "Ins Est / Pat when full writeback is enabled."
+    )
     lines.append(VERIFIED_BY_EZFI)
 
     return _truncate("\n".join(lines)).encode("ascii", "replace").decode("ascii")
 
 
 def build_subscriber_note(snapshot: CanonicalBenefitSnapshot, canonical: dict[str, Any]) -> str:
-    """One-line eligibility summary for InsSub.SubscNote (bold-red on the insurance grid)."""
-    parts = [f"Eligibility {snapshot.routing_status}"]
-    parts.append(f"Active: {_yes_no(canonical.get('is_active'))}")
-    if snapshot.coverage_percent_by_cdt:
-        cov = ", ".join(
-            f"{cdt} {_pct(snapshot.coverage_percent_by_cdt[cdt])}"
-            for cdt in sorted(snapshot.coverage_percent_by_cdt)
-        )
-        parts.append(cov)
+    """Quiet, formal InsSub.SubscNote (OD still renders SubscNote in bold red)."""
+    del canonical  # coverage_active already captured on the snapshot
+    when = snapshot.timestamp.strftime("%Y-%m-%d")
+    parts: list[str] = [f"Eligibility verified {when}"]
+    if snapshot.coverage_active is True:
+        parts.append("Coverage active")
+    elif snapshot.coverage_active is False:
+        parts.append("Coverage inactive")
+    if snapshot.deductible_remaining is not None:
+        parts.append(f"Deductible remaining {_money(snapshot.deductible_remaining)}")
+    if snapshot.annual_max_remaining is not None:
+        parts.append(f"Annual max remaining {_money(snapshot.annual_max_remaining)}")
     if snapshot.patient_estimated_responsibility is not None:
-        parts.append(f"est patient {_money(snapshot.patient_estimated_responsibility)}")
-    summary = (
-        f"[{VERIFIED_BY_EZFI}] "
-        + " | ".join(parts)
-        + f". Verified {snapshot.timestamp.strftime('%Y-%m-%d %H:%M')}."
-    )
+        parts.append(
+            f"Est. patient portion {_money(snapshot.patient_estimated_responsibility)}"
+        )
+    summary = ". ".join(parts) + "."
     return _truncate(summary).encode("ascii", "replace").decode("ascii")
 
 

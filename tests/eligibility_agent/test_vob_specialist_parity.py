@@ -303,11 +303,10 @@ def test_od_benefit_notes_include_specialist_sections() -> None:
         check_id="chk-1",
     )
     notes = format_benefit_notes(snapshot)
-    assert "Prior Auth" in notes
-    assert "Required: yes" in notes
-    assert "Last Service Dates" in notes
+    assert "Prior authorization: required" in notes
+    assert "Last service dates:" in notes
     assert "D1110: 2024-03-15" in notes
-    assert "Age Limits" in notes
+    assert "Age limits:" in notes
     assert "Sealants up to age 14" in notes
     assert "Downgrades" in notes
-    assert "Individual: $50.00" in notes
+    assert "Individual $50.00" in notes
