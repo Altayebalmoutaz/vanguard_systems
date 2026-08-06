@@ -153,8 +153,17 @@ def run_coding_suggest(
         warnings.extend(str(f) for f in cdt_validation["cdt_flags"])
     if icd_validation.get("icd_flags"):
         warnings.extend(str(f) for f in icd_validation["icd_flags"])
-    if payer.get("payer_flags"):
-        warnings.extend(str(f) for f in payer["payer_flags"][:12])
+    # Keep actionable matched-rule flags; drop the noisy "insurance name
+    # didn't fuzzy-match any payer_rules.payer_name" diagnostic — docs already
+    # fall back via documentation_required / default_docs_for_code.
+    payer_flags_out: list[str] = []
+    for flag in payer.get("payer_flags") or []:
+        text = str(flag)
+        if "none matched encounter insurance" in text:
+            logger.debug("suppressed payer_rules insurance mismatch: %s", text)
+            continue
+        payer_flags_out.append(text)
+    warnings.extend(payer_flags_out[:12])
 
     invalid_cdt = {str(c).upper().strip() for c in (cdt_validation.get("invalid") or [])}
     cdt_meta = fetch_cdt_metadata(

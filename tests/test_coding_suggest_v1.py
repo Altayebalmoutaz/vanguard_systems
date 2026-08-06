@@ -158,6 +158,65 @@ class TestCodingSuggestService(unittest.TestCase):
         )
         mock_insert.assert_called_once()
 
+    @patch("app.coding.service.insert_coding_run", return_value=None)
+    @patch("app.coding.service.write_audit_log")
+    @patch("app.coding.service.fetch_run_by_request_id", return_value=None)
+    @patch("app.coding.service.create_supabase", return_value=None)
+    @patch("app.coding.service.apply_payer_rules_tool")
+    @patch("app.coding.service.llm_generate_line_recommendations")
+    def test_suppresses_unmatched_insurance_payer_warning(
+        self,
+        mock_llm: MagicMock,
+        mock_payer: MagicMock,
+        _sb: MagicMock,
+        _fetch: MagicMock,
+        _audit: MagicMock,
+        _insert: MagicMock,
+    ) -> None:
+        mock_llm.return_value = {
+            "recommendations": [
+                {
+                    "line_id": "1",
+                    "cdt_code": "D2140",
+                    "confidence": 0.9,
+                    "explanation": "amalgam",
+                    "icd10_codes": [],
+                },
+                {
+                    "line_id": "2",
+                    "cdt_code": "D0120",
+                    "confidence": 0.9,
+                    "explanation": "eval",
+                    "icd10_codes": [],
+                },
+            ],
+            "overall_confidence": 0.9,
+            "justification": "ok",
+        }
+        mock_payer.return_value = {
+            "payer_flags": [
+                (
+                    "Payer rules: rules were returned but none matched encounter insurance "
+                    "('Cigna'). Align encounter.insurance with payer_name, or use payer_name "
+                    "'*' / 'any' for payer-wide notices."
+                ),
+                "[payer_rules][Cigna] D2140 (documentation_required): pre-op radiograph",
+            ],
+            "payer_rules_matched": [],
+        }
+        req = CodingSuggestRequest.model_validate(
+            json.loads(FIXTURE.read_text(encoding="utf-8"))
+        )
+        out = run_coding_suggest(
+            req,
+            settings=Settings(openrouter_api_key="test-key"),
+            coding_settings=CodingSettings(coding_confidence_review_threshold=0.75),
+        )
+        self.assertFalse(
+            any("none matched encounter insurance" in w for w in out.warnings)
+        )
+        self.assertTrue(any("pre-op radiograph" in w for w in out.warnings))
+
     @patch("app.coding.service.insert_coding_run")
     @patch("app.coding.service.write_audit_log")
     @patch("app.coding.service.fetch_run_by_request_id")
