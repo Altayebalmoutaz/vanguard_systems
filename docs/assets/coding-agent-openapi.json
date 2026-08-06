@@ -1,0 +1,486 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Vanguard MD Coding Agent",
+    "description": "Solo coding agent for structured scribe payloads. POST /v1/suggest returns line-level CDT recommendations for real-time dentist review.",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Health Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/suggest": {
+      "post": {
+        "summary": "Suggest Codes",
+        "description": "Accept a structured scribe payload and return line-level coding recommendations\nsynchronously for dentist approval in the scribe UI.",
+        "operationId": "suggest_codes_v1_suggest_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodingSuggestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodingSuggestResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CodingSuggestRequest": {
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "title": "Schema Version",
+            "default": "1.0"
+          },
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Request Id"
+          },
+          "practice_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Practice Id"
+          },
+          "patient_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Patient Id"
+          },
+          "provider_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Provider Id"
+          },
+          "encounter_datetime": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Encounter Datetime"
+          },
+          "payer": {
+            "$ref": "#/components/schemas/PayerInfo"
+          },
+          "patient": {
+            "$ref": "#/components/schemas/PatientInfo"
+          },
+          "procedures": {
+            "items": {
+              "$ref": "#/components/schemas/ProcedureLine"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Procedures"
+          },
+          "supporting_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supporting Note"
+          },
+          "attachments_present": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Attachments Present"
+          },
+          "fast": {
+            "type": "boolean",
+            "title": "Fast",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "request_id",
+          "practice_id",
+          "patient_id",
+          "provider_id",
+          "encounter_datetime"
+        ],
+        "title": "CodingSuggestRequest",
+        "description": "Inbound structured payload from the scribe agent."
+      },
+      "CodingSuggestResponse": {
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "title": "Schema Version",
+            "default": "1.0"
+          },
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Request Id"
+          },
+          "coding_run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coding Run Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending_review",
+              "needs_info"
+            ],
+            "title": "Status",
+            "default": "pending_review"
+          },
+          "recommendations": {
+            "items": {
+              "$ref": "#/components/schemas/LineRecommendation"
+            },
+            "type": "array",
+            "title": "Recommendations"
+          },
+          "global_missing_info": {
+            "items": {
+              "$ref": "#/components/schemas/MissingInfoItem"
+            },
+            "type": "array",
+            "title": "Global Missing Info"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          },
+          "overall_confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Overall Confidence",
+            "default": 0.0
+          },
+          "idempotent_replay": {
+            "type": "boolean",
+            "title": "Idempotent Replay",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "request_id"
+        ],
+        "title": "CodingSuggestResponse",
+        "description": "Outbound result for real-time dentist review in the scribe UI."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "LineRecommendation": {
+        "properties": {
+          "line_id": {
+            "type": "string",
+            "title": "Line Id"
+          },
+          "cdt_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cdt Code"
+          },
+          "cdt_description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cdt Description"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "default": 0.0
+          },
+          "explanation": {
+            "type": "string",
+            "title": "Explanation",
+            "default": ""
+          },
+          "icd10_codes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Icd10 Codes"
+          },
+          "required_supporting_documentation": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Required Supporting Documentation"
+          },
+          "missing_info": {
+            "items": {
+              "$ref": "#/components/schemas/MissingInfoItem"
+            },
+            "type": "array",
+            "title": "Missing Info"
+          }
+        },
+        "type": "object",
+        "required": [
+          "line_id"
+        ],
+        "title": "LineRecommendation"
+      },
+      "MissingInfoCode": {
+        "type": "string",
+        "enum": [
+          "TOOTH_MISSING",
+          "SURFACE_MISSING",
+          "FINDING_MISSING",
+          "RADIOGRAPH_MISSING",
+          "PAYER_MISSING",
+          "AGE_MISSING",
+          "PROCEDURE_EMPTY",
+          "SUPPORTING_NOTE_THIN",
+          "CDT_UNCERTAIN",
+          "OTHER"
+        ],
+        "title": "MissingInfoCode",
+        "description": "Machine-readable gaps the scribe UI can prompt for."
+      },
+      "MissingInfoItem": {
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/MissingInfoCode"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "MissingInfoItem"
+      },
+      "PatientInfo": {
+        "properties": {
+          "age": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 130.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Age"
+          }
+        },
+        "type": "object",
+        "title": "PatientInfo"
+      },
+      "PayerInfo": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id",
+            "description": "Trading partner / Stedi payer id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name",
+            "description": "Display name, e.g. Delta Dental PPO"
+          }
+        },
+        "type": "object",
+        "title": "PayerInfo"
+      },
+      "PlannedOrPerformed": {
+        "type": "string",
+        "enum": [
+          "planned",
+          "performed",
+          "unknown"
+        ],
+        "title": "PlannedOrPerformed"
+      },
+      "ProcedureLine": {
+        "properties": {
+          "line_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Line Id"
+          },
+          "tooth_numbers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tooth Numbers"
+          },
+          "surfaces": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Surfaces"
+          },
+          "findings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Findings"
+          },
+          "planned_or_performed": {
+            "$ref": "#/components/schemas/PlannedOrPerformed",
+            "default": "unknown"
+          }
+        },
+        "type": "object",
+        "required": [
+          "line_id"
+        ],
+        "title": "ProcedureLine"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

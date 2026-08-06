@@ -9,6 +9,8 @@ from fastapi import Depends, FastAPI
 from app.api.auth import require_principal
 from app.api.routes import agents, coding, dashboard, health, legacy, rcm, review
 from app.api.routes import auth as auth_routes
+from app.coding.config import get_coding_settings
+from app.coding.main import app as coding_agent_app
 from app.config import get_settings
 from app.eligibility.config import get_settings as get_eligibility_settings
 from app.eligibility.main import app as eligibility_agent_app
@@ -134,6 +136,10 @@ def create_app() -> FastAPI:
     # its own CORS middleware (see app/eligibility/main.py). Mounted under
     # /eligibility-agent so its OpenAPI surface stays independent.
     app.mount("/eligibility-agent", eligibility_agent_app)
+
+    # Coding sub-app: scribe-facing structured suggest API (independent OpenAPI + API key).
+    if get_coding_settings().coding_agent_enabled:
+        app.mount("/coding-agent", coding_agent_app)
     return app
 
 

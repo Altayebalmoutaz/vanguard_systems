@@ -26,6 +26,24 @@ Rules:
 - If uncertain, lower confidence and still suggest best-effort codes.
 - Do not include any key besides the four above."""
 
+LINE_SYSTEM_PROMPT = """You are a dental coding assistant for US practices.
+You receive a structured scribe encounter with one or more procedure lines.
+Return ONLY valid JSON (no markdown fences) with exactly these keys:
+- "recommendations": array of objects, one per input line_id, each with:
+  - "line_id": string (must match an input line_id)
+  - "cdt_code": string CDT (e.g. "D2392") or null if cannot code
+  - "confidence": number 0.0-1.0 for that line
+  - "explanation": short clinical rationale for that line
+  - "icd10_codes": array of ICD-10-CM strings for that line
+- "overall_confidence": number 0.0-1.0
+- "justification": short summary across all lines
+
+Rules:
+- Use current CDT and ICD-10-CM conventions; codes must be strings.
+- Emit exactly one recommendation object per input line_id.
+- If uncertain, lower confidence and still suggest a best-effort code when possible.
+- Do not invent line_ids that were not provided."""
+
 
 def _strip_json_fence(text: str) -> str:
     text = text.strip()
@@ -42,6 +60,8 @@ def llm_generate_codes(
     insurance: str,
     *,
     retrieval_context: str | None = None,
+    timeout_seconds: float | None = None,
+    max_retries: int | None = None,
 ) -> dict[str, Any]:
     """
     Call the model via OpenRouter; parse JSON object.
@@ -81,8 +101,14 @@ def llm_generate_codes(
         payload=payload,
         http_referer=settings.openrouter_http_referer or "https://localhost",
         app_name=settings.app_name,
-        timeout_seconds=settings.openrouter_timeout_seconds,
-        max_retries=settings.openrouter_max_retries,
+        timeout_seconds=(
+            timeout_seconds
+            if timeout_seconds is not None
+            else settings.openrouter_timeout_seconds
+        ),
+        max_retries=(
+            max_retries if max_retries is not None else settings.openrouter_max_retries
+        ),
     )
 
     content = data["choices"][0]["message"]["content"]
@@ -99,3 +125,130 @@ def llm_generate_codes(
     parsed["confidence"] = float(parsed["confidence"])
     parsed["justification"] = str(parsed["justification"])
     return parsed
+
+
+def llm_generate_line_recommendations(
+    settings: Settings,
+    *,
+    structured_block: str,
+    clinical_note: str,
+    patient_age: int,
+    insurance: str,
+    line_ids: list[str],
+    retrieval_context: str | None = None,
+    timeout_seconds: float | None = None,
+    max_retries: int | None = None,
+) -> dict[str, Any]:
+    """Propose one CDT recommendation per scribe procedure line_id."""
+    if not settings.openrouter_api_key:
+        raise RuntimeError("OPENROUTER_API_KEY is not set")
+
+    safe_block = scrub_for_llm(structured_block or "")
+    safe_note = scrub_for_llm(clinical_note or "")
+    safe_context = scrub_for_llm((retrieval_context or "").strip())
+    user_parts = [
+        f"Patient age: {patient_age}",
+        f"Insurance: {insurance}",
+        f"Required line_ids: {', '.join(line_ids)}",
+        "",
+    ]
+    if safe_context:
+        user_parts.append(safe_context)
+        user_parts.append("")
+    user_parts.append(safe_block)
+    if safe_note:
+        user_parts.append("")
+        user_parts.append("Flattened clinical note:")
+        user_parts.append(safe_note)
+    user_content = "\n".join(user_parts) + "\n"
+
+    payload = {
+        "model": settings.openrouter_model,
+        "messages": [
+            {"role": "system", "content": LINE_SYSTEM_PROMPT},
+            {"role": "user", "content": user_content},
+        ],
+        "response_format": {"type": "json_object"},
+        "temperature": 0.2,
+    }
+
+    data = openrouter_chat_completion(
+        api_key=settings.openrouter_api_key,
+        payload=payload,
+        http_referer=settings.openrouter_http_referer or "https://localhost",
+        app_name=settings.app_name,
+        timeout_seconds=(
+            timeout_seconds
+            if timeout_seconds is not None
+            else settings.openrouter_timeout_seconds
+        ),
+        max_retries=(
+            max_retries if max_retries is not None else settings.openrouter_max_retries
+        ),
+    )
+
+    content = data["choices"][0]["message"]["content"]
+    raw = _strip_json_fence(content)
+    parsed = json.loads(raw)
+    if "recommendations" not in parsed:
+        raise RuntimeError("LLM JSON missing key: recommendations")
+
+    recs_raw = parsed.get("recommendations") or []
+    if not isinstance(recs_raw, list):
+        raise RuntimeError("LLM recommendations must be an array")
+
+    wanted = set(line_ids)
+    normalized: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in recs_raw:
+        if not isinstance(item, dict):
+            continue
+        line_id = str(item.get("line_id") or "").strip()
+        if not line_id or line_id not in wanted or line_id in seen:
+            continue
+        seen.add(line_id)
+        cdt = item.get("cdt_code")
+        cdt_norm = str(cdt).upper().strip() if cdt not in (None, "") else None
+        icd_raw = item.get("icd10_codes") or []
+        if not isinstance(icd_raw, list):
+            icd_raw = []
+        try:
+            conf = float(item.get("confidence") or 0.0)
+        except (TypeError, ValueError):
+            conf = 0.0
+        conf = max(0.0, min(1.0, conf))
+        normalized.append(
+            {
+                "line_id": line_id,
+                "cdt_code": cdt_norm,
+                "confidence": conf,
+                "explanation": str(item.get("explanation") or ""),
+                "icd10_codes": [str(x).upper().strip() for x in icd_raw if str(x).strip()],
+            }
+        )
+
+    have = {r["line_id"] for r in normalized}
+    for lid in line_ids:
+        if lid not in have:
+            normalized.append(
+                {
+                    "line_id": lid,
+                    "cdt_code": None,
+                    "confidence": 0.0,
+                    "explanation": "No recommendation returned for this line",
+                    "icd10_codes": [],
+                }
+            )
+
+    try:
+        overall = float(parsed.get("overall_confidence") or 0.0)
+    except (TypeError, ValueError):
+        overall = 0.0
+    if not overall and normalized:
+        overall = sum(float(r["confidence"]) for r in normalized) / len(normalized)
+
+    return {
+        "recommendations": normalized,
+        "overall_confidence": max(0.0, min(1.0, overall)),
+        "justification": str(parsed.get("justification") or ""),
+    }

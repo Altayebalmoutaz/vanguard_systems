@@ -28,13 +28,17 @@ def generate_codes_tool(
     clinical_note: str,
     patient_age: int,
     insurance: str,
+    *,
+    fast: bool = False,
+    timeout_seconds: float | None = None,
+    max_retries: int | None = None,
 ) -> dict[str, Any]:
     """
     Tool: produce structured code suggestions using the LLM module.
     Optionally enriches the prompt with pgvector CDT retrieval (Jina + match_cdt_codes).
     """
     memory = ""
-    if supabase is not None and settings.jina_api_key:
+    if not fast and supabase is not None and settings.jina_api_key:
         memory = fetch_cdt_vector_memory(
             supabase,
             clinical_note,
@@ -49,6 +53,8 @@ def generate_codes_tool(
         patient_age,
         insurance,
         retrieval_context=memory or None,
+        timeout_seconds=timeout_seconds,
+        max_retries=max_retries,
     )
 
 

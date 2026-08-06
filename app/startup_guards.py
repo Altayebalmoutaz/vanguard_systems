@@ -91,8 +91,26 @@ def validate_production_eligibility_security() -> None:
             )
 
 
+def validate_production_coding_security() -> None:
+    """Fail closed on coding sub-app auth when the mount is enabled in production."""
+    if not _is_production():
+        return
+    from app.coding.config import get_coding_settings
+
+    coding = get_coding_settings()
+    if not coding.coding_agent_enabled:
+        return
+    if not (coding.coding_agent_api_key or "").strip():
+        raise RuntimeError(
+            "CODING_AGENT_API_KEY must be set when ENVIRONMENT=production and "
+            "CODING_AGENT_ENABLED is true; without it the coding sub-app accepts "
+            "unauthenticated requests."
+        )
+
+
 def validate_production_readiness(settings: Settings) -> None:
     """All production fail-fast checks; called from the app factory."""
     validate_production_auth(settings)
     validate_production_workers(settings)
     validate_production_eligibility_security()
+    validate_production_coding_security()

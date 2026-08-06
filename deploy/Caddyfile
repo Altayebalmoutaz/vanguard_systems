@@ -3,10 +3,11 @@
 # Routing:
 #   /health, /ready          → FastAPI (uptime / readiness probes)
 #   /eligibility-agent/*     → FastAPI mount (eligibility API + Bland voice webhooks)
+#   /coding-agent/*          → FastAPI mount (scribe coding suggest API)
 #   /* (everything else)     → Next.js dashboard
 #
-# Path prefix /eligibility-agent MUST be preserved — FastAPI mounts the sub-app
-# at that path. Do NOT use handle_path (it strips the prefix).
+# Path prefixes /eligibility-agent and /coding-agent MUST be preserved — FastAPI
+# mounts the sub-apps at those paths. Do NOT use handle_path (it strips the prefix).
 #
 # Caddy reverse_proxy streams by default (SSE-safe for the dashboard BFF
 # /api/dashboard/eligibility/stream path that terminates on the frontend).
@@ -42,6 +43,13 @@ ezfi.smilesuite.ai {
 	# Prefix is PRESERVED (handle, not handle_path) — FastAPI mounts the sub-app
 	# at /eligibility-agent. Public voice base: https://ezfi.smilesuite.ai/eligibility-agent
 	handle /eligibility-agent/* {
+		reverse_proxy backend:8000
+	}
+
+	# Coding sub-app (scribe partner API).
+	# Prefix is PRESERVED — FastAPI mounts at /coding-agent.
+	# Public base: https://ezfi.smilesuite.ai/coding-agent
+	handle /coding-agent/* {
 		reverse_proxy backend:8000
 	}
 

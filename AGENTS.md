@@ -10,7 +10,7 @@ caveats for running/testing in the Cursor Cloud VM.
 
 | Service | Dir | Dev run command | Port |
 | --- | --- | --- | --- |
-| FastAPI backend (eligibility sub-app mounted at `/eligibility-agent`) | repo root | `source venv/bin/activate && uvicorn main:app --host 127.0.0.1 --port 8000` | 8000 |
+| FastAPI backend (eligibility at `/eligibility-agent`, coding at `/coding-agent`) | repo root | `source venv/bin/activate && uvicorn main:app --host 127.0.0.1 --port 8000` | 8000 |
 | Eligibility dashboard (Next.js, only UI) | `eligibility_dashboard/` | `npm run dev` | 3000 |
 
 Python deps live in a repo-root `venv/` (Python 3.12). The update script recreates the

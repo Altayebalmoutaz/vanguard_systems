@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "request_id": "11111111-1111-1111-1111-111111111111",
+  "practice_id": "vgd_mock_brooklyn",
+  "patient_id": "pat_demo_42",
+  "provider_id": "prov_1999999984",
+  "encounter_datetime": "2026-08-06T14:30:00-04:00",
+  "payer": { "id": "62308", "name": "Cigna" },
+  "patient": { "age": 42 },
+  "procedures": [
+    {
+      "line_id": "1",
+      "tooth_numbers": ["14"],
+      "surfaces": ["M", "O"],
+      "findings": ["interproximal caries"],
+      "planned_or_performed": "planned"
+    },
+    {
+      "line_id": "2",
+      "tooth_numbers": [],
+      "surfaces": [],
+      "findings": ["periodic oral evaluation"],
+      "planned_or_performed": "performed"
+    }
+  ],
+  "supporting_note": "Adult patient presents for periodic oral evaluation. Bitewings show interproximal caries on #14 MO.",
+  "attachments_present": ["bitewing_radiograph"],
+  "fast": true
+}

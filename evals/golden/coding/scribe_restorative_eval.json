@@ -1,0 +1,57 @@
+{
+  "name": "scribe_restorative_eval_line_codes",
+  "request": {
+    "schema_version": "1.0",
+    "request_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "practice_id": "vgd_mock_brooklyn",
+    "patient_id": "pat_eval_1",
+    "provider_id": "prov_eval_1",
+    "encounter_datetime": "2026-08-06T14:30:00-04:00",
+    "payer": { "id": "62308", "name": "Cigna" },
+    "patient": { "age": 42 },
+    "procedures": [
+      {
+        "line_id": "1",
+        "tooth_numbers": ["14"],
+        "surfaces": ["M", "O"],
+        "findings": ["interproximal caries"],
+        "planned_or_performed": "planned"
+      },
+      {
+        "line_id": "2",
+        "tooth_numbers": [],
+        "surfaces": [],
+        "findings": ["periodic oral evaluation"],
+        "planned_or_performed": "performed"
+      }
+    ],
+    "supporting_note": "Periodic eval; caries #14 MO on bitewings.",
+    "attachments_present": ["bitewing_radiograph"],
+    "fast": true
+  },
+  "mock_llm": {
+    "recommendations": [
+      {
+        "line_id": "1",
+        "cdt_code": "D2392",
+        "confidence": 0.91,
+        "explanation": "Two-surface posterior composite",
+        "icd10_codes": ["K02.9"]
+      },
+      {
+        "line_id": "2",
+        "cdt_code": "D0120",
+        "confidence": 0.88,
+        "explanation": "Periodic oral evaluation",
+        "icd10_codes": []
+      }
+    ],
+    "overall_confidence": 0.9,
+    "justification": "Restorative + eval"
+  },
+  "expect": {
+    "status": "pending_review",
+    "line_cdt": { "1": "D2392", "2": "D0120" },
+    "min_overall_confidence": 0.85
+  }
+}
