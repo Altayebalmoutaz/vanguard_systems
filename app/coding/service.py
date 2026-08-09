@@ -219,13 +219,14 @@ def run_coding_suggest(
         explanation = str(raw.get("explanation") or justification or "")
 
         meta = cdt_meta.get(cdt_norm or "") or {}
+        line_payer_conflict = cdt_norm in payer_conflict_codes
 
         # Verifier/repair pass for low-confidence, high-stakes, or payer-conflict
         # lines (no-op unless CODING_VERIFIER_ENABLED).
         if cdt_norm and needs_verification(
             cdt_code=cdt_norm,
             confidence=conf,
-            payer_conflict=cdt_norm in payer_conflict_codes,
+            payer_conflict=line_payer_conflict,
             cfg=cfg,
         ):
             verdict = verify_line(
@@ -238,26 +239,45 @@ def run_coding_suggest(
             )
             if verdict and verdict.get("cdt_code"):
                 new_code = str(verdict["cdt_code"]).upper().strip()
+                accept_verdict = True
                 if verdict.get("changed"):
-                    warnings.append(
-                        f"Verifier changed line {proc.line_id}: {cdt_norm} -> {new_code}"
-                    )
-                    inc("coding_verifier_total", {"result": "changed"})
-                    cdt_norm = new_code
-                    # Re-resolve reference metadata for the endorsed code.
-                    meta = (
-                        fetch_cdt_metadata(
-                            supabase,
-                            [cdt_norm],
-                            ttl_seconds=cfg.coding_reference_cache_ttl_seconds,
-                        ).get(cdt_norm)
-                        or {}
-                    )
+                    verifier_validation = validate_cdt_tool(supabase, [new_code])
+                    verifier_invalid = {
+                        str(code).upper().strip()
+                        for code in (verifier_validation.get("invalid") or [])
+                    }
+                    if new_code in verifier_invalid:
+                        accept_verdict = False
+                        warnings.extend(
+                            str(flag)
+                            for flag in (verifier_validation.get("cdt_flags") or [])
+                        )
+                        warnings.append(
+                            f"Verifier proposed invalid CDT {new_code} on line "
+                            f"{proc.line_id}; kept {cdt_norm}"
+                        )
+                        inc("coding_verifier_total", {"result": "invalid_change"})
+                    else:
+                        warnings.append(
+                            f"Verifier changed line {proc.line_id}: {cdt_norm} -> {new_code}"
+                        )
+                        inc("coding_verifier_total", {"result": "changed"})
+                        cdt_norm = new_code
+                        # Re-resolve reference metadata for the endorsed code.
+                        meta = (
+                            fetch_cdt_metadata(
+                                supabase,
+                                [cdt_norm],
+                                ttl_seconds=cfg.coding_reference_cache_ttl_seconds,
+                            ).get(cdt_norm)
+                            or {}
+                        )
                 else:
                     inc("coding_verifier_total", {"result": "confirmed"})
-                explanation = str(verdict.get("explanation") or explanation)
-                with contextlib.suppress(TypeError, ValueError):
-                    conf = max(conf, float(verdict.get("confidence") or conf))
+                if accept_verdict:
+                    explanation = str(verdict.get("explanation") or explanation)
+                    with contextlib.suppress(TypeError, ValueError):
+                        conf = max(conf, float(verdict.get("confidence") or conf))
 
         # Calibrate confidence (identity until a calibration map is fit/stored).
         conf = calibrate(conf, cmap)
@@ -282,7 +302,7 @@ def run_coding_suggest(
             calibrated_confidence=conf,
             has_blocking_gap=has_blocking(deduped_missing),
             is_valid=bool(cdt_norm) and cdt_norm not in invalid_cdt,
-            payer_conflict=cdt_norm in payer_conflict_codes,
+            payer_conflict=line_payer_conflict,
             cfg=cfg,
             allowlist=autonomy_allowlist,
         )

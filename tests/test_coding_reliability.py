@@ -281,6 +281,123 @@ class TestVerifierRepairInService(unittest.TestCase):
             {m.code for m in out.recommendations[0].missing_info},
         )
 
+    def test_verifier_invalid_change_keeps_validated_candidate(self) -> None:
+        data = _base_request()
+        llm_value = {
+            "recommendations": [
+                {
+                    "line_id": "1",
+                    "cdt_code": "D2740",
+                    "confidence": 0.72,
+                    "explanation": "crown",
+                    "icd10_codes": [],
+                },
+            ],
+            "overall_confidence": 0.72,
+            "justification": "crown",
+        }
+        with (
+            patch(
+                "app.coding.service.llm_generate_line_recommendations",
+                return_value=llm_value,
+            ),
+            patch(
+                "app.coding.service.verify_line",
+                return_value={
+                    "cdt_code": "D9999",
+                    "confidence": 0.99,
+                    "explanation": "unsupported code",
+                    "changed": True,
+                },
+            ),
+            patch(
+                "app.coding.service.validate_cdt_tool",
+                side_effect=[
+                    {"invalid": [], "verified": ["D2740"], "cdt_flags": []},
+                    {
+                        "invalid": ["D9999"],
+                        "verified": [],
+                        "cdt_flags": ["CDT D9999 not in reference"],
+                    },
+                ],
+            ),
+            patch("app.coding.service.fetch_run_by_request_id", return_value=None),
+            patch("app.coding.service.insert_coding_run", return_value=None),
+            patch("app.coding.service.write_audit_log"),
+            patch("app.coding.service.create_supabase", return_value=None),
+        ):
+            out = run_coding_suggest(
+                CodingSuggestRequest.model_validate(data),
+                settings=Settings(openrouter_api_key="x"),
+                coding_settings=CodingSettings(coding_verifier_enabled=True),
+            )
+
+        self.assertEqual(out.recommendations[0].cdt_code, "D2740")
+        self.assertTrue(any("proposed invalid CDT D9999" in warning for warning in out.warnings))
+
+    def test_verifier_change_preserves_original_payer_conflict(self) -> None:
+        data = _base_request()
+        llm_value = {
+            "recommendations": [
+                {
+                    "line_id": "1",
+                    "cdt_code": "D2740",
+                    "confidence": 0.96,
+                    "explanation": "crown",
+                    "icd10_codes": [],
+                },
+            ],
+            "overall_confidence": 0.96,
+            "justification": "crown",
+        }
+        with (
+            patch(
+                "app.coding.service.llm_generate_line_recommendations",
+                return_value=llm_value,
+            ),
+            patch(
+                "app.coding.service.verify_line",
+                return_value={
+                    "cdt_code": "D2750",
+                    "confidence": 0.99,
+                    "explanation": "repaired crown code",
+                    "changed": True,
+                },
+            ),
+            patch(
+                "app.coding.service.validate_cdt_tool",
+                return_value={"invalid": [], "verified": ["D2740"], "cdt_flags": []},
+            ),
+            patch(
+                "app.coding.service.apply_payer_rules_tool",
+                return_value={
+                    "payer_flags": [
+                        "[payer_rules][Cigna] D2740 -> D2750 (transform): use alternate"
+                    ],
+                    "payer_rules_matched": [],
+                },
+            ),
+            patch(
+                "app.coding.service.fetch_autonomy_allowlist",
+                return_value=frozenset({"D2750"}),
+            ),
+            patch("app.coding.service.fetch_run_by_request_id", return_value=None),
+            patch("app.coding.service.insert_coding_run", return_value=None),
+            patch("app.coding.service.write_audit_log"),
+            patch("app.coding.service.create_supabase", return_value=None),
+        ):
+            out = run_coding_suggest(
+                CodingSuggestRequest.model_validate(data),
+                settings=Settings(openrouter_api_key="x"),
+                coding_settings=CodingSettings(
+                    coding_verifier_enabled=True,
+                    coding_autonomy_auto_threshold=0.95,
+                ),
+            )
+
+        self.assertEqual(out.recommendations[0].cdt_code, "D2750")
+        self.assertEqual(out.recommendations[0].autonomy, AutonomyTier.review)
+
 
 if __name__ == "__main__":
     unittest.main()
