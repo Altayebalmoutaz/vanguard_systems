@@ -243,7 +243,25 @@ class OpenDentalClient:
             if not isinstance(payload, list):
                 logger.warning("OpenDental procedurecodes payload was not a list")
                 return []
-            return [ODProcedureCode.model_validate(row) for row in payload]
+            catalog: list[ODProcedureCode] = []
+            invalid_rows = 0
+            for index, row in enumerate(payload):
+                try:
+                    catalog.append(ODProcedureCode.model_validate(row))
+                except Exception as exc:
+                    invalid_rows += 1
+                    logger.warning(
+                        "OpenDental procedurecodes row %s skipped: %s",
+                        index,
+                        type(exc).__name__,
+                    )
+            if invalid_rows:
+                logger.warning(
+                    "OpenDental procedurecodes skipped %s invalid row(s); retained %s",
+                    invalid_rows,
+                    len(catalog),
+                )
+            return catalog
         except Exception as exc:
             logger.warning(
                 "OpenDental procedurecodes fetch failed: %s: %s",

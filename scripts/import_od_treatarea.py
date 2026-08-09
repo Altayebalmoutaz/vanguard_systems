@@ -3,8 +3,8 @@
 Pulls ``GET /procedurecodes`` from the OpenDental Local API, stores it in
 ``analytics.od_procedurecode_catalog`` (a code dictionary, no PHI), then sets
 ``requires_tooth`` / ``requires_surfaces`` on ``analytics.cdt_codes`` from the
-authoritative TreatArea (falling back to CDT code-range rules for codes missing
-from the OD catalog) and syncs the flags to ``public.cdt_codes``.
+authoritative TreatArea and syncs the flags to ``public.cdt_codes``. Codes absent
+from a successful catalog response retain their existing code-range baseline.
 
 ``requires_radiograph`` is left to the code-range hint from migration 060 — it is
 a payer documentation policy, not intrinsic to the code.
@@ -12,6 +12,7 @@ a payer documentation policy, not intrinsic to the code.
 Usage:
     python -m scripts.import_od_treatarea            # apply
     python -m scripts.import_od_treatarea --dry-run  # report only
+    python -m scripts.import_od_treatarea --force-code-range-only
 """
 
 from __future__ import annotations
@@ -56,9 +57,20 @@ def _fetch_catalog() -> dict[str, str | int | None]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--force-code-range-only",
+        action="store_true",
+        help="Explicitly replace codes absent from OpenDental with code-range defaults",
+    )
     args = parser.parse_args()
 
     catalog = _fetch_catalog()
+    if not catalog and not args.force_code_range_only:
+        print(
+            "OpenDental returned no procedure catalog; aborting without changing CDT flags. "
+            "Use --force-code-range-only only for an intentional baseline reset."
+        )
+        return 1
     settings = get_app_settings()
 
     updated = 0
@@ -87,12 +99,14 @@ def main() -> int:
             if flags is not None:
                 requires_tooth, requires_surfaces = flags
                 from_od += 1
-            else:
+            elif args.force_code_range_only:
                 req = code_range_requirements(code)
                 requires_tooth, requires_surfaces = (
                     req.requires_tooth,
                     req.requires_surfaces,
                 )
+            else:
+                continue
             cur.execute(
                 """
                     update analytics.cdt_codes
@@ -146,7 +160,7 @@ def main() -> int:
 
     print(
         f"Updated {updated} cdt_codes rows ({from_od} from OD TreatArea, "
-        f"rest via code-range) and synced analytics -> public."
+        f"{updated - from_od} via explicit code-range fallback) and synced analytics -> public."
     )
     return 0
 
