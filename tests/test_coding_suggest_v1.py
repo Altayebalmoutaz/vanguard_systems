@@ -11,7 +11,7 @@ from uuid import UUID
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from app.coding.adapter import build_clinical_note, map_flat_codes_to_lines
+from app.coding.adapter import build_clinical_note, map_flat_codes_to_lines, structured_prompt_block
 from app.coding.cache import cache_clear
 from app.coding.config import CodingSettings
 from app.coding.gaps import (
@@ -158,6 +158,16 @@ class TestCodingAdapter(unittest.TestCase):
         note = build_clinical_note(req)
         self.assertIn("tooth=14", note)
         self.assertIn("surfaces=M, O", note)
+
+    def test_structured_prompt_excludes_patient_identifier(self) -> None:
+        data = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        data["patient_id"] = "PAT-12345"
+        req = CodingSuggestRequest.model_validate(data)
+
+        prompt = structured_prompt_block(req)
+
+        self.assertNotIn("patient_id", prompt)
+        self.assertNotIn("PAT-12345", prompt)
 
     def test_map_flat_codes_to_lines(self) -> None:
         req = CodingSuggestRequest.model_validate(json.loads(FIXTURE.read_text(encoding="utf-8")))

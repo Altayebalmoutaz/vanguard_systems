@@ -48,7 +48,6 @@ def structured_prompt_block(request: CodingSuggestRequest) -> str:
         "Structured encounter (from scribe):",
         f"- encounter_datetime: {request.encounter_datetime.isoformat()}",
         f"- provider_id: {scrub_for_llm(request.provider_id)}",
-        f"- patient_id: {scrub_for_llm(request.patient_id)}",
         f"- payer: {insurance_label(request)}",
         f"- patient_age: {patient_age(request)}",
         "- procedures:",
