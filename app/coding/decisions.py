@@ -7,7 +7,7 @@ from typing import Any
 
 from app.audit.writer import write_audit_log
 from app.coding.config import CodingSettings, get_coding_settings
-from app.coding.errors import CodingPersistenceError
+from app.coding.errors import CodingPersistenceError, CodingRunNotFoundError
 from app.coding.schemas import CodingDecisionRequest, CodingDecisionResponse
 from app.coding.store import fetch_run_by_id, insert_coding_decisions
 from app.config import Settings, get_settings
@@ -43,8 +43,10 @@ def run_record_decision(
     run = fetch_run_by_id(
         app_settings, practice_id=practice_id, coding_run_id=request.coding_run_id
     )
-    suggested = _suggested_by_line(run.get("response_payload") if run else None)
-    payer_id = str(run.get("payer_id")) if run and run.get("payer_id") else None
+    if run is None:
+        raise CodingRunNotFoundError("coding run not found for practice")
+    suggested = _suggested_by_line(run.get("response_payload"))
+    payer_id = str(run.get("payer_id")) if run.get("payer_id") else None
 
     decisions: list[dict[str, Any]] = []
     for d in request.decisions:

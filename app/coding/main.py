@@ -14,7 +14,7 @@ from starlette.responses import JSONResponse
 from app.api.errors import sanitized_http_exception
 from app.coding.config import get_coding_settings
 from app.coding.decisions import run_record_decision
-from app.coding.errors import CodingPersistenceError
+from app.coding.errors import CodingPersistenceError, CodingRunNotFoundError
 from app.coding.schemas import (
     CodingDecisionRequest,
     CodingDecisionResponse,
@@ -118,6 +118,13 @@ def record_decision(body: CodingDecisionRequest) -> CodingDecisionResponse:
     """
     try:
         return run_record_decision(body)
+    except CodingRunNotFoundError as exc:
+        raise sanitized_http_exception(
+            404,
+            public_message="Coding run not found for this practice",
+            log_message=f"coding decision run lookup failed: {scrub_for_log(str(exc))}",
+            exc=exc,
+        ) from exc
     except CodingPersistenceError as exc:
         raise sanitized_http_exception(
             503,

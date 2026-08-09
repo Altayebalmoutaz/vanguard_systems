@@ -9,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.coding.decisions import run_record_decision
-from app.coding.errors import CodingPersistenceError
+from app.coding.errors import CodingPersistenceError, CodingRunNotFoundError
 from app.coding.main import app as coding_app
 from app.coding.schemas import CodingDecisionRequest
 from app.config import Settings
@@ -50,6 +50,17 @@ def test_failed_decision_write_raises_without_emitting_metrics() -> None:
     mock_inc.assert_not_called()
 
 
+def test_unknown_coding_run_is_rejected_before_insert() -> None:
+    with (
+        patch("app.coding.decisions.fetch_run_by_id", return_value=None),
+        patch("app.coding.decisions.insert_coding_decisions") as mock_insert,
+    ):
+        with pytest.raises(CodingRunNotFoundError):
+            run_record_decision(_request(), settings=Settings())
+
+    mock_insert.assert_not_called()
+
+
 def test_successful_decision_write_emits_metrics() -> None:
     with (
         patch("app.coding.decisions.fetch_run_by_id", return_value=_stored_run()),
@@ -77,3 +88,15 @@ def test_decision_endpoint_returns_503_for_persistence_failure() -> None:
         response.json()["detail"]["message"]
         == "Coding decision could not be saved; retry the request"
     )
+
+
+def test_decision_endpoint_returns_404_for_unknown_run() -> None:
+    body = _request().model_dump(mode="json")
+    with patch(
+        "app.coding.main.run_record_decision",
+        side_effect=CodingRunNotFoundError("missing run"),
+    ):
+        response = TestClient(coding_app).post("/v1/decision", json=body)
+
+    assert response.status_code == 404
+    assert response.json()["detail"]["message"] == "Coding run not found for this practice"
