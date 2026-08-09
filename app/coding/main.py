@@ -14,6 +14,7 @@ from starlette.responses import JSONResponse
 from app.api.errors import sanitized_http_exception
 from app.coding.config import get_coding_settings
 from app.coding.decisions import run_record_decision
+from app.coding.errors import CodingPersistenceError, CodingRunNotFoundError
 from app.coding.schemas import (
     CodingDecisionRequest,
     CodingDecisionResponse,
@@ -92,6 +93,13 @@ def suggest_codes(body: CodingSuggestRequest) -> CodingSuggestResponse:
     """
     try:
         return run_coding_suggest(body)
+    except CodingPersistenceError as exc:
+        raise sanitized_http_exception(
+            503,
+            public_message="Coding suggest could not be saved; retry with the same request_id",
+            log_message=f"coding suggest persistence failure: {scrub_for_log(str(exc))}",
+            exc=exc,
+        ) from exc
     except Exception as exc:
         raise sanitized_http_exception(
             500,
@@ -110,6 +118,20 @@ def record_decision(body: CodingDecisionRequest) -> CodingDecisionResponse:
     """
     try:
         return run_record_decision(body)
+    except CodingRunNotFoundError as exc:
+        raise sanitized_http_exception(
+            404,
+            public_message="Coding run not found for this practice",
+            log_message=f"coding decision run lookup failed: {scrub_for_log(str(exc))}",
+            exc=exc,
+        ) from exc
+    except CodingPersistenceError as exc:
+        raise sanitized_http_exception(
+            503,
+            public_message="Coding decision could not be saved; retry the request",
+            log_message=f"coding decision persistence failure: {scrub_for_log(str(exc))}",
+            exc=exc,
+        ) from exc
     except Exception as exc:
         raise sanitized_http_exception(
             500,

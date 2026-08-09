@@ -10,6 +10,7 @@ from uuid import UUID
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
+from app.coding.errors import CodingPersistenceError
 from app.config import Settings
 from app.db.connection import get_neon_dsn, neon_connection
 from app.db.json_safe import json_safe
@@ -101,11 +102,14 @@ def fetch_run_by_id(
             return dict(row) if row else None
         except Exception as exc:
             logger.warning("coding_runs by-id lookup failed: %s", scrub_for_log(str(exc)))
-            return None
+            raise CodingPersistenceError("coding run lookup failed") from exc
 
-    supabase = create_supabase(settings)
+    try:
+        supabase = create_supabase(settings)
+    except Exception as exc:
+        raise CodingPersistenceError("coding run lookup client failed") from exc
     if supabase is None:
-        return None
+        raise CodingPersistenceError("coding run lookup storage is not configured")
     try:
         result = (
             supabase.table("coding_runs")
@@ -119,7 +123,7 @@ def fetch_run_by_id(
         return dict(rows[0]) if rows else None
     except Exception as exc:
         logger.warning("coding_runs supabase by-id lookup failed: %s", scrub_for_log(str(exc)))
-        return None
+        raise CodingPersistenceError("coding run lookup failed") from exc
 
 
 def insert_coding_decisions(

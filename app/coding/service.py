@@ -21,6 +21,7 @@ from app.coding.adapter import (
 from app.coding.autonomy import decide_tier, fetch_autonomy_allowlist
 from app.coding.calibration import CalibrationMap, calibrate
 from app.coding.config import CodingSettings, get_coding_settings
+from app.coding.errors import CodingPersistenceError
 from app.coding.gaps import (
     confidence_threshold,
     default_docs_for_code,
@@ -44,6 +45,7 @@ from app.coding.schemas import (
 )
 from app.coding.store import fetch_run_by_request_id, insert_coding_run
 from app.config import Settings, get_settings
+from app.db.connection import get_neon_dsn
 from app.integrations.supabase_client import create_supabase
 from app.llm.coding_llm import llm_generate_codes, llm_generate_line_recommendations
 from app.observability.metrics import inc
@@ -219,13 +221,14 @@ def run_coding_suggest(
         explanation = str(raw.get("explanation") or justification or "")
 
         meta = cdt_meta.get(cdt_norm or "") or {}
+        line_payer_conflict = cdt_norm in payer_conflict_codes
 
         # Verifier/repair pass for low-confidence, high-stakes, or payer-conflict
         # lines (no-op unless CODING_VERIFIER_ENABLED).
         if cdt_norm and needs_verification(
             cdt_code=cdt_norm,
             confidence=conf,
-            payer_conflict=cdt_norm in payer_conflict_codes,
+            payer_conflict=line_payer_conflict,
             cfg=cfg,
         ):
             verdict = verify_line(
@@ -238,26 +241,44 @@ def run_coding_suggest(
             )
             if verdict and verdict.get("cdt_code"):
                 new_code = str(verdict["cdt_code"]).upper().strip()
+                accept_verdict = True
                 if verdict.get("changed"):
-                    warnings.append(
-                        f"Verifier changed line {proc.line_id}: {cdt_norm} -> {new_code}"
-                    )
-                    inc("coding_verifier_total", {"result": "changed"})
-                    cdt_norm = new_code
-                    # Re-resolve reference metadata for the endorsed code.
-                    meta = (
-                        fetch_cdt_metadata(
-                            supabase,
-                            [cdt_norm],
-                            ttl_seconds=cfg.coding_reference_cache_ttl_seconds,
-                        ).get(cdt_norm)
-                        or {}
-                    )
+                    verifier_validation = validate_cdt_tool(supabase, [new_code])
+                    verifier_invalid = {
+                        str(code).upper().strip()
+                        for code in (verifier_validation.get("invalid") or [])
+                    }
+                    if new_code in verifier_invalid:
+                        accept_verdict = False
+                        warnings.extend(
+                            str(flag) for flag in (verifier_validation.get("cdt_flags") or [])
+                        )
+                        warnings.append(
+                            f"Verifier proposed invalid CDT {new_code} on line "
+                            f"{proc.line_id}; kept {cdt_norm}"
+                        )
+                        inc("coding_verifier_total", {"result": "invalid_change"})
+                    else:
+                        warnings.append(
+                            f"Verifier changed line {proc.line_id}: {cdt_norm} -> {new_code}"
+                        )
+                        inc("coding_verifier_total", {"result": "changed"})
+                        cdt_norm = new_code
+                        # Re-resolve reference metadata for the endorsed code.
+                        meta = (
+                            fetch_cdt_metadata(
+                                supabase,
+                                [cdt_norm],
+                                ttl_seconds=cfg.coding_reference_cache_ttl_seconds,
+                            ).get(cdt_norm)
+                            or {}
+                        )
                 else:
                     inc("coding_verifier_total", {"result": "confirmed"})
-                explanation = str(verdict.get("explanation") or explanation)
-                with contextlib.suppress(TypeError, ValueError):
-                    conf = max(conf, float(verdict.get("confidence") or conf))
+                if accept_verdict:
+                    explanation = str(verdict.get("explanation") or explanation)
+                    with contextlib.suppress(TypeError, ValueError):
+                        conf = max(conf, float(verdict.get("confidence") or conf))
 
         # Calibrate confidence (identity until a calibration map is fit/stored).
         conf = calibrate(conf, cmap)
@@ -282,7 +303,7 @@ def run_coding_suggest(
             calibrated_confidence=conf,
             has_blocking_gap=has_blocking(deduped_missing),
             is_valid=bool(cdt_norm) and cdt_norm not in invalid_cdt,
-            payer_conflict=cdt_norm in payer_conflict_codes,
+            payer_conflict=line_payer_conflict,
             cfg=cfg,
             allowlist=autonomy_allowlist,
         )
@@ -320,6 +341,7 @@ def run_coding_suggest(
         idempotent_replay=False,
     )
 
+    response_payload = response.model_dump(mode="json")
     run_id = insert_coding_run(
         app_settings,
         practice_id=practice_id,
@@ -329,11 +351,40 @@ def run_coding_suggest(
         encounter_datetime=request.encounter_datetime,
         payer_id=request.payer.id,
         request_payload=request.model_dump(mode="json"),
-        response_payload=response.model_dump(mode="json"),
+        response_payload=response_payload,
         status=status,
         overall_confidence=response.overall_confidence,
     )
     response.coding_run_id = run_id
+    if run_id is None:
+        if get_neon_dsn(app_settings) or supabase is not None:
+            raise CodingPersistenceError("coding run could not be persisted")
+        response.warnings.append(
+            "Coding run was not persisted; decision capture is unavailable in offline mode"
+        )
+    if run_id is not None:
+        # A concurrent retry may have won the unique (practice_id, request_id)
+        # insert with a different model response. Return the persisted winner so
+        # every caller sees the same recommendations for this idempotency key.
+        canonical_row = fetch_run_by_request_id(
+            app_settings,
+            practice_id=practice_id,
+            request_id=request.request_id,
+        )
+        canonical_payload = canonical_row.get("response_payload") if canonical_row else None
+        if isinstance(canonical_payload, dict):
+            try:
+                canonical_response = CodingSuggestResponse.model_validate(canonical_payload)
+                canonical_response.coding_run_id = UUID(str(canonical_row.get("id") or run_id))
+                canonical_response.idempotent_replay = canonical_payload != response_payload
+                response = canonical_response
+                status = response.status
+            except (TypeError, ValueError) as exc:
+                logger.warning(
+                    "coding_runs canonical response validate failed request_id=%s: %s",
+                    request.request_id,
+                    scrub_for_log(str(exc)),
+                )
 
     write_audit_log(
         app_settings,
@@ -369,7 +420,7 @@ def _flat_fallback(
     cfg: CodingSettings,
     *,
     note: str,
-    age: int,
+    age: int | None,
     insurance: str,
     request: CodingSuggestRequest,
     supabase: Any,

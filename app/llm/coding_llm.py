@@ -133,7 +133,7 @@ def _strip_json_fence(text: str) -> str:
 def llm_generate_codes(
     settings: Settings,
     clinical_note: str,
-    patient_age: int,
+    patient_age: int | None,
     insurance: str,
     *,
     retrieval_context: str | None = None,
@@ -151,8 +151,9 @@ def llm_generate_codes(
     # Scrub the clinical note before it leaves the process — third-party LLMs are out-of-scope BAA.
     safe_note = scrub_for_llm(clinical_note or "")
     safe_context = scrub_for_llm((retrieval_context or "").strip())
+    age_label = patient_age if patient_age is not None else "unknown"
     user_parts = [
-        f"Patient age: {patient_age}",
+        f"Patient age: {age_label}",
         f"Insurance: {insurance}",
         "",
     ]
@@ -205,7 +206,7 @@ def llm_generate_line_recommendations(
     *,
     structured_block: str,
     clinical_note: str,
-    patient_age: int,
+    patient_age: int | None,
     insurance: str,
     line_ids: list[str],
     retrieval_context: str | None = None,
@@ -219,8 +220,9 @@ def llm_generate_line_recommendations(
     safe_block = scrub_for_llm(structured_block or "")
     safe_note = scrub_for_llm(clinical_note or "")
     safe_context = scrub_for_llm((retrieval_context or "").strip())
+    age_label = patient_age if patient_age is not None else "unknown"
     user_parts = [
-        f"Patient age: {patient_age}",
+        f"Patient age: {age_label}",
         f"Insurance: {insurance}",
         f"Required line_ids: {', '.join(line_ids)}",
         "",

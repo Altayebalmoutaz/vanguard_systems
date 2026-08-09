@@ -11,9 +11,15 @@ from uuid import UUID
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from app.coding.adapter import build_clinical_note, map_flat_codes_to_lines
+from app.coding.adapter import (
+    build_clinical_note,
+    map_flat_codes_to_lines,
+    patient_age,
+    structured_prompt_block,
+)
 from app.coding.cache import cache_clear
 from app.coding.config import CodingSettings
+from app.coding.errors import CodingPersistenceError
 from app.coding.gaps import (
     has_blocking,
     post_check_line,
@@ -159,6 +165,24 @@ class TestCodingAdapter(unittest.TestCase):
         self.assertIn("tooth=14", note)
         self.assertIn("surfaces=M, O", note)
 
+    def test_structured_prompt_excludes_patient_identifier(self) -> None:
+        data = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        data["patient_id"] = "PAT-12345"
+        req = CodingSuggestRequest.model_validate(data)
+
+        prompt = structured_prompt_block(req)
+
+        self.assertNotIn("patient_id", prompt)
+        self.assertNotIn("PAT-12345", prompt)
+
+    def test_missing_patient_age_remains_unknown(self) -> None:
+        data = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        data["patient"] = {}
+        req = CodingSuggestRequest.model_validate(data)
+
+        self.assertIsNone(patient_age(req))
+        self.assertIn("- patient_age: unknown", structured_prompt_block(req))
+
     def test_map_flat_codes_to_lines(self) -> None:
         req = CodingSuggestRequest.model_validate(json.loads(FIXTURE.read_text(encoding="utf-8")))
         mapped = map_flat_codes_to_lines(
@@ -170,6 +194,20 @@ class TestCodingAdapter(unittest.TestCase):
         )
         self.assertEqual(mapped[0]["cdt_code"], "D2392")
         self.assertEqual(mapped[1]["cdt_code"], "D0120")
+
+    def test_map_flat_codes_does_not_duplicate_last_code(self) -> None:
+        req = CodingSuggestRequest.model_validate(json.loads(FIXTURE.read_text(encoding="utf-8")))
+
+        mapped = map_flat_codes_to_lines(
+            req,
+            cdt_codes=["D2392"],
+            icd10_codes=["K02.9"],
+            confidence=0.9,
+            justification="partial fallback",
+        )
+
+        self.assertEqual(mapped[0]["cdt_code"], "D2392")
+        self.assertIsNone(mapped[1]["cdt_code"])
 
 
 class TestCodingSuggestService(unittest.TestCase):
@@ -233,6 +271,52 @@ class TestCodingSuggestService(unittest.TestCase):
     @patch("app.coding.service.write_audit_log")
     @patch("app.coding.service.fetch_run_by_request_id", return_value=None)
     @patch("app.coding.service.create_supabase", return_value=None)
+    @patch("app.coding.service.llm_generate_line_recommendations")
+    def test_configured_persistence_failure_aborts_suggest(
+        self,
+        mock_llm: MagicMock,
+        _sb: MagicMock,
+        _fetch: MagicMock,
+        mock_audit: MagicMock,
+        _insert: MagicMock,
+    ) -> None:
+        mock_llm.return_value = {
+            "recommendations": [
+                {
+                    "line_id": "1",
+                    "cdt_code": "D2392",
+                    "confidence": 0.9,
+                    "explanation": "composite",
+                    "icd10_codes": [],
+                },
+                {
+                    "line_id": "2",
+                    "cdt_code": "D0120",
+                    "confidence": 0.9,
+                    "explanation": "eval",
+                    "icd10_codes": [],
+                },
+            ],
+            "overall_confidence": 0.9,
+            "justification": "ok",
+        }
+        req = CodingSuggestRequest.model_validate(json.loads(FIXTURE.read_text(encoding="utf-8")))
+
+        with self.assertRaises(CodingPersistenceError):
+            run_coding_suggest(
+                req,
+                settings=Settings(
+                    openrouter_api_key="test-key",
+                    neon_database_url="postgresql://configured",
+                ),
+            )
+
+        mock_audit.assert_not_called()
+
+    @patch("app.coding.service.insert_coding_run", return_value=None)
+    @patch("app.coding.service.write_audit_log")
+    @patch("app.coding.service.fetch_run_by_request_id", return_value=None)
+    @patch("app.coding.service.create_supabase", return_value=None)
     @patch("app.coding.service.apply_payer_rules_tool")
     @patch("app.coding.service.llm_generate_line_recommendations")
     def test_suppresses_unmatched_insurance_payer_warning(
@@ -284,6 +368,52 @@ class TestCodingSuggestService(unittest.TestCase):
         self.assertFalse(any("none matched encounter insurance" in w for w in out.warnings))
         self.assertTrue(any("pre-op radiograph" in w for w in out.warnings))
 
+    @patch("app.coding.service.insert_coding_run", return_value=None)
+    @patch("app.coding.service.write_audit_log")
+    @patch("app.coding.service.fetch_run_by_request_id", return_value=None)
+    @patch("app.coding.service.create_supabase", return_value=None)
+    @patch("app.coding.service.apply_payer_rules_tool")
+    @patch("app.coding.service.llm_generate_line_recommendations")
+    def test_unknown_age_is_not_treated_as_newborn_for_payer_rules(
+        self,
+        mock_llm: MagicMock,
+        mock_payer: MagicMock,
+        _sb: MagicMock,
+        _fetch: MagicMock,
+        _audit: MagicMock,
+        _insert: MagicMock,
+    ) -> None:
+        mock_llm.return_value = {
+            "recommendations": [
+                {
+                    "line_id": "1",
+                    "cdt_code": "D2392",
+                    "confidence": 0.9,
+                    "explanation": "composite",
+                    "icd10_codes": [],
+                },
+                {
+                    "line_id": "2",
+                    "cdt_code": "D0120",
+                    "confidence": 0.9,
+                    "explanation": "eval",
+                    "icd10_codes": [],
+                },
+            ],
+            "overall_confidence": 0.9,
+            "justification": "ok",
+        }
+        mock_payer.return_value = {"payer_flags": [], "payer_rules_matched": []}
+        data = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        data["patient"] = {}
+
+        run_coding_suggest(
+            CodingSuggestRequest.model_validate(data),
+            settings=Settings(openrouter_api_key="test-key"),
+        )
+
+        self.assertIsNone(mock_payer.call_args.args[3])
+
     @patch("app.coding.service.insert_coding_run")
     @patch("app.coding.service.write_audit_log")
     @patch("app.coding.service.fetch_run_by_request_id")
@@ -325,6 +455,91 @@ class TestCodingSuggestService(unittest.TestCase):
         self.assertTrue(out.idempotent_replay)
         self.assertEqual(out.recommendations[0].cdt_code, "D2392")
         mock_insert.assert_not_called()
+
+    @patch(
+        "app.coding.service.insert_coding_run",
+        return_value=UUID("44444444-4444-4444-4444-444444444444"),
+    )
+    @patch("app.coding.service.write_audit_log")
+    @patch("app.coding.service.fetch_run_by_request_id")
+    @patch("app.coding.service.create_supabase", return_value=None)
+    @patch("app.coding.service.llm_generate_line_recommendations")
+    def test_concurrent_duplicate_returns_persisted_winner(
+        self,
+        mock_llm: MagicMock,
+        _sb: MagicMock,
+        mock_fetch: MagicMock,
+        _audit: MagicMock,
+        mock_insert: MagicMock,
+    ) -> None:
+        req = CodingSuggestRequest.model_validate(json.loads(FIXTURE.read_text(encoding="utf-8")))
+        mock_llm.return_value = {
+            "recommendations": [
+                {
+                    "line_id": "1",
+                    "cdt_code": "D2140",
+                    "confidence": 0.8,
+                    "explanation": "later result",
+                    "icd10_codes": [],
+                },
+                {
+                    "line_id": "2",
+                    "cdt_code": "D0150",
+                    "confidence": 0.8,
+                    "explanation": "later result",
+                    "icd10_codes": [],
+                },
+            ],
+            "overall_confidence": 0.8,
+            "justification": "later result",
+        }
+        persisted_payload = {
+            "schema_version": "1.0",
+            "request_id": str(req.request_id),
+            "coding_run_id": None,
+            "status": "pending_review",
+            "recommendations": [
+                {
+                    "line_id": "1",
+                    "cdt_code": "D2392",
+                    "confidence": 0.9,
+                    "explanation": "persisted winner",
+                    "icd10_codes": [],
+                    "required_supporting_documentation": [],
+                    "missing_info": [],
+                },
+                {
+                    "line_id": "2",
+                    "cdt_code": "D0120",
+                    "confidence": 0.9,
+                    "explanation": "persisted winner",
+                    "icd10_codes": [],
+                    "required_supporting_documentation": [],
+                    "missing_info": [],
+                },
+            ],
+            "global_missing_info": [],
+            "warnings": [],
+            "overall_confidence": 0.9,
+            "idempotent_replay": False,
+        }
+        mock_fetch.side_effect = [
+            None,
+            {
+                "id": "44444444-4444-4444-4444-444444444444",
+                "response_payload": persisted_payload,
+            },
+        ]
+
+        out = run_coding_suggest(
+            req,
+            settings=Settings(openrouter_api_key="x"),
+        )
+
+        self.assertTrue(out.idempotent_replay)
+        self.assertEqual(out.recommendations[0].cdt_code, "D2392")
+        self.assertEqual(out.recommendations[1].cdt_code, "D0120")
+        mock_insert.assert_called_once()
 
     @patch("app.coding.service.insert_coding_run", return_value=None)
     @patch("app.coding.service.write_audit_log")
@@ -545,6 +760,20 @@ class TestCodingHttpApi(unittest.TestCase):
         body = res.json()
         self.assertEqual(body["recommendations"][0]["cdt_code"], "D2392")
         mock_run.assert_called_once()
+
+    @patch(
+        "app.coding.main.run_coding_suggest",
+        side_effect=CodingPersistenceError("database unavailable"),
+    )
+    def test_suggest_endpoint_returns_503_for_persistence_failure(
+        self, _mock_run: MagicMock
+    ) -> None:
+        req_data = json.loads(FIXTURE.read_text(encoding="utf-8"))
+
+        res = TestClient(coding_app).post("/v1/suggest", json=req_data)
+
+        self.assertEqual(res.status_code, 503)
+        self.assertIn("could not be saved", res.json()["detail"]["message"])
 
 
 if __name__ == "__main__":

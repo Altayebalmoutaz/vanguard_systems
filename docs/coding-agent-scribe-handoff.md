@@ -152,7 +152,8 @@ Response: `{ "coding_run_id", "recorded": <count>, "status": "recorded" }`.
 | --- | --- |
 | 401 | Missing / invalid Bearer token |
 | 422 | Request validation failed (bad/missing fields) |
-| 500 | Server-side failure (retry with same `request_id` for idempotent safety) |
+| 500 | Server-side failure |
+| 503 | Durable storage unavailable. Retry `/v1/suggest` with the same `request_id`, or retry the identical `/v1/decision` body; a decision is never reported as recorded until every line is saved. |
 
 ## Support
 

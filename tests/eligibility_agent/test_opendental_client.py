@@ -88,6 +88,24 @@ def test_get_procedurelogs_for_appointment_errors_return_empty() -> None:
     assert _client().get_procedurelogs_for_appointment(7) == []
 
 
+@respx.mock
+def test_get_procedure_catalog_skips_only_invalid_rows() -> None:
+    respx.get("http://localhost:30222/api/v1/procedurecodes").mock(
+        return_value=Response(
+            200,
+            json=[
+                {"ProcCode": "D0120", "Descript": "Periodic exam", "TreatArea": "Mouth"},
+                {"ProcCode": "D9999", "TreatArea": {"unexpected": "shape"}},
+                {"ProcCode": "D2392", "Descript": "Composite", "TreatArea": "Surf"},
+            ],
+        )
+    )
+
+    catalog = _client().get_procedure_catalog()
+
+    assert [row.ProcCode for row in catalog] == ["D0120", "D2392"]
+
+
 def test_replay_mode_short_circuits_http(tmp_path: Path) -> None:
     fixtures = tmp_path / "od"
     fixtures.mkdir()

@@ -16,8 +16,8 @@ def insurance_label(request: CodingSuggestRequest) -> str:
     return "Unknown"
 
 
-def patient_age(request: CodingSuggestRequest) -> int:
-    return int(request.patient.age) if request.patient.age is not None else 0
+def patient_age(request: CodingSuggestRequest) -> int | None:
+    return int(request.patient.age) if request.patient.age is not None else None
 
 
 def build_clinical_note(request: CodingSuggestRequest) -> str:
@@ -44,13 +44,13 @@ def _format_procedure_line(proc: ProcedureLine) -> str:
 
 def structured_prompt_block(request: CodingSuggestRequest) -> str:
     """JSON-ish block for the LLM (PHI-scrubbed)."""
+    age = patient_age(request)
     lines = [
         "Structured encounter (from scribe):",
         f"- encounter_datetime: {request.encounter_datetime.isoformat()}",
         f"- provider_id: {scrub_for_llm(request.provider_id)}",
-        f"- patient_id: {scrub_for_llm(request.patient_id)}",
         f"- payer: {insurance_label(request)}",
-        f"- patient_age: {patient_age(request)}",
+        f"- patient_age: {age if age is not None else 'unknown'}",
         "- procedures:",
     ]
     for proc in request.procedures:
@@ -79,8 +79,8 @@ def map_flat_codes_to_lines(
     justification: str,
 ) -> list[dict[str, Any]]:
     """
-    Fallback when the LLM returns a flat code list: assign one CDT per line
-    (round-robin) so the v1 response stays line-addressable.
+    Fallback when the LLM returns a flat code list: map available CDTs by
+    position and leave unmatched lines uncoded so the gap gate requests review.
     """
     codes = [c for c in cdt_codes if c]
     if not codes:
@@ -97,7 +97,7 @@ def map_flat_codes_to_lines(
 
     out: list[dict[str, Any]] = []
     for idx, proc in enumerate(request.procedures):
-        code = codes[idx] if idx < len(codes) else codes[-1]
+        code = codes[idx] if idx < len(codes) else None
         out.append(
             {
                 "line_id": proc.line_id,
