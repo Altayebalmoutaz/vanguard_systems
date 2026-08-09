@@ -389,7 +389,7 @@ def _flat_fallback(
     cfg: CodingSettings,
     *,
     note: str,
-    age: int,
+    age: int | None,
     insurance: str,
     request: CodingSuggestRequest,
     supabase: Any,

@@ -11,7 +11,12 @@ from uuid import UUID
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from app.coding.adapter import build_clinical_note, map_flat_codes_to_lines, structured_prompt_block
+from app.coding.adapter import (
+    build_clinical_note,
+    map_flat_codes_to_lines,
+    patient_age,
+    structured_prompt_block,
+)
 from app.coding.cache import cache_clear
 from app.coding.config import CodingSettings
 from app.coding.gaps import (
@@ -169,6 +174,14 @@ class TestCodingAdapter(unittest.TestCase):
         self.assertNotIn("patient_id", prompt)
         self.assertNotIn("PAT-12345", prompt)
 
+    def test_missing_patient_age_remains_unknown(self) -> None:
+        data = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        data["patient"] = {}
+        req = CodingSuggestRequest.model_validate(data)
+
+        self.assertIsNone(patient_age(req))
+        self.assertIn("- patient_age: unknown", structured_prompt_block(req))
+
     def test_map_flat_codes_to_lines(self) -> None:
         req = CodingSuggestRequest.model_validate(json.loads(FIXTURE.read_text(encoding="utf-8")))
         mapped = map_flat_codes_to_lines(
@@ -180,6 +193,20 @@ class TestCodingAdapter(unittest.TestCase):
         )
         self.assertEqual(mapped[0]["cdt_code"], "D2392")
         self.assertEqual(mapped[1]["cdt_code"], "D0120")
+
+    def test_map_flat_codes_does_not_duplicate_last_code(self) -> None:
+        req = CodingSuggestRequest.model_validate(json.loads(FIXTURE.read_text(encoding="utf-8")))
+
+        mapped = map_flat_codes_to_lines(
+            req,
+            cdt_codes=["D2392"],
+            icd10_codes=["K02.9"],
+            confidence=0.9,
+            justification="partial fallback",
+        )
+
+        self.assertEqual(mapped[0]["cdt_code"], "D2392")
+        self.assertIsNone(mapped[1]["cdt_code"])
 
 
 class TestCodingSuggestService(unittest.TestCase):
@@ -293,6 +320,52 @@ class TestCodingSuggestService(unittest.TestCase):
         )
         self.assertFalse(any("none matched encounter insurance" in w for w in out.warnings))
         self.assertTrue(any("pre-op radiograph" in w for w in out.warnings))
+
+    @patch("app.coding.service.insert_coding_run", return_value=None)
+    @patch("app.coding.service.write_audit_log")
+    @patch("app.coding.service.fetch_run_by_request_id", return_value=None)
+    @patch("app.coding.service.create_supabase", return_value=None)
+    @patch("app.coding.service.apply_payer_rules_tool")
+    @patch("app.coding.service.llm_generate_line_recommendations")
+    def test_unknown_age_is_not_treated_as_newborn_for_payer_rules(
+        self,
+        mock_llm: MagicMock,
+        mock_payer: MagicMock,
+        _sb: MagicMock,
+        _fetch: MagicMock,
+        _audit: MagicMock,
+        _insert: MagicMock,
+    ) -> None:
+        mock_llm.return_value = {
+            "recommendations": [
+                {
+                    "line_id": "1",
+                    "cdt_code": "D2392",
+                    "confidence": 0.9,
+                    "explanation": "composite",
+                    "icd10_codes": [],
+                },
+                {
+                    "line_id": "2",
+                    "cdt_code": "D0120",
+                    "confidence": 0.9,
+                    "explanation": "eval",
+                    "icd10_codes": [],
+                },
+            ],
+            "overall_confidence": 0.9,
+            "justification": "ok",
+        }
+        mock_payer.return_value = {"payer_flags": [], "payer_rules_matched": []}
+        data = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        data["patient"] = {}
+
+        run_coding_suggest(
+            CodingSuggestRequest.model_validate(data),
+            settings=Settings(openrouter_api_key="test-key"),
+        )
+
+        self.assertIsNone(mock_payer.call_args.args[3])
 
     @patch("app.coding.service.insert_coding_run")
     @patch("app.coding.service.write_audit_log")

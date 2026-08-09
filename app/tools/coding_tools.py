@@ -26,7 +26,7 @@ def generate_codes_tool(
     settings: Settings,
     supabase: Client | None,
     clinical_note: str,
-    patient_age: int,
+    patient_age: int | None,
     insurance: str,
     *,
     fast: bool = False,
