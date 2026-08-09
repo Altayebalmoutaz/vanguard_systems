@@ -7,9 +7,7 @@ from unittest.mock import patch
 from scripts.import_od_treatarea import main
 
 
-def test_empty_catalog_aborts_before_database_mutation(
-    monkeypatch, capsys
-) -> None:
+def test_empty_catalog_aborts_before_database_mutation(monkeypatch, capsys) -> None:
     monkeypatch.setattr("sys.argv", ["import_od_treatarea"])
 
     with (
