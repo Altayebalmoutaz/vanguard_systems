@@ -32,10 +32,6 @@ def test_forward_migration_revokes_all_browser_role_access() -> None:
 
     for relation in relations:
         assert (
-            f"revoke all privileges on table {relation} "
-            "from public, anon, authenticated;"
+            f"revoke all privileges on table {relation} from public, anon, authenticated;"
         ) in sql
-        assert (
-            f"grant select, insert, update, delete on table {relation} "
-            "to service_role;"
-        ) in sql
+        assert (f"grant select, insert, update, delete on table {relation} to service_role;") in sql
