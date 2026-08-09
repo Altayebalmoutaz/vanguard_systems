@@ -65,3 +65,9 @@ supabase/.temp/
 
 # --- Auto-generated golden candidates (PHI-derived; review before promoting) ---
 evals/golden/coding/candidates/
+
+# --- Partner onboarding doc contains a live API key; share out-of-band, never commit ---
+docs/coding-agent-scribe-onboarding.md
+
+# --- Local test scratch ---
+.runid.tmp

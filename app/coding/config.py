@@ -40,6 +40,17 @@ class CodingSettings(BaseSettings):
         default=False, validation_alias="CODING_DEFAULT_FAST_MODE"
     )
 
+    # Payer adjudication (bundling/frequency/downcode/denial) is a coverage
+    # concern, not clinical CDT correctness. It belongs in the downstream
+    # RCM/claims pipeline (which has full claim + eligibility context), not the
+    # chairside suggest path. Off by default: when disabled the suggest response
+    # carries no payer_rules warnings and payer policy never influences code
+    # selection, the verifier, or autonomy tiers. Documentation prompts still
+    # come from deterministic code requirements (default_docs_for_code).
+    coding_payer_rules_enabled: bool = Field(
+        default=False, validation_alias="CODING_PAYER_RULES_ENABLED"
+    )
+
     # Reliability: retrieve reference context by default for non-routine encounters
     # even in fast mode (routine exam/prophy/x-ray visits stay retrieval-free).
     coding_retrieval_default: bool = Field(

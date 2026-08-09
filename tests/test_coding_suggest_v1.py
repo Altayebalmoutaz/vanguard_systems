@@ -279,7 +279,10 @@ class TestCodingSuggestService(unittest.TestCase):
         out = run_coding_suggest(
             req,
             settings=Settings(openrouter_api_key="test-key"),
-            coding_settings=CodingSettings(coding_confidence_review_threshold=0.75),
+            coding_settings=CodingSettings(
+                coding_confidence_review_threshold=0.75,
+                coding_payer_rules_enabled=True,
+            ),
         )
         self.assertFalse(any("none matched encounter insurance" in w for w in out.warnings))
         self.assertTrue(any("pre-op radiograph" in w for w in out.warnings))

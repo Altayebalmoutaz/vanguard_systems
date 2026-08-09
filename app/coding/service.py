@@ -154,32 +154,40 @@ def run_coding_suggest(
 
     cdt_validation = validate_cdt_tool(supabase, cdt_codes)
     icd_validation = validate_icd_tool(supabase, icd_codes)
-    payer = apply_payer_rules_tool(supabase, cdt_codes, insurance, age)
     if cdt_validation.get("cdt_flags"):
         warnings.extend(str(f) for f in cdt_validation["cdt_flags"])
     if icd_validation.get("icd_flags"):
         warnings.extend(str(f) for f in icd_validation["icd_flags"])
-    # Keep actionable matched-rule flags; drop the noisy "insurance name
-    # didn't fuzzy-match any payer_rules.payer_name" diagnostic — docs already
-    # fall back via documentation_required / default_docs_for_code.
+    # Payer adjudication is a coverage concern owned by the downstream RCM/claims
+    # pipeline, not the chairside suggest path (off by default). When enabled we
+    # keep actionable matched-rule flags but drop the noisy "insurance name
+    # didn't fuzzy-match any payer_rules.payer_name" diagnostic.
     payer_flags_out: list[str] = []
-    for flag in payer.get("payer_flags") or []:
-        text = str(flag)
-        if "none matched encounter insurance" in text:
-            logger.debug("suppressed payer_rules insurance mismatch: %s", text)
-            continue
-        payer_flags_out.append(text)
-    warnings.extend(payer_flags_out[:12])
+    if cfg.coding_payer_rules_enabled:
+        payer = apply_payer_rules_tool(supabase, cdt_codes, insurance, age)
+        for flag in payer.get("payer_flags") or []:
+            text = str(flag)
+            if "none matched encounter insurance" in text:
+                logger.debug("suppressed payer_rules insurance mismatch: %s", text)
+                continue
+            payer_flags_out.append(text)
+        warnings.extend(payer_flags_out[:12])
 
     invalid_cdt = {str(c).upper().strip() for c in (cdt_validation.get("invalid") or [])}
     cdt_meta = fetch_cdt_metadata(
         supabase, cdt_codes, ttl_seconds=cfg.coding_reference_cache_ttl_seconds
     )
-    docs_by_code = fetch_required_documentation(
-        supabase,
-        cdt_codes=cdt_codes,
-        payer_name=insurance,
-        ttl_seconds=cfg.coding_reference_cache_ttl_seconds,
+    # Payer-specific documentation_required rows only when payer rules are on;
+    # otherwise per-line docs fall back to deterministic code requirements.
+    docs_by_code = (
+        fetch_required_documentation(
+            supabase,
+            cdt_codes=cdt_codes,
+            payer_name=insurance,
+            ttl_seconds=cfg.coding_reference_cache_ttl_seconds,
+        )
+        if cfg.coding_payer_rules_enabled
+        else {}
     )
     threshold = confidence_threshold(cfg)
 
