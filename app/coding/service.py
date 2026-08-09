@@ -249,8 +249,7 @@ def run_coding_suggest(
                     if new_code in verifier_invalid:
                         accept_verdict = False
                         warnings.extend(
-                            str(flag)
-                            for flag in (verifier_validation.get("cdt_flags") or [])
+                            str(flag) for flag in (verifier_validation.get("cdt_flags") or [])
                         )
                         warnings.append(
                             f"Verifier proposed invalid CDT {new_code} on line "
