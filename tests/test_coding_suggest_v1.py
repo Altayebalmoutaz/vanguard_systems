@@ -425,9 +425,7 @@ class TestCodingSuggestService(unittest.TestCase):
         _audit: MagicMock,
         mock_insert: MagicMock,
     ) -> None:
-        req = CodingSuggestRequest.model_validate(
-            json.loads(FIXTURE.read_text(encoding="utf-8"))
-        )
+        req = CodingSuggestRequest.model_validate(json.loads(FIXTURE.read_text(encoding="utf-8")))
         mock_llm.return_value = {
             "recommendations": [
                 {

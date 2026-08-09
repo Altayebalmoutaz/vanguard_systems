@@ -367,9 +367,7 @@ def run_coding_suggest(
         if isinstance(canonical_payload, dict):
             try:
                 canonical_response = CodingSuggestResponse.model_validate(canonical_payload)
-                canonical_response.coding_run_id = UUID(
-                    str(canonical_row.get("id") or run_id)
-                )
+                canonical_response.coding_run_id = UUID(str(canonical_row.get("id") or run_id))
                 canonical_response.idempotent_replay = canonical_payload != response_payload
                 response = canonical_response
                 status = response.status
