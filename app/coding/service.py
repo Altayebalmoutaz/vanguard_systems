@@ -339,6 +339,7 @@ def run_coding_suggest(
         idempotent_replay=False,
     )
 
+    response_payload = response.model_dump(mode="json")
     run_id = insert_coding_run(
         app_settings,
         practice_id=practice_id,
@@ -348,11 +349,36 @@ def run_coding_suggest(
         encounter_datetime=request.encounter_datetime,
         payer_id=request.payer.id,
         request_payload=request.model_dump(mode="json"),
-        response_payload=response.model_dump(mode="json"),
+        response_payload=response_payload,
         status=status,
         overall_confidence=response.overall_confidence,
     )
     response.coding_run_id = run_id
+    if run_id is not None:
+        # A concurrent retry may have won the unique (practice_id, request_id)
+        # insert with a different model response. Return the persisted winner so
+        # every caller sees the same recommendations for this idempotency key.
+        canonical_row = fetch_run_by_request_id(
+            app_settings,
+            practice_id=practice_id,
+            request_id=request.request_id,
+        )
+        canonical_payload = canonical_row.get("response_payload") if canonical_row else None
+        if isinstance(canonical_payload, dict):
+            try:
+                canonical_response = CodingSuggestResponse.model_validate(canonical_payload)
+                canonical_response.coding_run_id = UUID(
+                    str(canonical_row.get("id") or run_id)
+                )
+                canonical_response.idempotent_replay = canonical_payload != response_payload
+                response = canonical_response
+                status = response.status
+            except (TypeError, ValueError) as exc:
+                logger.warning(
+                    "coding_runs canonical response validate failed request_id=%s: %s",
+                    request.request_id,
+                    scrub_for_log(str(exc)),
+                )
 
     write_audit_log(
         app_settings,

@@ -409,6 +409,93 @@ class TestCodingSuggestService(unittest.TestCase):
         self.assertEqual(out.recommendations[0].cdt_code, "D2392")
         mock_insert.assert_not_called()
 
+    @patch(
+        "app.coding.service.insert_coding_run",
+        return_value=UUID("44444444-4444-4444-4444-444444444444"),
+    )
+    @patch("app.coding.service.write_audit_log")
+    @patch("app.coding.service.fetch_run_by_request_id")
+    @patch("app.coding.service.create_supabase", return_value=None)
+    @patch("app.coding.service.llm_generate_line_recommendations")
+    def test_concurrent_duplicate_returns_persisted_winner(
+        self,
+        mock_llm: MagicMock,
+        _sb: MagicMock,
+        mock_fetch: MagicMock,
+        _audit: MagicMock,
+        mock_insert: MagicMock,
+    ) -> None:
+        req = CodingSuggestRequest.model_validate(
+            json.loads(FIXTURE.read_text(encoding="utf-8"))
+        )
+        mock_llm.return_value = {
+            "recommendations": [
+                {
+                    "line_id": "1",
+                    "cdt_code": "D2140",
+                    "confidence": 0.8,
+                    "explanation": "later result",
+                    "icd10_codes": [],
+                },
+                {
+                    "line_id": "2",
+                    "cdt_code": "D0150",
+                    "confidence": 0.8,
+                    "explanation": "later result",
+                    "icd10_codes": [],
+                },
+            ],
+            "overall_confidence": 0.8,
+            "justification": "later result",
+        }
+        persisted_payload = {
+            "schema_version": "1.0",
+            "request_id": str(req.request_id),
+            "coding_run_id": None,
+            "status": "pending_review",
+            "recommendations": [
+                {
+                    "line_id": "1",
+                    "cdt_code": "D2392",
+                    "confidence": 0.9,
+                    "explanation": "persisted winner",
+                    "icd10_codes": [],
+                    "required_supporting_documentation": [],
+                    "missing_info": [],
+                },
+                {
+                    "line_id": "2",
+                    "cdt_code": "D0120",
+                    "confidence": 0.9,
+                    "explanation": "persisted winner",
+                    "icd10_codes": [],
+                    "required_supporting_documentation": [],
+                    "missing_info": [],
+                },
+            ],
+            "global_missing_info": [],
+            "warnings": [],
+            "overall_confidence": 0.9,
+            "idempotent_replay": False,
+        }
+        mock_fetch.side_effect = [
+            None,
+            {
+                "id": "44444444-4444-4444-4444-444444444444",
+                "response_payload": persisted_payload,
+            },
+        ]
+
+        out = run_coding_suggest(
+            req,
+            settings=Settings(openrouter_api_key="x"),
+        )
+
+        self.assertTrue(out.idempotent_replay)
+        self.assertEqual(out.recommendations[0].cdt_code, "D2392")
+        self.assertEqual(out.recommendations[1].cdt_code, "D0120")
+        mock_insert.assert_called_once()
+
     @patch("app.coding.service.insert_coding_run", return_value=None)
     @patch("app.coding.service.write_audit_log")
     @patch("app.coding.service.fetch_run_by_request_id", return_value=None)
