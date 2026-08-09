@@ -300,9 +300,7 @@ class TestCodingSuggestService(unittest.TestCase):
             "overall_confidence": 0.9,
             "justification": "ok",
         }
-        req = CodingSuggestRequest.model_validate(
-            json.loads(FIXTURE.read_text(encoding="utf-8"))
-        )
+        req = CodingSuggestRequest.model_validate(json.loads(FIXTURE.read_text(encoding="utf-8")))
 
         with self.assertRaises(CodingPersistenceError):
             run_coding_suggest(

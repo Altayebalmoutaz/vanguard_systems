@@ -70,9 +70,7 @@ def run_record_decision(
         decisions=decisions,
     )
     if recorded != len(decisions):
-        raise CodingPersistenceError(
-            f"persisted {recorded} of {len(decisions)} coding decisions"
-        )
+        raise CodingPersistenceError(f"persisted {recorded} of {len(decisions)} coding decisions")
 
     for decision in decisions:
         action = str(decision["action"])
@@ -80,9 +78,7 @@ def run_record_decision(
         suggested_cdt = decision.get("suggested_cdt")
         if suggested_cdt is not None:
             final_cdt = decision.get("final_cdt")
-            hit = action == "approved" or (
-                final_cdt is not None and final_cdt == suggested_cdt
-            )
+            hit = action == "approved" or (final_cdt is not None and final_cdt == suggested_cdt)
             inc("coding_decision_top1", {"result": "hit" if hit else "miss"})
 
     try:
