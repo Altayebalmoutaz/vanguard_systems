@@ -59,3 +59,9 @@ supabase/.temp/
 .claude/
 .cursor/
 *.tsbuildinfo
+
+# --- Local Python venvs ---
+.venv312/
+
+# --- Auto-generated golden candidates (PHI-derived; review before promoting) ---
+evals/golden/coding/candidates/

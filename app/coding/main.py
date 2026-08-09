@@ -13,7 +13,13 @@ from starlette.responses import JSONResponse
 
 from app.api.errors import sanitized_http_exception
 from app.coding.config import get_coding_settings
-from app.coding.schemas import CodingSuggestRequest, CodingSuggestResponse
+from app.coding.decisions import run_record_decision
+from app.coding.schemas import (
+    CodingDecisionRequest,
+    CodingDecisionResponse,
+    CodingSuggestRequest,
+    CodingSuggestResponse,
+)
 from app.coding.service import run_coding_suggest
 from app.logging_config import CorrelationIdMiddleware
 from app.security.phi import scrub_for_log
@@ -91,5 +97,23 @@ def suggest_codes(body: CodingSuggestRequest) -> CodingSuggestResponse:
             500,
             public_message="Failed to run coding suggest",
             log_message=f"coding suggest failure: {scrub_for_log(str(exc))}",
+            exc=exc,
+        ) from exc
+
+
+@app.post("/v1/decision", response_model=CodingDecisionResponse)
+def record_decision(body: CodingDecisionRequest) -> CodingDecisionResponse:
+    """
+    Record what the dentist did with a prior suggest run's lines
+    (approved / edited / rejected / added). This is the coding agent's
+    ground truth for CDT top-1 accuracy and the live scorecard.
+    """
+    try:
+        return run_record_decision(body)
+    except Exception as exc:
+        raise sanitized_http_exception(
+            500,
+            public_message="Failed to record coding decision",
+            log_message=f"coding decision failure: {scrub_for_log(str(exc))}",
             exc=exc,
         ) from exc

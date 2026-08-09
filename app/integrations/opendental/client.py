@@ -29,6 +29,7 @@ from app.integrations.opendental.models import (
     ODInsVerifyCreate,
     ODInsVerifyResponse,
     ODPatient,
+    ODProcedureCode,
     ODProcedureLog,
 )
 
@@ -216,15 +217,36 @@ class OpenDentalClient:
             else:
                 payload = self._get_json(f"/procedurelogs?AptNum={int(apt_num)}")
             if not isinstance(payload, list):
-                logger.warning(
-                    "OpenDental procedurelogs for AptNum=%s was not a list", apt_num
-                )
+                logger.warning("OpenDental procedurelogs for AptNum=%s was not a list", apt_num)
                 return []
             return [ODProcedureLog.model_validate(row) for row in payload]
         except Exception as exc:
             logger.warning(
                 "OpenDental procedurelogs AptNum=%s failed: %s: %s",
                 apt_num,
+                type(exc).__name__,
+                exc,
+            )
+            return []
+
+    def get_procedure_catalog(self) -> list[ODProcedureCode]:
+        """GET /procedurecodes — the full OD procedure code dictionary.
+
+        Read-only, no PHI (a code catalog). Returns [] on error so a one-time
+        reference import can degrade gracefully. Supports ``replay_dir`` fixtures.
+        """
+        try:
+            if self.replay_dir:
+                payload = self._read_fixture("procedurecodes")
+            else:
+                payload = self._get_json("/procedurecodes")
+            if not isinstance(payload, list):
+                logger.warning("OpenDental procedurecodes payload was not a list")
+                return []
+            return [ODProcedureCode.model_validate(row) for row in payload]
+        except Exception as exc:
+            logger.warning(
+                "OpenDental procedurecodes fetch failed: %s: %s",
                 type(exc).__name__,
                 exc,
             )

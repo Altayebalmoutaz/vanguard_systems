@@ -57,7 +57,9 @@ def fetch_run_by_request_id(
     try:
         result = (
             supabase.table("coding_runs")
-            .select("id,practice_id,request_id,status,overall_confidence,response_payload,created_at")
+            .select(
+                "id,practice_id,request_id,status,overall_confidence,response_payload,created_at"
+            )
             .eq("practice_id", practice_id)
             .eq("request_id", str(request_id))
             .limit(1)
@@ -71,6 +73,136 @@ def fetch_run_by_request_id(
             scrub_for_log(str(exc)),
         )
         return None
+
+
+def fetch_run_by_id(
+    settings: Settings,
+    *,
+    practice_id: str,
+    coding_run_id: UUID,
+) -> dict[str, Any] | None:
+    """Return a coding_runs row by id (used to backfill suggested_cdt), or None."""
+    if get_neon_dsn(settings):
+        try:
+            with (
+                neon_connection(settings, practice_id=practice_id) as conn,
+                conn.cursor(row_factory=dict_row) as cur,
+            ):
+                cur.execute(
+                    """
+                    select id, practice_id, request_id, payer_id, response_payload
+                    from agents.coding_runs
+                    where practice_id = %s and id = %s
+                    limit 1
+                    """,
+                    (practice_id, str(coding_run_id)),
+                )
+                row = cur.fetchone()
+            return dict(row) if row else None
+        except Exception as exc:
+            logger.warning("coding_runs by-id lookup failed: %s", scrub_for_log(str(exc)))
+            return None
+
+    supabase = create_supabase(settings)
+    if supabase is None:
+        return None
+    try:
+        result = (
+            supabase.table("coding_runs")
+            .select("id,practice_id,request_id,payer_id,response_payload")
+            .eq("practice_id", practice_id)
+            .eq("id", str(coding_run_id))
+            .limit(1)
+            .execute()
+        )
+        rows = getattr(result, "data", None) or []
+        return dict(rows[0]) if rows else None
+    except Exception as exc:
+        logger.warning("coding_runs supabase by-id lookup failed: %s", scrub_for_log(str(exc)))
+        return None
+
+
+def insert_coding_decisions(
+    settings: Settings,
+    *,
+    practice_id: str,
+    coding_run_id: UUID,
+    request_id: UUID | None,
+    decided_by: str | None,
+    payer_id: str | None,
+    decisions: list[dict[str, Any]],
+) -> int:
+    """Upsert dentist decisions (one row per line); returns count persisted."""
+    if not decisions:
+        return 0
+
+    if get_neon_dsn(settings):
+        try:
+            with neon_connection(settings, practice_id=practice_id) as conn:
+                with conn.cursor() as cur:
+                    for d in decisions:
+                        cur.execute(
+                            """
+                            insert into agents.coding_decisions (
+                              practice_id, coding_run_id, request_id, line_id,
+                              action, suggested_cdt, final_cdt, edit_reason,
+                              payer_id, decided_by
+                            )
+                            values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            on conflict (practice_id, coding_run_id, line_id) do update
+                              set action = excluded.action,
+                                  suggested_cdt = excluded.suggested_cdt,
+                                  final_cdt = excluded.final_cdt,
+                                  edit_reason = excluded.edit_reason,
+                                  decided_by = excluded.decided_by,
+                                  decided_at = now()
+                            """,
+                            (
+                                practice_id,
+                                str(coding_run_id),
+                                str(request_id) if request_id else None,
+                                str(d.get("line_id")),
+                                str(d.get("action")),
+                                d.get("suggested_cdt"),
+                                d.get("final_cdt"),
+                                d.get("edit_reason"),
+                                payer_id,
+                                decided_by,
+                            ),
+                        )
+                conn.commit()
+            return len(decisions)
+        except Exception as exc:
+            logger.warning("coding_decisions neon upsert failed: %s", scrub_for_log(str(exc)))
+            return 0
+
+    supabase = create_supabase(settings)
+    if supabase is None:
+        logger.warning("coding_decisions insert skipped: no Neon/Supabase configured")
+        return 0
+    try:
+        rows = [
+            {
+                "practice_id": practice_id,
+                "coding_run_id": str(coding_run_id),
+                "request_id": str(request_id) if request_id else None,
+                "line_id": str(d.get("line_id")),
+                "action": str(d.get("action")),
+                "suggested_cdt": d.get("suggested_cdt"),
+                "final_cdt": d.get("final_cdt"),
+                "edit_reason": d.get("edit_reason"),
+                "payer_id": payer_id,
+                "decided_by": decided_by,
+            }
+            for d in decisions
+        ]
+        supabase.table("coding_decisions").upsert(
+            rows, on_conflict="practice_id,coding_run_id,line_id"
+        ).execute()
+        return len(rows)
+    except Exception as exc:
+        logger.warning("coding_decisions supabase upsert failed: %s", scrub_for_log(str(exc)))
+        return 0
 
 
 def insert_coding_run(
@@ -135,9 +267,7 @@ def insert_coding_run(
             "coding_runs supabase insert failed (may be duplicate): %s",
             scrub_for_log(str(exc)),
         )
-        existing = fetch_run_by_request_id(
-            settings, practice_id=practice_id, request_id=request_id
-        )
+        existing = fetch_run_by_request_id(settings, practice_id=practice_id, request_id=request_id)
         if existing and existing.get("id"):
             return UUID(str(existing["id"]))
     return None
@@ -194,9 +324,7 @@ def _insert_neon(
             "coding_runs neon insert failed: %s",
             scrub_for_log(str(exc)),
         )
-        existing = fetch_run_by_request_id(
-            settings, practice_id=practice_id, request_id=request_id
-        )
+        existing = fetch_run_by_request_id(settings, practice_id=practice_id, request_id=request_id)
         if existing and existing.get("id"):
             return UUID(str(existing["id"]))
     return None

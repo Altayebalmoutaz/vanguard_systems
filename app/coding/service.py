@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import time
 from typing import Any
@@ -17,15 +18,23 @@ from app.coding.adapter import (
     patient_age,
     structured_prompt_block,
 )
+from app.coding.autonomy import decide_tier, fetch_autonomy_allowlist
+from app.coding.calibration import CalibrationMap, calibrate
 from app.coding.config import CodingSettings, get_coding_settings
 from app.coding.gaps import (
     confidence_threshold,
     default_docs_for_code,
     fetch_cdt_metadata,
     fetch_required_documentation,
+    has_blocking,
     post_check_line,
     pre_check_line,
     pre_check_request,
+)
+from app.coding.reliability import (
+    needs_verification,
+    should_use_retrieval,
+    verify_line,
 )
 from app.coding.schemas import (
     CodingSuggestRequest,
@@ -83,6 +92,7 @@ def run_coding_suggest(
     }
 
     fast = bool(request.fast or cfg.coding_default_fast_mode)
+    use_retrieval = should_use_retrieval(request, fast=fast, cfg=cfg)
     note = build_clinical_note(request)
     insurance = insurance_label(request)
     age = patient_age(request)
@@ -94,7 +104,7 @@ def run_coding_suggest(
 
     try:
         memory = ""
-        if not fast and supabase is not None and app_settings.jina_api_key:
+        if use_retrieval and supabase is not None and app_settings.jina_api_key:
             memory = fetch_cdt_vector_memory(
                 supabase,
                 note,
@@ -131,15 +141,11 @@ def run_coding_suggest(
             insurance=insurance,
             request=request,
             supabase=supabase,
-            fast=fast,
+            use_retrieval=use_retrieval,
             warnings=warnings,
         )
 
-    cdt_codes = [
-        str(r.get("cdt_code")).upper().strip()
-        for r in line_recs_raw
-        if r.get("cdt_code")
-    ]
+    cdt_codes = [str(r.get("cdt_code")).upper().strip() for r in line_recs_raw if r.get("cdt_code")]
     icd_codes: list[str] = []
     for r in line_recs_raw:
         for code in r.get("icd10_codes") or []:
@@ -177,6 +183,20 @@ def run_coding_suggest(
     )
     threshold = confidence_threshold(cfg)
 
+    # Lines whose code is implicated by a matched payer rule (transform/doc/bundle)
+    # are candidates for the verifier pass.
+    _conflict_kw = ("transform", "downcode", "document", "bundle", "replace", "alternate")
+    payer_conflict_codes = {
+        code
+        for code in cdt_codes
+        for flag in payer_flags_out
+        if code in flag and any(kw in flag.lower() for kw in _conflict_kw)
+    }
+
+    # Identity by default; ops can fit/store a map from calibration.py output.
+    cmap: CalibrationMap = []
+    autonomy_allowlist = fetch_autonomy_allowlist(app_settings, practice_id=practice_id, cfg=cfg)
+
     by_line = {str(r.get("line_id")): r for r in line_recs_raw}
     recommendations: list[LineRecommendation] = []
     for proc in request.procedures:
@@ -196,10 +216,55 @@ def run_coding_suggest(
         except (TypeError, ValueError):
             conf = 0.0
         conf = max(0.0, min(1.0, conf))
+        explanation = str(raw.get("explanation") or justification or "")
+
+        meta = cdt_meta.get(cdt_norm or "") or {}
+
+        # Verifier/repair pass for low-confidence, high-stakes, or payer-conflict
+        # lines (no-op unless CODING_VERIFIER_ENABLED).
+        if cdt_norm and needs_verification(
+            cdt_code=cdt_norm,
+            confidence=conf,
+            payer_conflict=cdt_norm in payer_conflict_codes,
+            cfg=cfg,
+        ):
+            verdict = verify_line(
+                app_settings,
+                cfg,
+                line=proc,
+                candidate_cdt=cdt_norm,
+                candidate_description=str(meta.get("description") or ""),
+                payer_notes="; ".join(f for f in payer_flags_out if cdt_norm in f),
+            )
+            if verdict and verdict.get("cdt_code"):
+                new_code = str(verdict["cdt_code"]).upper().strip()
+                if verdict.get("changed"):
+                    warnings.append(
+                        f"Verifier changed line {proc.line_id}: {cdt_norm} -> {new_code}"
+                    )
+                    inc("coding_verifier_total", {"result": "changed"})
+                    cdt_norm = new_code
+                    # Re-resolve reference metadata for the endorsed code.
+                    meta = (
+                        fetch_cdt_metadata(
+                            supabase,
+                            [cdt_norm],
+                            ttl_seconds=cfg.coding_reference_cache_ttl_seconds,
+                        ).get(cdt_norm)
+                        or {}
+                    )
+                else:
+                    inc("coding_verifier_total", {"result": "confirmed"})
+                explanation = str(verdict.get("explanation") or explanation)
+                with contextlib.suppress(TypeError, ValueError):
+                    conf = max(conf, float(verdict.get("confidence") or conf))
+
+        # Calibrate confidence (identity until a calibration map is fit/stored).
+        conf = calibrate(conf, cmap)
+
         docs = list(docs_by_code.get(cdt_norm or "", []) or [])
         if not docs:
             docs = default_docs_for_code(cdt_norm)
-        meta = cdt_meta.get(cdt_norm or "") or {}
         missing = list(line_pre.get(proc.line_id) or [])
         missing.extend(
             post_check_line(
@@ -211,23 +276,38 @@ def run_coding_suggest(
                 cdt_meta=meta,
             )
         )
+        deduped_missing = _dedupe_missing(missing)
+        tier = decide_tier(
+            cdt_code=cdt_norm,
+            calibrated_confidence=conf,
+            has_blocking_gap=has_blocking(deduped_missing),
+            is_valid=bool(cdt_norm) and cdt_norm not in invalid_cdt,
+            payer_conflict=cdt_norm in payer_conflict_codes,
+            cfg=cfg,
+            allowlist=autonomy_allowlist,
+        )
         recommendations.append(
             LineRecommendation(
                 line_id=proc.line_id,
                 cdt_code=cdt_norm,
                 cdt_description=str(meta.get("description") or "") or None,
                 confidence=conf,
-                explanation=str(raw.get("explanation") or justification or ""),
+                explanation=explanation,
                 icd10_codes=[str(c).upper().strip() for c in (raw.get("icd10_codes") or [])],
                 required_supporting_documentation=docs,
-                missing_info=_dedupe_missing(missing),
+                missing_info=deduped_missing,
+                autonomy=tier,
             )
         )
 
     if recommendations:
         overall_confidence = sum(r.confidence for r in recommendations) / len(recommendations)
 
-    needs_info = bool(global_missing) or any(r.missing_info for r in recommendations)
+    # Only blocking gaps force needs_info. Advisory gaps (payer/age/thin-note,
+    # radiograph hint) are still surfaced but keep the codes reviewable.
+    needs_info = has_blocking(global_missing) or any(
+        has_blocking(r.missing_info) for r in recommendations
+    )
     status = "needs_info" if needs_info else "pending_review"
 
     response = CodingSuggestResponse(
@@ -293,12 +373,12 @@ def _flat_fallback(
     insurance: str,
     request: CodingSuggestRequest,
     supabase: Any,
-    fast: bool,
+    use_retrieval: bool,
     warnings: list[str],
 ) -> tuple[list[dict[str, Any]], float, str]:
     try:
         memory = ""
-        if not fast and supabase is not None and app_settings.jina_api_key:
+        if use_retrieval and supabase is not None and app_settings.jina_api_key:
             memory = fetch_cdt_vector_memory(
                 supabase,
                 note,

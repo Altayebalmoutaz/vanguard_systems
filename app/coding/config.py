@@ -40,6 +40,44 @@ class CodingSettings(BaseSettings):
         default=False, validation_alias="CODING_DEFAULT_FAST_MODE"
     )
 
+    # Reliability: retrieve reference context by default for non-routine encounters
+    # even in fast mode (routine exam/prophy/x-ray visits stay retrieval-free).
+    coding_retrieval_default: bool = Field(
+        default=True, validation_alias="CODING_RETRIEVAL_DEFAULT"
+    )
+    # Verifier/repair pass for low-confidence, high-stakes, or payer-conflict lines.
+    coding_verifier_enabled: bool = Field(default=False, validation_alias="CODING_VERIFIER_ENABLED")
+    coding_verifier_confidence_threshold: float = Field(
+        default=0.70, validation_alias="CODING_VERIFIER_CONFIDENCE_THRESHOLD"
+    )
+    # CDT family prefixes considered high-stakes (crowns, endo, implants, surgery).
+    coding_high_stakes_prefixes: str = Field(
+        default="D27,D3,D6,D7", validation_alias="CODING_HIGH_STAKES_PREFIXES"
+    )
+
+    # Autonomy tiers (auto-propose / review / ask) from calibrated confidence.
+    coding_autonomy_enabled: bool = Field(default=True, validation_alias="CODING_AUTONOMY_ENABLED")
+    coding_autonomy_auto_threshold: float = Field(
+        default=0.95, validation_alias="CODING_AUTONOMY_AUTO_THRESHOLD"
+    )
+    coding_autonomy_review_threshold: float = Field(
+        default=0.75, validation_alias="CODING_AUTONOMY_REVIEW_THRESHOLD"
+    )
+    # Per-code allowlist: min historical decisions + min top-1 approval rate for a
+    # code to qualify for the 'auto' tier even when high-stakes.
+    coding_autonomy_allowlist_min_decisions: int = Field(
+        default=20, validation_alias="CODING_AUTONOMY_ALLOWLIST_MIN_DECISIONS"
+    )
+    coding_autonomy_allowlist_min_hit_rate: float = Field(
+        default=0.98, validation_alias="CODING_AUTONOMY_ALLOWLIST_MIN_HIT_RATE"
+    )
+
+    @property
+    def high_stakes_prefixes(self) -> tuple[str, ...]:
+        return tuple(
+            p.strip().upper() for p in self.coding_high_stakes_prefixes.split(",") if p.strip()
+        )
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.coding_agent_cors_origins.split(",") if o.strip()]

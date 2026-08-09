@@ -93,6 +93,50 @@ def _db_gauge_lines() -> list[str]:
     return lines
 
 
+def _coding_gauge_lines() -> list[str]:
+    """Coding-agent accuracy gauges from analytics.coding_scorecard (last 30d)."""
+    settings = get_settings()
+    if not get_neon_dsn(settings):
+        return []
+    try:
+        with neon_connection(settings, bypass_rls=True) as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                select
+                  coalesce(sum(lines_total), 0),
+                  coalesce(sum(lines_proposed), 0),
+                  coalesce(sum(lines_decided), 0),
+                  coalesce(sum(top1_hits), 0),
+                  coalesce(sum(lines_with_gap), 0),
+                  coalesce(sum(false_gaps), 0),
+                  coalesce(sum(lines_in_needs_info), 0)
+                from analytics.coding_scorecard
+                where run_date >= (current_date - 30)
+                """
+            )
+            row = cur.fetchone() or (0, 0, 0, 0, 0, 0, 0)
+    except Exception as exc:
+        logger.warning("coding metrics gauges failed: %s: %s", type(exc).__name__, exc)
+        return []
+    total, proposed, decided, hits, gapped, false_gaps, needs_info = (int(v) for v in row)
+
+    def ratio(num: int, den: int) -> float:
+        return round(num / den, 4) if den else 0.0
+
+    return [
+        "# TYPE coding_lines_total gauge",
+        f"coding_lines_total {total}",
+        "# TYPE coding_top1_accuracy gauge",
+        f"coding_top1_accuracy {ratio(hits, decided)}",
+        "# TYPE coding_coverage gauge",
+        f"coding_coverage {ratio(proposed, total)}",
+        "# TYPE coding_needs_info_rate gauge",
+        f"coding_needs_info_rate {ratio(needs_info, total)}",
+        "# TYPE coding_false_gap_rate gauge",
+        f"coding_false_gap_rate {ratio(false_gaps, gapped)}",
+    ]
+
+
 def _sse_gauge_lines() -> list[str]:
     try:
         from app.realtime.bus import bus
@@ -107,7 +151,7 @@ def _sse_gauge_lines() -> list[str]:
 
 @router.get("/metrics", response_class=PlainTextResponse)
 def metrics() -> PlainTextResponse:
-    lines = _db_gauge_lines() + _sse_gauge_lines() + _counter_lines()
+    lines = _db_gauge_lines() + _coding_gauge_lines() + _sse_gauge_lines() + _counter_lines()
     return PlainTextResponse(
         "\n".join(lines) + "\n",
         media_type="text/plain; version=0.0.4; charset=utf-8",

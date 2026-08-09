@@ -7,6 +7,7 @@ import re
 from typing import Any
 
 from app.coding.cache import cached
+from app.coding.cdt_requirements import code_range_requirements
 from app.coding.config import CodingSettings
 from app.coding.schemas import (
     CodingSuggestRequest,
@@ -19,9 +20,29 @@ from supabase import Client
 
 logger = logging.getLogger(__name__)
 
-# Restorative / endo / crown-ish families that typically need tooth + surface.
-_TOOTH_REQUIRED_PREFIXES = ("D2", "D3", "D4", "D6", "D7")
-_SURFACE_REQUIRED_PREFIXES = ("D2",)  # amalgam/composite/resin restorations
+# Gaps that mean a suggested code is not yet reviewable/billable as-is. Anything
+# not listed here is advisory: surfaced to the UI but does NOT force needs_info.
+# Radiograph is advisory because the enforceable requirement is payer-specific
+# (payer_rules.documentation_required); cdt_codes.requires_radiograph is a hint.
+BLOCKING_MISSING_CODES = frozenset(
+    {
+        MissingInfoCode.TOOTH_MISSING,
+        MissingInfoCode.SURFACE_MISSING,
+        MissingInfoCode.FINDING_MISSING,
+        MissingInfoCode.PROCEDURE_EMPTY,
+        MissingInfoCode.CDT_UNCERTAIN,
+    }
+)
+
+
+def is_blocking(item: MissingInfoItem) -> bool:
+    return item.code in BLOCKING_MISSING_CODES
+
+
+def has_blocking(items: list[MissingInfoItem]) -> bool:
+    return any(is_blocking(i) for i in items)
+
+
 _IMAGING_CODES = frozenset(
     {
         "D0210",
@@ -55,26 +76,94 @@ _RADIOGRAPH_ATTACHMENT_HINTS = (
 )
 
 
+# Findings that imply a tooth-specific procedure (restorative / crown / endo etc.).
+_RESTORATIVE_TOKENS = (
+    "caries",
+    "decay",
+    "cavity",
+    "composite",
+    "amalgam",
+    "filling",
+    "restoration",
+    "crown",
+    "onlay",
+    "inlay",
+    "occlusal",
+    "interproximal",
+    "mesial",
+    "distal",
+    "buccal",
+    "lingual",
+)
+# Findings that specifically imply a *surface* is codeable (excludes crown/caries
+# alone, which need a tooth but not necessarily a surface).
+_SURFACE_TOKENS = (
+    "composite",
+    "amalgam",
+    "filling",
+    "occlusal",
+    "interproximal",
+    "mesial",
+    "distal",
+    "buccal",
+    "lingual",
+    "surface",
+)
+# Negation cues that cancel a nearby clinical token (e.g. "no decay noted").
+_NEGATION_CUES = frozenset(
+    {
+        "no",
+        "not",
+        "non",
+        "without",
+        "denies",
+        "denied",
+        "negative",
+        "neg",
+        "r/o",
+        "ro",
+        "rule",
+        "ruled",
+        "resolved",
+        "absent",
+        "free",
+    }
+)
+
+
+def _token_present_unnegated(blob: str, token: str) -> bool:
+    """True if ``token`` appears on a word boundary and is not negated nearby."""
+    for m in re.finditer(r"\b" + re.escape(token) + r"\b", blob):
+        # Only look back within the current clause (stop at punctuation).
+        clause_prefix = re.split(r"[.,;:]", blob[: m.start()])[-1]
+        prev_words = re.findall(r"[a-z/]+", clause_prefix)[-3:]
+        if any(cue in _NEGATION_CUES for cue in prev_words):
+            continue
+        return True
+    return False
+
+
+def _any_unnegated(findings: list[str], tokens: tuple[str, ...]) -> bool:
+    blob = " ".join(findings).lower()
+    return any(_token_present_unnegated(blob, tok) for tok in tokens)
+
+
 def _looks_restorative_from_findings(line: ProcedureLine) -> bool:
-    blob = " ".join(line.findings).lower()
-    return any(
-        token in blob
-        for token in (
-            "caries",
-            "decay",
-            "cavity",
-            "composite",
-            "amalgam",
-            "filling",
-            "restoration",
-            "occlusal",
-            "interproximal",
-        )
-    )
+    """Negation- and word-boundary-aware restorative detection."""
+    return _any_unnegated(line.findings, _RESTORATIVE_TOKENS)
+
+
+def _surface_indicated_from_findings(line: ProcedureLine) -> bool:
+    return _any_unnegated(line.findings, _SURFACE_TOKENS)
 
 
 def pre_check_line(line: ProcedureLine) -> list[MissingInfoItem]:
-    """Gaps known before coding (tooth/surface/findings)."""
+    """Gaps known before coding (tooth/surface/findings).
+
+    A tooth is required whenever the finding is tooth-specific; a surface is only
+    required when the finding specifically implies one (so crowns/caries-only
+    notes do not spuriously demand a surface).
+    """
     missing: list[MissingInfoItem] = []
     restorative = _looks_restorative_from_findings(line)
     if restorative and not line.tooth_numbers:
@@ -84,11 +173,11 @@ def pre_check_line(line: ProcedureLine) -> list[MissingInfoItem]:
                 message=f"Line {line.line_id}: tooth number required for restorative finding",
             )
         )
-    if restorative and not line.surfaces:
+    if restorative and _surface_indicated_from_findings(line) and not line.surfaces:
         missing.append(
             MissingInfoItem(
                 code=MissingInfoCode.SURFACE_MISSING,
-                message=f"Line {line.line_id}: surface(s) required for restorative finding",
+                message=f"Line {line.line_id}: surface(s) required for this restorative finding",
             )
         )
     if not line.findings and not line.tooth_numbers and not line.surfaces:
@@ -157,15 +246,19 @@ def post_check_line(
         return missing
 
     meta = cdt_meta or {}
-    needs_tooth = bool(meta.get("requires_tooth")) or code.startswith(
-        _TOOTH_REQUIRED_PREFIXES
-    )
-    needs_surface = bool(meta.get("requires_surfaces")) or code.startswith(
-        _SURFACE_REQUIRED_PREFIXES
-    )
-    needs_radio = bool(meta.get("requires_radiograph")) or (
-        code in _IMAGING_CODES or code.startswith("D02") or code.startswith("D03")
-    )
+    if meta:
+        # DB reference row exists -> requires_* flags are authoritative (both True
+        # and False are respected; this is what stops crowns being surface-gated).
+        needs_tooth = bool(meta.get("requires_tooth"))
+        needs_surface = bool(meta.get("requires_surfaces"))
+        needs_radio = bool(meta.get("requires_radiograph"))
+    else:
+        # No reference row -> deterministic code-range fallback (shared with the
+        # reference backfill), not the blunt code-prefix heuristics.
+        req = code_range_requirements(code)
+        needs_tooth = req.requires_tooth
+        needs_surface = req.requires_surfaces
+        needs_radio = req.requires_radiograph or code in _IMAGING_CODES
 
     if needs_tooth and not line.tooth_numbers:
         missing.append(
@@ -185,9 +278,7 @@ def post_check_line(
         missing.append(
             MissingInfoItem(
                 code=MissingInfoCode.RADIOGRAPH_MISSING,
-                message=(
-                    f"Line {line.line_id}: radiographic documentation expected for {code}"
-                ),
+                message=(f"Line {line.line_id}: radiographic documentation expected for {code}"),
             )
         )
     if confidence < threshold:
@@ -223,9 +314,7 @@ def fetch_cdt_metadata(
         try:
             result = (
                 supabase.table(CDT_CODES)
-                .select(
-                    "code,description,requires_tooth,requires_surfaces,requires_radiograph"
-                )
+                .select("code,description,requires_tooth,requires_surfaces,requires_radiograph")
                 .in_("code", normalized)
                 .execute()
             )

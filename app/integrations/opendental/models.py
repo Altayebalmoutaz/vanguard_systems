@@ -52,6 +52,21 @@ class ODProcedureLog(BaseModel):
     CodeNum: int | None = None
 
 
+class ODProcedureCode(BaseModel):
+    """GET /procedurecodes row — the OD procedure catalog (a code dictionary, no PHI).
+
+    ``TreatArea`` is the authoritative source for whether a code needs a tooth
+    and/or surface. OD serializes it as an enum *name* (e.g. ``Surf``), but some
+    API versions emit an integer ordinal; normalize both at import time.
+    """
+
+    CodeNum: int | None = None
+    ProcCode: str | None = None
+    Descript: str | None = None
+    AbbrDesc: str | None = None
+    TreatArea: str | int | None = None
+
+
 class ODInsVerifyCreate(BaseModel):
     DateLastVerified: date
     VerifyType: Literal["PatientEnrollment", "InsuranceBenefit"] = "PatientEnrollment"

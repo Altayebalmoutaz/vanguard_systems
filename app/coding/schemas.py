@@ -102,6 +102,14 @@ class MissingInfoItem(BaseModel):
     message: str
 
 
+class AutonomyTier(str, Enum):
+    """How much the scribe UI can trust this line without dentist scrutiny."""
+
+    auto = "auto"  # calibrated-confident, valid, no blocking gaps, allowlisted/low-stakes
+    review = "review"  # default: show for a quick dentist confirm
+    ask = "ask"  # cannot code / blocking gap / invalid — must resolve first
+
+
 class LineRecommendation(BaseModel):
     line_id: str
     cdt_code: str | None = None
@@ -111,6 +119,7 @@ class LineRecommendation(BaseModel):
     icd10_codes: list[str] = Field(default_factory=list)
     required_supporting_documentation: list[str] = Field(default_factory=list)
     missing_info: list[MissingInfoItem] = Field(default_factory=list)
+    autonomy: AutonomyTier = AutonomyTier.review
 
 
 class CodingSuggestResponse(BaseModel):
@@ -125,3 +134,53 @@ class CodingSuggestResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     overall_confidence: float = Field(0.0, ge=0.0, le=1.0)
     idempotent_replay: bool = False
+
+
+class DecisionAction(str, Enum):
+    """What the dentist did with a suggested line, for ground-truth capture."""
+
+    approved = "approved"  # accepted the suggested CDT unchanged
+    edited = "edited"  # changed the CDT to a different code
+    rejected = "rejected"  # removed the line / no code billed
+    added = "added"  # dentist added a line the agent did not suggest
+
+
+class CodingDecisionLine(BaseModel):
+    line_id: str = Field(..., min_length=1, max_length=64)
+    action: DecisionAction
+    suggested_cdt: str | None = None
+    final_cdt: str | None = None
+    edit_reason: str | None = Field(default=None, max_length=500)
+
+    @field_validator("suggested_cdt", "final_cdt", mode="before")
+    @classmethod
+    def _norm_code(cls, value: object) -> str | None:
+        if value is None:
+            return None
+        text = str(value).upper().strip()
+        return text or None
+
+
+class CodingDecisionRequest(BaseModel):
+    """Dentist approve/edit/reject decisions for a prior suggest run (ground truth)."""
+
+    schema_version: str = Field(default=SCHEMA_VERSION)
+    practice_id: str = Field(..., min_length=1, max_length=128)
+    coding_run_id: UUID
+    request_id: UUID | None = None
+    decided_by: str | None = Field(default=None, max_length=128)
+    decisions: list[CodingDecisionLine] = Field(default_factory=list, min_length=1)
+
+    @model_validator(mode="after")
+    def _unique_line_ids(self) -> CodingDecisionRequest:
+        ids = [d.line_id for d in self.decisions]
+        if len(ids) != len(set(ids)):
+            raise ValueError("decisions[].line_id values must be unique")
+        return self
+
+
+class CodingDecisionResponse(BaseModel):
+    schema_version: str = SCHEMA_VERSION
+    coding_run_id: UUID
+    recorded: int = 0
+    status: Literal["recorded"] = "recorded"

@@ -45,6 +45,83 @@ Rules:
 - Do not invent line_ids that were not provided."""
 
 
+VERIFY_SYSTEM_PROMPT = """You are a senior dental coding auditor for US practices.
+You are given ONE procedure line, a candidate CDT code, its official description,
+and any payer notes. Confirm or correct the single best CDT code for this line.
+Return ONLY valid JSON (no markdown fences) with exactly these keys:
+- "cdt_code": string CDT you endorse (may equal or differ from the candidate)
+- "confidence": number 0.0-1.0 in the endorsed code
+- "explanation": one-sentence rationale
+Rules:
+- Prefer the candidate unless it is clearly wrong for the documented finding.
+- Respect the tooth/surface/material detail actually documented.
+- Do not invent unsupported procedures. Output only the three keys above."""
+
+
+def llm_verify_line(
+    settings: Settings,
+    *,
+    line_summary: str,
+    candidate_cdt: str,
+    candidate_description: str = "",
+    payer_notes: str = "",
+    timeout_seconds: float | None = None,
+    max_retries: int | None = None,
+) -> dict[str, Any]:
+    """Second-opinion pass for one high-stakes/low-confidence/conflict line.
+
+    Returns {"cdt_code", "confidence", "explanation"}. Raises on transport/JSON
+    errors so callers can degrade to the original recommendation.
+    """
+    if not settings.openrouter_api_key:
+        raise RuntimeError("OPENROUTER_API_KEY is not set")
+
+    safe_line = scrub_for_llm(line_summary or "")
+    safe_payer = scrub_for_llm((payer_notes or "").strip())
+    user_parts = [
+        f"Candidate CDT: {candidate_cdt}",
+        f"Candidate description: {candidate_description or '(none)'}",
+        "",
+        "Procedure line:",
+        safe_line,
+    ]
+    if safe_payer:
+        user_parts += ["", "Payer notes:", safe_payer]
+    user_content = "\n".join(user_parts) + "\n"
+
+    payload = {
+        "model": settings.openrouter_model,
+        "messages": [
+            {"role": "system", "content": VERIFY_SYSTEM_PROMPT},
+            {"role": "user", "content": user_content},
+        ],
+        "response_format": {"type": "json_object"},
+        "temperature": 0.0,
+    }
+    data = openrouter_chat_completion(
+        api_key=settings.openrouter_api_key,
+        payload=payload,
+        http_referer=settings.openrouter_http_referer or "https://localhost",
+        app_name=settings.app_name,
+        timeout_seconds=(
+            timeout_seconds if timeout_seconds is not None else settings.openrouter_timeout_seconds
+        ),
+        max_retries=(max_retries if max_retries is not None else settings.openrouter_max_retries),
+    )
+    content = data["choices"][0]["message"]["content"]
+    parsed = json.loads(_strip_json_fence(content))
+    code = parsed.get("cdt_code")
+    try:
+        conf = float(parsed.get("confidence") or 0.0)
+    except (TypeError, ValueError):
+        conf = 0.0
+    return {
+        "cdt_code": str(code).upper().strip() if code else None,
+        "confidence": max(0.0, min(1.0, conf)),
+        "explanation": str(parsed.get("explanation") or ""),
+    }
+
+
 def _strip_json_fence(text: str) -> str:
     text = text.strip()
     m = re.match(r"^```(?:json)?\s*([\s\S]*?)\s*```$", text, re.IGNORECASE)
@@ -102,13 +179,9 @@ def llm_generate_codes(
         http_referer=settings.openrouter_http_referer or "https://localhost",
         app_name=settings.app_name,
         timeout_seconds=(
-            timeout_seconds
-            if timeout_seconds is not None
-            else settings.openrouter_timeout_seconds
+            timeout_seconds if timeout_seconds is not None else settings.openrouter_timeout_seconds
         ),
-        max_retries=(
-            max_retries if max_retries is not None else settings.openrouter_max_retries
-        ),
+        max_retries=(max_retries if max_retries is not None else settings.openrouter_max_retries),
     )
 
     content = data["choices"][0]["message"]["content"]
@@ -178,13 +251,9 @@ def llm_generate_line_recommendations(
         http_referer=settings.openrouter_http_referer or "https://localhost",
         app_name=settings.app_name,
         timeout_seconds=(
-            timeout_seconds
-            if timeout_seconds is not None
-            else settings.openrouter_timeout_seconds
+            timeout_seconds if timeout_seconds is not None else settings.openrouter_timeout_seconds
         ),
-        max_retries=(
-            max_retries if max_retries is not None else settings.openrouter_max_retries
-        ),
+        max_retries=(max_retries if max_retries is not None else settings.openrouter_max_retries),
     )
 
     content = data["choices"][0]["message"]["content"]

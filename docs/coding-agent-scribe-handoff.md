@@ -85,7 +85,8 @@ Without a valid Bearer token you should receive **HTTP 401**.
 | `recommendations[]` | One per input `line_id` |
 | `recommendations[].cdt_code` | Suggested CDT or `null` |
 | `recommendations[].cdt_description` | When available from reference data |
-| `recommendations[].confidence` | 0.0–1.0 |
+| `recommendations[].confidence` | 0.0–1.0 (calibrated when a calibration map is fit) |
+| `recommendations[].autonomy` | `auto` (one-click accept), `review` (quick confirm), or `ask` (resolve gap first) |
 | `recommendations[].explanation` | Short clinical rationale for the dentist |
 | `recommendations[].icd10_codes` | ICD-10-CM suggestions for that line |
 | `recommendations[].required_supporting_documentation` | Docs expected for the code / payer |
@@ -103,11 +104,47 @@ Without a valid Bearer token you should receive **HTTP 401**.
 
 1. Dentist / scribe finishes structured lines in your UI.
 2. You `POST /v1/suggest` with a new `request_id`.
-3. Render `recommendations[]` for dentist approve / edit.
-4. If `status` is `needs_info`, prompt using `missing_info[].code` + `message`, then call again with a **new** `request_id` (or same id only if you intend idempotent replay of the prior result).
+3. **Always render `recommendations[]`, regardless of `status`.** `needs_info` means "prompts are available", not "no usable codes" — the suggested CDTs are still there for review.
+4. If `status` is `needs_info`, prompt using `missing_info[].code` + `message`. Note only **blocking** gaps (`TOOTH_MISSING`, `SURFACE_MISSING`, `FINDING_MISSING`, `PROCEDURE_EMPTY`, `CDT_UNCERTAIN`) set `needs_info`; the rest (`PAYER_MISSING`, `AGE_MISSING`, `SUPPORTING_NOTE_THIN`, `RADIOGRAPH_MISSING`) are advisory and keep `status = pending_review`.
 5. Keep `coding_run_id` on your side for support / audit correlation.
+6. **At dentist sign-off, `POST /v1/decision`** with what the dentist actually did per line (see below). This is required for accuracy measurement.
 
 Typical interactive latency target: under ~25s (LLM budget). Prefer `"fast": true` in the dentist chair unless you need retrieval enrichment.
+
+## Decision write-back (`POST /v1/decision`)
+
+Report what the dentist did with each suggested line so we can measure and improve CDT top-1 accuracy. Send one call per run at sign-off.
+
+```bash
+curl -fsS https://ezfi.smilesuite.ai/coding-agent/v1/decision \
+  -H "Authorization: Bearer KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "practice_id": "your_practice_id",
+    "coding_run_id": "<coding_run_id from /v1/suggest>",
+    "request_id": "<the suggest request_id (optional)>",
+    "decided_by": "dr_smith",
+    "decisions": [
+      { "line_id": "1", "action": "approved", "final_cdt": "D2392" },
+      { "line_id": "2", "action": "edited", "suggested_cdt": "D2740", "final_cdt": "D2750", "edit_reason": "PFM not all-ceramic" }
+    ]
+  }'
+```
+
+| Field | Required | Notes |
+| --- | --- | --- |
+| `practice_id` | **yes** | Your tenant id |
+| `coding_run_id` | **yes** | From the `/v1/suggest` response you are grading |
+| `request_id` | no | The suggest `request_id`, for correlation |
+| `decided_by` | no | Dentist/user id (opaque) |
+| `decisions[]` | **yes** (≥1) | One object per line |
+| `decisions[].line_id` | **yes** | Must match the suggested line |
+| `decisions[].action` | **yes** | `approved` \| `edited` \| `rejected` \| `added` |
+| `decisions[].suggested_cdt` | no | We backfill from the run if omitted |
+| `decisions[].final_cdt` | no | The code actually billed (null if rejected) |
+| `decisions[].edit_reason` | no | Short free text (why it changed) |
+
+Response: `{ "coding_run_id", "recorded": <count>, "status": "recorded" }`.
 
 ## Errors
 
@@ -125,4 +162,5 @@ Typical interactive latency target: under ~25s (LLM budget). Prefer `"fast": tru
 
 ## Changelog
 
+- **v1.1** — Add `POST /v1/decision` ground-truth write-back; split blocking vs advisory gaps (advisory gaps no longer force `needs_info`); crown/negated-recall false `needs_info` fixed via CDT documentation-requirement backfill.
 - **v1.0** — Initial partner API: sync suggest, line-level CDTs, gap codes, idempotency, Bearer auth.

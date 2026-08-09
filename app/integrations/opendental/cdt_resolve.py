@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any, Literal, Mapping
+from typing import Any, Literal
 
 # Seeded from local OD trial ``procedurecode`` catalog (T-codes → ADA CDT).
 OD_TRIAL_CODE_ALIASES: dict[str, str] = {
@@ -96,7 +97,7 @@ class ResolveResult:
 
 def resolve_od_proc_code(
     proc_code: str | None,
-    descript: str | None = None,  # noqa: ARG001 — reserved for Phase 2 descript aliases
+    descript: str | None = None,
 ) -> ResolvedCdt | None:
     """Map a single OD procCode to an ADA CDT, or None if unmapped."""
     raw = (proc_code or "").strip()

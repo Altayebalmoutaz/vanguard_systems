@@ -140,7 +140,7 @@ def validate_cdt_tool(supabase: Client | None, cdt_codes: list[str]) -> dict[str
     """
     Tool: verify CDT codes exist in `cdt_codes`.
 
-    Your hosted table is a small reference set (~52 codes) — good for dev/testing, not full ADA CDT.
+    The hosted reference holds the full CDT set (~699 codes), all embedded for retrieval.
     """
     cdt_flags: list[str] = []
     if not cdt_codes:
@@ -173,11 +173,6 @@ def validate_cdt_tool(supabase: Client | None, cdt_codes: list[str]) -> dict[str
             cdt_flags.append(
                 f"CDT {original} not in {CDT_CODES} reference ({reference_size} procedures loaded)"
             )
-
-    if reference_size and reference_size < 200:
-        cdt_flags.append(
-            f"Note: CDT reference is a limited test set ({reference_size} codes), not full ADA CDT."
-        )
 
     return {
         "invalid": invalid,

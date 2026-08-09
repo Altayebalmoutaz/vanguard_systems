@@ -1,0 +1,57 @@
+{
+  "name": "scribe_recall_negation_no_false_needs_info",
+  "request": {
+    "schema_version": "1.0",
+    "request_id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+    "practice_id": "vgd_mock_brooklyn",
+    "patient_id": "pat_eval_recall",
+    "provider_id": "prov_eval_1",
+    "encounter_datetime": "2026-08-06T09:00:00-04:00",
+    "payer": { "id": "62308", "name": "Cigna" },
+    "patient": { "age": 39 },
+    "procedures": [
+      {
+        "line_id": "1",
+        "tooth_numbers": [],
+        "surfaces": [],
+        "findings": ["periodic oral evaluation; no decay noted"],
+        "planned_or_performed": "performed"
+      },
+      {
+        "line_id": "2",
+        "tooth_numbers": [],
+        "surfaces": [],
+        "findings": ["adult prophylaxis; no decay noted"],
+        "planned_or_performed": "performed"
+      }
+    ],
+    "supporting_note": "Recall exam and cleaning. No decay noted on any surface.",
+    "attachments_present": ["bitewing_radiograph"],
+    "fast": true
+  },
+  "mock_llm": {
+    "recommendations": [
+      {
+        "line_id": "1",
+        "cdt_code": "D0120",
+        "confidence": 0.92,
+        "explanation": "Periodic oral evaluation",
+        "icd10_codes": []
+      },
+      {
+        "line_id": "2",
+        "cdt_code": "D1110",
+        "confidence": 0.9,
+        "explanation": "Adult prophylaxis",
+        "icd10_codes": []
+      }
+    ],
+    "overall_confidence": 0.91,
+    "justification": "Recall exam + prophy"
+  },
+  "expect": {
+    "status": "pending_review",
+    "line_cdt": { "1": "D0120", "2": "D1110" },
+    "min_overall_confidence": 0.85
+  }
+}

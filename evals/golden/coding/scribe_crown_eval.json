@@ -1,0 +1,43 @@
+{
+  "name": "scribe_crown_no_surface_false_gap",
+  "request": {
+    "schema_version": "1.0",
+    "request_id": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+    "practice_id": "vgd_mock_brooklyn",
+    "patient_id": "pat_eval_crown",
+    "provider_id": "prov_eval_1",
+    "encounter_datetime": "2026-08-06T11:00:00-04:00",
+    "payer": { "id": "62308", "name": "Cigna" },
+    "patient": { "age": 54 },
+    "procedures": [
+      {
+        "line_id": "1",
+        "tooth_numbers": ["3"],
+        "surfaces": [],
+        "findings": ["porcelain-fused-to-metal crown; fractured cusp"],
+        "planned_or_performed": "planned"
+      }
+    ],
+    "supporting_note": "Tooth #3 fractured cusp, crown indicated.",
+    "attachments_present": ["periapical_radiograph"],
+    "fast": true
+  },
+  "mock_llm": {
+    "recommendations": [
+      {
+        "line_id": "1",
+        "cdt_code": "D2750",
+        "confidence": 0.9,
+        "explanation": "Crown - porcelain fused to high noble metal",
+        "icd10_codes": ["K02.9"]
+      }
+    ],
+    "overall_confidence": 0.9,
+    "justification": "Crown on #3"
+  },
+  "expect": {
+    "status": "pending_review",
+    "line_cdt": { "1": "D2750" },
+    "min_overall_confidence": 0.85
+  }
+}

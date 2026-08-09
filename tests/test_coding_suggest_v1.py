@@ -14,7 +14,12 @@ from pydantic import ValidationError
 from app.coding.adapter import build_clinical_note, map_flat_codes_to_lines
 from app.coding.cache import cache_clear
 from app.coding.config import CodingSettings
-from app.coding.gaps import post_check_line, pre_check_line, pre_check_request
+from app.coding.gaps import (
+    has_blocking,
+    post_check_line,
+    pre_check_line,
+    pre_check_request,
+)
 from app.coding.main import app as coding_app
 from app.coding.schemas import (
     CodingSuggestRequest,
@@ -74,20 +79,88 @@ class TestCodingGaps(unittest.TestCase):
         missing = pre_check_request(req)
         self.assertTrue(any(m.code == MissingInfoCode.PAYER_MISSING for m in missing))
 
+    def test_negated_finding_is_not_restorative(self) -> None:
+        # "no decay noted" must not trigger tooth/surface gaps (negation-aware).
+        line = ProcedureLine(
+            line_id="1",
+            findings=["no decay noted"],
+            tooth_numbers=[],
+            surfaces=[],
+        )
+        codes = {m.code for m in pre_check_line(line)}
+        self.assertNotIn(MissingInfoCode.TOOTH_MISSING, codes)
+        self.assertNotIn(MissingInfoCode.SURFACE_MISSING, codes)
+
+    def test_crown_finding_requires_tooth_not_surface(self) -> None:
+        line = ProcedureLine(
+            line_id="1",
+            findings=["porcelain crown restoration"],
+            tooth_numbers=[],
+            surfaces=[],
+        )
+        codes = {m.code for m in pre_check_line(line)}
+        self.assertIn(MissingInfoCode.TOOTH_MISSING, codes)
+        self.assertNotIn(MissingInfoCode.SURFACE_MISSING, codes)
+
+    def test_post_check_db_precedence_suppresses_surface_for_crown(self) -> None:
+        line = ProcedureLine(line_id="1", tooth_numbers=["14"], surfaces=[])
+        missing = post_check_line(
+            line,
+            cdt_code="D2740",
+            attachments_present=[],
+            confidence=0.9,
+            threshold=0.75,
+            cdt_meta={
+                "requires_tooth": True,
+                "requires_surfaces": False,
+                "requires_radiograph": False,
+            },
+        )
+        codes = {m.code for m in missing}
+        self.assertNotIn(MissingInfoCode.SURFACE_MISSING, codes)
+        self.assertNotIn(MissingInfoCode.TOOTH_MISSING, codes)
+
+    def test_post_check_fallback_keeps_surface_for_unknown_filling(self) -> None:
+        # No DB metadata row -> code-range fallback still flags a filling surface.
+        line = ProcedureLine(line_id="1", tooth_numbers=["14"], surfaces=[])
+        missing = post_check_line(
+            line,
+            cdt_code="D2391",
+            attachments_present=[],
+            confidence=0.9,
+            threshold=0.75,
+            cdt_meta=None,
+        )
+        self.assertTrue(any(m.code == MissingInfoCode.SURFACE_MISSING for m in missing))
+
+    def test_radiograph_gap_is_advisory_not_blocking(self) -> None:
+        line = ProcedureLine(line_id="1", tooth_numbers=["3"], surfaces=[])
+        missing = post_check_line(
+            line,
+            cdt_code="D2740",
+            attachments_present=[],
+            confidence=0.9,
+            threshold=0.75,
+            cdt_meta={
+                "requires_tooth": True,
+                "requires_surfaces": False,
+                "requires_radiograph": True,
+            },
+        )
+        codes = {m.code for m in missing}
+        self.assertIn(MissingInfoCode.RADIOGRAPH_MISSING, codes)
+        self.assertFalse(has_blocking(missing))
+
 
 class TestCodingAdapter(unittest.TestCase):
     def test_build_clinical_note_includes_tooth(self) -> None:
-        req = CodingSuggestRequest.model_validate(
-            json.loads(FIXTURE.read_text(encoding="utf-8"))
-        )
+        req = CodingSuggestRequest.model_validate(json.loads(FIXTURE.read_text(encoding="utf-8")))
         note = build_clinical_note(req)
         self.assertIn("tooth=14", note)
         self.assertIn("surfaces=M, O", note)
 
     def test_map_flat_codes_to_lines(self) -> None:
-        req = CodingSuggestRequest.model_validate(
-            json.loads(FIXTURE.read_text(encoding="utf-8"))
-        )
+        req = CodingSuggestRequest.model_validate(json.loads(FIXTURE.read_text(encoding="utf-8")))
         mapped = map_flat_codes_to_lines(
             req,
             cdt_codes=["D2392", "D0120"],
@@ -138,9 +211,7 @@ class TestCodingSuggestService(unittest.TestCase):
         }
         run_id = UUID("22222222-2222-2222-2222-222222222222")
         mock_insert.return_value = run_id
-        req = CodingSuggestRequest.model_validate(
-            json.loads(FIXTURE.read_text(encoding="utf-8"))
-        )
+        req = CodingSuggestRequest.model_validate(json.loads(FIXTURE.read_text(encoding="utf-8")))
         settings = Settings(openrouter_api_key="test-key")
         cfg = CodingSettings(coding_confidence_review_threshold=0.75)
         out = run_coding_suggest(req, settings=settings, coding_settings=cfg)
@@ -204,17 +275,13 @@ class TestCodingSuggestService(unittest.TestCase):
             ],
             "payer_rules_matched": [],
         }
-        req = CodingSuggestRequest.model_validate(
-            json.loads(FIXTURE.read_text(encoding="utf-8"))
-        )
+        req = CodingSuggestRequest.model_validate(json.loads(FIXTURE.read_text(encoding="utf-8")))
         out = run_coding_suggest(
             req,
             settings=Settings(openrouter_api_key="test-key"),
             coding_settings=CodingSettings(coding_confidence_review_threshold=0.75),
         )
-        self.assertFalse(
-            any("none matched encounter insurance" in w for w in out.warnings)
-        )
+        self.assertFalse(any("none matched encounter insurance" in w for w in out.warnings))
         self.assertTrue(any("pre-op radiograph" in w for w in out.warnings))
 
     @patch("app.coding.service.insert_coding_run")
@@ -228,9 +295,7 @@ class TestCodingSuggestService(unittest.TestCase):
         _audit: MagicMock,
         mock_insert: MagicMock,
     ) -> None:
-        req = CodingSuggestRequest.model_validate(
-            json.loads(FIXTURE.read_text(encoding="utf-8"))
-        )
+        req = CodingSuggestRequest.model_validate(json.loads(FIXTURE.read_text(encoding="utf-8")))
         prior = {
             "id": "33333333-3333-3333-3333-333333333333",
             "response_payload": {
@@ -311,6 +376,142 @@ class TestCodingSuggestService(unittest.TestCase):
                 for m in out.recommendations[0].missing_info
             )
         )
+
+
+class TestCodingGapGateRegressions(unittest.TestCase):
+    """Regressions for the false-needs_info pilot bug (crowns + negated recall)."""
+
+    def setUp(self) -> None:
+        cache_clear()
+
+    def _run(self, data: dict, mock_llm_value: dict):
+        with (
+            patch(
+                "app.coding.service.llm_generate_line_recommendations",
+                return_value=mock_llm_value,
+            ),
+            patch("app.coding.service.fetch_run_by_request_id", return_value=None),
+            patch("app.coding.service.insert_coding_run", return_value=None),
+            patch("app.coding.service.write_audit_log"),
+            patch("app.coding.service.create_supabase", return_value=None),
+        ):
+            return run_coding_suggest(
+                CodingSuggestRequest.model_validate(data),
+                settings=Settings(openrouter_api_key="x"),
+                coding_settings=CodingSettings(coding_confidence_review_threshold=0.75),
+            )
+
+    def test_negated_recall_stays_pending_review(self) -> None:
+        data = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        data["procedures"] = [
+            {
+                "line_id": "1",
+                "findings": ["periodic oral evaluation; no decay noted"],
+                "planned_or_performed": "performed",
+            },
+            {
+                "line_id": "2",
+                "findings": ["adult prophylaxis; no decay noted"],
+                "planned_or_performed": "performed",
+            },
+        ]
+        data["supporting_note"] = "Recall visit. No decay noted. Prophy and exam."
+        out = self._run(
+            data,
+            {
+                "recommendations": [
+                    {
+                        "line_id": "1",
+                        "cdt_code": "D0120",
+                        "confidence": 0.9,
+                        "explanation": "eval",
+                        "icd10_codes": [],
+                    },
+                    {
+                        "line_id": "2",
+                        "cdt_code": "D1110",
+                        "confidence": 0.9,
+                        "explanation": "prophy",
+                        "icd10_codes": [],
+                    },
+                ],
+                "overall_confidence": 0.9,
+                "justification": "recall",
+            },
+        )
+        self.assertEqual(out.status, "pending_review")
+        self.assertEqual(out.recommendations[0].cdt_code, "D0120")
+        for rec in out.recommendations:
+            codes = {m.code for m in rec.missing_info}
+            self.assertNotIn(MissingInfoCode.TOOTH_MISSING, codes)
+            self.assertNotIn(MissingInfoCode.SURFACE_MISSING, codes)
+
+    def test_crown_without_surfaces_stays_pending_review(self) -> None:
+        data = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        data["procedures"] = [
+            {
+                "line_id": "1",
+                "tooth_numbers": ["3"],
+                "surfaces": [],
+                "findings": ["porcelain-fused-to-metal crown"],
+                "planned_or_performed": "planned",
+            },
+        ]
+        data["attachments_present"] = ["periapical_radiograph"]
+        out = self._run(
+            data,
+            {
+                "recommendations": [
+                    {
+                        "line_id": "1",
+                        "cdt_code": "D2750",
+                        "confidence": 0.9,
+                        "explanation": "crown",
+                        "icd10_codes": [],
+                    },
+                ],
+                "overall_confidence": 0.9,
+                "justification": "crown",
+            },
+        )
+        self.assertEqual(out.status, "pending_review")
+        self.assertNotIn(
+            MissingInfoCode.SURFACE_MISSING,
+            {m.code for m in out.recommendations[0].missing_info},
+        )
+
+    def test_advisory_only_gaps_stay_pending_review(self) -> None:
+        # Missing payer + age are advisory: valid codes must stay reviewable.
+        data = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        data["payer"] = {}
+        data["patient"] = {}
+        data["procedures"] = [
+            {
+                "line_id": "1",
+                "findings": ["periodic oral evaluation"],
+                "planned_or_performed": "performed",
+            },
+        ]
+        out = self._run(
+            data,
+            {
+                "recommendations": [
+                    {
+                        "line_id": "1",
+                        "cdt_code": "D0120",
+                        "confidence": 0.9,
+                        "explanation": "eval",
+                        "icd10_codes": [],
+                    },
+                ],
+                "overall_confidence": 0.9,
+                "justification": "eval",
+            },
+        )
+        self.assertEqual(out.status, "pending_review")
+        advisory = {m.code for m in out.global_missing_info}
+        self.assertIn(MissingInfoCode.PAYER_MISSING, advisory)
+        self.assertIn(MissingInfoCode.AGE_MISSING, advisory)
 
 
 class TestCodingHttpApi(unittest.TestCase):
