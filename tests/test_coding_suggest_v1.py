@@ -19,6 +19,7 @@ from app.coding.adapter import (
 )
 from app.coding.cache import cache_clear
 from app.coding.config import CodingSettings
+from app.coding.errors import CodingPersistenceError
 from app.coding.gaps import (
     has_blocking,
     post_check_line,
@@ -265,6 +266,54 @@ class TestCodingSuggestService(unittest.TestCase):
             )
         )
         mock_insert.assert_called_once()
+
+    @patch("app.coding.service.insert_coding_run", return_value=None)
+    @patch("app.coding.service.write_audit_log")
+    @patch("app.coding.service.fetch_run_by_request_id", return_value=None)
+    @patch("app.coding.service.create_supabase", return_value=None)
+    @patch("app.coding.service.llm_generate_line_recommendations")
+    def test_configured_persistence_failure_aborts_suggest(
+        self,
+        mock_llm: MagicMock,
+        _sb: MagicMock,
+        _fetch: MagicMock,
+        mock_audit: MagicMock,
+        _insert: MagicMock,
+    ) -> None:
+        mock_llm.return_value = {
+            "recommendations": [
+                {
+                    "line_id": "1",
+                    "cdt_code": "D2392",
+                    "confidence": 0.9,
+                    "explanation": "composite",
+                    "icd10_codes": [],
+                },
+                {
+                    "line_id": "2",
+                    "cdt_code": "D0120",
+                    "confidence": 0.9,
+                    "explanation": "eval",
+                    "icd10_codes": [],
+                },
+            ],
+            "overall_confidence": 0.9,
+            "justification": "ok",
+        }
+        req = CodingSuggestRequest.model_validate(
+            json.loads(FIXTURE.read_text(encoding="utf-8"))
+        )
+
+        with self.assertRaises(CodingPersistenceError):
+            run_coding_suggest(
+                req,
+                settings=Settings(
+                    openrouter_api_key="test-key",
+                    neon_database_url="postgresql://configured",
+                ),
+            )
+
+        mock_audit.assert_not_called()
 
     @patch("app.coding.service.insert_coding_run", return_value=None)
     @patch("app.coding.service.write_audit_log")
@@ -713,6 +762,20 @@ class TestCodingHttpApi(unittest.TestCase):
         body = res.json()
         self.assertEqual(body["recommendations"][0]["cdt_code"], "D2392")
         mock_run.assert_called_once()
+
+    @patch(
+        "app.coding.main.run_coding_suggest",
+        side_effect=CodingPersistenceError("database unavailable"),
+    )
+    def test_suggest_endpoint_returns_503_for_persistence_failure(
+        self, _mock_run: MagicMock
+    ) -> None:
+        req_data = json.loads(FIXTURE.read_text(encoding="utf-8"))
+
+        res = TestClient(coding_app).post("/v1/suggest", json=req_data)
+
+        self.assertEqual(res.status_code, 503)
+        self.assertIn("could not be saved", res.json()["detail"]["message"])
 
 
 if __name__ == "__main__":

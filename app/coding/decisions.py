@@ -7,6 +7,7 @@ from typing import Any
 
 from app.audit.writer import write_audit_log
 from app.coding.config import CodingSettings, get_coding_settings
+from app.coding.errors import CodingPersistenceError
 from app.coding.schemas import CodingDecisionRequest, CodingDecisionResponse
 from app.coding.store import fetch_run_by_id, insert_coding_decisions
 from app.config import Settings, get_settings
@@ -58,13 +59,6 @@ def run_record_decision(
                 "edit_reason": d.edit_reason,
             }
         )
-        inc("coding_decision_total", {"action": d.action.value})
-        # Top-1 signal: approved-unchanged (or edited-to-same) counts as a hit.
-        if suggested_cdt is not None:
-            hit = d.action.value == "approved" or (
-                d.final_cdt is not None and d.final_cdt == suggested_cdt
-            )
-            inc("coding_decision_top1", {"result": "hit" if hit else "miss"})
 
     recorded = insert_coding_decisions(
         app_settings,
@@ -75,6 +69,21 @@ def run_record_decision(
         payer_id=payer_id,
         decisions=decisions,
     )
+    if recorded != len(decisions):
+        raise CodingPersistenceError(
+            f"persisted {recorded} of {len(decisions)} coding decisions"
+        )
+
+    for decision in decisions:
+        action = str(decision["action"])
+        inc("coding_decision_total", {"action": action})
+        suggested_cdt = decision.get("suggested_cdt")
+        if suggested_cdt is not None:
+            final_cdt = decision.get("final_cdt")
+            hit = action == "approved" or (
+                final_cdt is not None and final_cdt == suggested_cdt
+            )
+            inc("coding_decision_top1", {"result": "hit" if hit else "miss"})
 
     try:
         write_audit_log(

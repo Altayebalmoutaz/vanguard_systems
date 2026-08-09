@@ -21,6 +21,7 @@ from app.coding.adapter import (
 from app.coding.autonomy import decide_tier, fetch_autonomy_allowlist
 from app.coding.calibration import CalibrationMap, calibrate
 from app.coding.config import CodingSettings, get_coding_settings
+from app.coding.errors import CodingPersistenceError
 from app.coding.gaps import (
     confidence_threshold,
     default_docs_for_code,
@@ -44,6 +45,7 @@ from app.coding.schemas import (
 )
 from app.coding.store import fetch_run_by_request_id, insert_coding_run
 from app.config import Settings, get_settings
+from app.db.connection import get_neon_dsn
 from app.integrations.supabase_client import create_supabase
 from app.llm.coding_llm import llm_generate_codes, llm_generate_line_recommendations
 from app.observability.metrics import inc
@@ -354,6 +356,12 @@ def run_coding_suggest(
         overall_confidence=response.overall_confidence,
     )
     response.coding_run_id = run_id
+    if run_id is None:
+        if get_neon_dsn(app_settings) or supabase is not None:
+            raise CodingPersistenceError("coding run could not be persisted")
+        response.warnings.append(
+            "Coding run was not persisted; decision capture is unavailable in offline mode"
+        )
     if run_id is not None:
         # A concurrent retry may have won the unique (practice_id, request_id)
         # insert with a different model response. Return the persisted winner so

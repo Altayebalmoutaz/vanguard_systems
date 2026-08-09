@@ -52,6 +52,10 @@ Example: see [`tests/fixtures/coding_suggest_request.json`](../tests/fixtures/co
 | `warnings[]` | string[] | Non-blocking diagnostics |
 | `idempotent_replay` | bool | `true` when same `request_id` was replayed |
 
+When configured durable storage is unavailable, suggest/decision writes return
+HTTP `503` instead of reporting an unpersisted run or decision as successful.
+Retry suggest with the same `request_id`; retry a decision with the identical body.
+
 ##### `missing_info.code` enums
 
 `TOOTH_MISSING`, `SURFACE_MISSING`, `FINDING_MISSING`, `RADIOGRAPH_MISSING`, `PAYER_MISSING`, `AGE_MISSING`, `PROCEDURE_EMPTY`, `SUPPORTING_NOTE_THIN`, `CDT_UNCERTAIN`, `OTHER`
