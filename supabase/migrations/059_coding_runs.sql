@@ -34,8 +34,6 @@ create or replace view public.coding_runs as
   select * from agents.coding_runs;
 
 grant select, insert, update, delete on agents.coding_runs to service_role;
-grant select, insert on agents.coding_runs to authenticated;
 grant select, insert, update, delete on public.coding_runs to service_role;
-grant select, insert on public.coding_runs to authenticated;
 
 commit;
