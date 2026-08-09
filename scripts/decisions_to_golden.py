@@ -76,11 +76,15 @@ def _to_case(miss: dict[str, Any]) -> dict[str, Any] | None:
     final_cdt = miss.get("final_cdt")
     # mock_llm reproduces the ORIGINAL model output so the case is deterministic;
     # the expectation is the dentist's corrected code (the lesson to learn).
-    mock_llm = {
-        "recommendations": response_payload.get("recommendations") or [],
-        "overall_confidence": response_payload.get("overall_confidence") or 0.0,
-        "justification": response_payload.get("justification") or "",
-    }
+    mock_llm = scrub_for_llm(
+        {
+            "recommendations": response_payload.get("recommendations") or [],
+            "overall_confidence": response_payload.get("overall_confidence") or 0.0,
+            "justification": response_payload.get("justification") or "",
+        }
+    )
+    if not isinstance(mock_llm, dict):  # defensive: recursive scrub preserves mappings
+        return None
     expect: dict[str, Any] = {}
     if miss.get("action") == "edited" and final_cdt:
         expect["line_cdt"] = {line_id: str(final_cdt).upper().strip()}
