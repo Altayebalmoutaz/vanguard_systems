@@ -22,6 +22,7 @@ from app.coding.gaps import (
 )
 from app.coding.main import app as coding_app
 from app.coding.schemas import (
+    AutonomyTier,
     CodingSuggestRequest,
     MissingInfoCode,
     ProcedureLine,
@@ -168,7 +169,15 @@ class TestCodingGaps(unittest.TestCase):
         self.assertIn(MissingInfoCode.RADIOGRAPH_MISSING, codes)
         self.assertFalse(has_blocking(missing))
 
-    def test_srp_with_quadrant_still_needs_tooth_count(self) -> None:
+    def test_tooth_and_surface_gaps_are_advisory_not_blocking(self) -> None:
+        line = ProcedureLine(line_id="1", findings=["interproximal caries"])
+        missing = pre_check_line(line)
+        codes = {m.code for m in missing}
+        self.assertIn(MissingInfoCode.TOOTH_MISSING, codes)
+        self.assertIn(MissingInfoCode.SURFACE_MISSING, codes)
+        self.assertFalse(has_blocking(missing))
+
+    def test_srp_with_quadrant_and_no_teeth_is_advisory(self) -> None:
         line = ProcedureLine(line_id="P3-UR", quadrant="UR", findings=["SRP"])
         missing = post_check_line(
             line,
@@ -182,7 +191,9 @@ class TestCodingGaps(unittest.TestCase):
                 "requires_radiograph": False,
             },
         )
-        self.assertTrue(any(m.code == MissingInfoCode.TOOTH_MISSING for m in missing))
+        self.assertFalse(any(m.code == MissingInfoCode.TOOTH_MISSING for m in missing))
+        self.assertTrue(any(m.code == MissingInfoCode.OTHER for m in missing))
+        self.assertFalse(has_blocking(missing))
 
     def test_srp_with_quadrant_and_four_teeth_is_complete(self) -> None:
         line = ProcedureLine(
@@ -207,7 +218,7 @@ class TestCodingGaps(unittest.TestCase):
         self.assertNotIn(MissingInfoCode.TOOTH_MISSING, codes)
         self.assertNotIn(MissingInfoCode.CDT_UNCERTAIN, codes)
 
-    def test_irrigation_without_quadrant_is_uncertain(self) -> None:
+    def test_irrigation_without_quadrant_is_advisory(self) -> None:
         line = ProcedureLine(line_id="P5", findings=["Gingival irrigation"])
         missing = post_check_line(
             line,
@@ -221,7 +232,9 @@ class TestCodingGaps(unittest.TestCase):
                 "requires_radiograph": False,
             },
         )
-        self.assertTrue(any(m.code == MissingInfoCode.CDT_UNCERTAIN for m in missing))
+        self.assertTrue(any(m.code == MissingInfoCode.OTHER for m in missing))
+        self.assertFalse(any(m.code == MissingInfoCode.CDT_UNCERTAIN for m in missing))
+        self.assertFalse(has_blocking(missing))
 
     def test_irrigation_with_findings_quadrant_token_is_complete(self) -> None:
         line = ProcedureLine(
@@ -439,7 +452,7 @@ class TestCodingSuggestService(unittest.TestCase):
     @patch("app.coding.service.fetch_run_by_request_id", return_value=None)
     @patch("app.coding.service.create_supabase", return_value=None)
     @patch("app.coding.service.llm_generate_line_recommendations")
-    def test_needs_info_when_surface_missing(
+    def test_surface_missing_stays_pending_review(
         self,
         mock_llm: MagicMock,
         _sb: MagicMock,
@@ -477,7 +490,8 @@ class TestCodingSuggestService(unittest.TestCase):
             settings=Settings(openrouter_api_key="x"),
             coding_settings=CodingSettings(coding_confidence_review_threshold=0.75),
         )
-        self.assertEqual(out.status, "needs_info")
+        self.assertEqual(out.status, "pending_review")
+        self.assertEqual(out.recommendations[0].cdt_code, "D2391")
         self.assertTrue(
             any(
                 m.code == MissingInfoCode.SURFACE_MISSING
@@ -620,6 +634,200 @@ class TestCodingGapGateRegressions(unittest.TestCase):
         advisory = {m.code for m in out.global_missing_info}
         self.assertIn(MissingInfoCode.PAYER_MISSING, advisory)
         self.assertIn(MissingInfoCode.AGE_MISSING, advisory)
+
+    def test_quadrant_only_srp_stays_pending_review(self) -> None:
+        data = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        data["procedures"] = [
+            {
+                "line_id": "I",
+                "quadrant": "UR",
+                "findings": ["Non-surgical periodontal therapy"],
+                "planned_or_performed": "planned",
+            },
+        ]
+        data["attachments_present"] = ["full_mouth_series"]
+        out = self._run(
+            data,
+            {
+                "recommendations": [
+                    {
+                        "line_id": "I",
+                        "cdt_code": "D4341",
+                        "confidence": 0.9,
+                        "explanation": "srp",
+                        "icd10_codes": ["K05.3"],
+                    },
+                ],
+                "overall_confidence": 0.9,
+                "justification": "srp",
+            },
+        )
+        self.assertEqual(out.status, "pending_review")
+        self.assertEqual(out.recommendations[0].cdt_code, "D4341")
+        self.assertFalse(has_blocking(out.recommendations[0].missing_info))
+
+    def test_crown_without_material_keeps_d2740_ask(self) -> None:
+        data = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        data["procedures"] = [
+            {
+                "line_id": "G",
+                "tooth_numbers": ["15"],
+                "findings": ["Replacement of existing full gold crown"],
+                "planned_or_performed": "planned",
+            },
+        ]
+        data["attachments_present"] = ["periapical_radiograph"]
+        out = self._run(
+            data,
+            {
+                "recommendations": [
+                    {
+                        "line_id": "G",
+                        "cdt_code": "D2740",
+                        "confidence": 0.85,
+                        "explanation": "crown",
+                        "icd10_codes": [],
+                    },
+                ],
+                "overall_confidence": 0.85,
+                "justification": "crown",
+            },
+        )
+        rec = out.recommendations[0]
+        self.assertEqual(out.status, "pending_review")
+        self.assertEqual(rec.cdt_code, "D2740")
+        self.assertEqual(rec.autonomy, AutonomyTier.ask)
+        self.assertTrue(any("crown material" in w for w in out.warnings))
+
+    def test_irrigation_all_quadrants_stays_pending_review(self) -> None:
+        data = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        data["procedures"] = [
+            {
+                "line_id": "N",
+                "findings": ["Gingival irrigation, all four quadrants"],
+                "planned_or_performed": "planned",
+            },
+        ]
+        out = self._run(
+            data,
+            {
+                "recommendations": [
+                    {
+                        "line_id": "N",
+                        "cdt_code": "D4921",
+                        "confidence": 0.8,
+                        "explanation": "irrigation",
+                        "icd10_codes": [],
+                    },
+                ],
+                "overall_confidence": 0.8,
+                "justification": "irrigation",
+            },
+        )
+        rec = out.recommendations[0]
+        self.assertEqual(out.status, "pending_review")
+        self.assertEqual(rec.cdt_code, "D4921")
+        self.assertFalse(has_blocking(rec.missing_info))
+        self.assertTrue(any(m.code == MissingInfoCode.OTHER for m in rec.missing_info))
+
+    def test_spoken_encounter_without_ppe_is_pending_review(self) -> None:
+        data = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        data["procedures"] = [
+            {
+                "line_id": "A",
+                "findings": ["Periodontal evaluation with periodontal charting"],
+                "planned_or_performed": "performed",
+            },
+            {
+                "line_id": "B",
+                "findings": ["Full mouth series"],
+                "planned_or_performed": "performed",
+            },
+            {
+                "line_id": "E",
+                "findings": ["Oral hygiene instructions"],
+                "planned_or_performed": "performed",
+            },
+            {
+                "line_id": "G",
+                "tooth_numbers": ["15"],
+                "findings": ["Replacement of existing full gold crown"],
+                "planned_or_performed": "planned",
+            },
+            {
+                "line_id": "I",
+                "quadrant": "UR",
+                "findings": ["Non-surgical periodontal therapy"],
+                "planned_or_performed": "planned",
+            },
+            {
+                "line_id": "N",
+                "findings": ["Gingival irrigation, all four quadrants"],
+                "planned_or_performed": "planned",
+            },
+        ]
+        data["attachments_present"] = ["full_mouth_series"]
+        out = self._run(
+            data,
+            {
+                "recommendations": [
+                    {
+                        "line_id": "A",
+                        "cdt_code": "D0180",
+                        "confidence": 0.9,
+                        "explanation": "perio eval",
+                        "icd10_codes": [],
+                    },
+                    {
+                        "line_id": "B",
+                        "cdt_code": "D0210",
+                        "confidence": 0.9,
+                        "explanation": "fmx",
+                        "icd10_codes": [],
+                    },
+                    {
+                        "line_id": "E",
+                        "cdt_code": "D1330",
+                        "confidence": 0.9,
+                        "explanation": "ohi",
+                        "icd10_codes": [],
+                    },
+                    {
+                        "line_id": "G",
+                        "cdt_code": "D2740",
+                        "confidence": 0.85,
+                        "explanation": "crown",
+                        "icd10_codes": [],
+                    },
+                    {
+                        "line_id": "I",
+                        "cdt_code": "D4341",
+                        "confidence": 0.9,
+                        "explanation": "srp",
+                        "icd10_codes": [],
+                    },
+                    {
+                        "line_id": "N",
+                        "cdt_code": "D4921",
+                        "confidence": 0.8,
+                        "explanation": "irrigation",
+                        "icd10_codes": [],
+                    },
+                ],
+                "overall_confidence": 0.88,
+                "justification": "spoken encounter",
+            },
+        )
+        self.assertEqual(out.status, "pending_review")
+        by_id = {r.line_id: r for r in out.recommendations}
+        self.assertEqual(by_id["A"].cdt_code, "D0180")
+        self.assertEqual(by_id["B"].cdt_code, "D0210")
+        self.assertEqual(by_id["E"].cdt_code, "D1330")
+        self.assertEqual(by_id["G"].cdt_code, "D2740")
+        self.assertEqual(by_id["I"].cdt_code, "D4341")
+        self.assertEqual(by_id["N"].cdt_code, "D4921")
+        for rec in out.recommendations:
+            self.assertFalse(has_blocking(rec.missing_info))
 
 
 class TestCodingHttpApi(unittest.TestCase):

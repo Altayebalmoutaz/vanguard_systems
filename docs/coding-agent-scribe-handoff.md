@@ -12,9 +12,9 @@ chart lines  →  POST /v1/suggest  →  dentist reviews CDTs  →  POST /v1/dec
 
 1. Scribe finishes structured lines in your UI.
 2. You `POST /v1/suggest` (fresh `request_id` per encounter). Same id = same saved result.
-3. We suggest a CDT per line, check it against the CDT catalog, and return it for review. Always render `recommendations[]` — even when `status` is `needs_info`.
-4. Dentist approve / edit / reject in your UI.
-5. At sign-off, `POST /v1/decision` with what they actually billed. Required for accuracy measurement.
+3. We suggest a CDT per line and return it for dentist review. Always render `recommendations[]` — even when `status` is `needs_info`.
+4. Dentist approve / edit / reject in your UI, then writeback to Open Dental.
+5. At sign-off, `POST /v1/decision` with what the dentist actually billed. Required for accuracy measurement.
 
 Chairside coding does **not** apply payer bundling/downcodes (that is downstream RCM). `fast: true` keeps routine visits snappy; non-routine lines may still use CDT retrieval.
 
@@ -82,7 +82,7 @@ Without a valid Bearer token you should receive **HTTP 401**.
 | `patient.age` | recommended | Clinical context for the model |
 | `procedures[]` | **yes** (≥1) | One object per chart line |
 | `procedures[].line_id` | **yes** | Unique within the request |
-| `procedures[].tooth_numbers` | no | e.g. `["14"]`. Needed on SRP lines to choose D4341 (4+) vs D4342 (1–3). |
+| `procedures[].tooth_numbers` | no | e.g. `["14"]`. Optional. On SRP, quadrant without teeth still suggests D4341; listed teeth choose D4341 (4+) vs D4342 (1–3). |
 | `procedures[].surfaces` | no | e.g. `["M","O"]` |
 | `procedures[].quadrant` | no | `UR` \| `UL` \| `LR` \| `LL`. Additive; does not bump `schema_version`. |
 | `procedures[].arch` | no | `maxillary` \| `mandibular` \| `full_mouth` |
@@ -99,12 +99,12 @@ Without a valid Bearer token you should receive **HTTP 401**.
 | Field | Notes |
 | --- | --- |
 | `coding_run_id` | Our persisted run id |
-| `status` | `pending_review` (ready for dentist) or `needs_info` (gaps to fill) |
+| `status` | `pending_review` (codes ready for dentist) or `needs_info` (no code could be suggested on at least one blocking line) |
 | `recommendations[]` | One per input `line_id` |
 | `recommendations[].cdt_code` | Suggested CDT or `null` |
 | `recommendations[].cdt_description` | When available from reference data |
 | `recommendations[].confidence` | 0.0–1.0 (calibrated when a calibration map is fit) |
-| `recommendations[].autonomy` | `auto` (one-click accept), `review` (quick confirm), or `ask` (resolve gap first) |
+| `recommendations[].autonomy` | `auto` (one-click accept), `review` (quick confirm), or `ask` (dentist must confirm — low confidence, no CDT, or blocking gap) |
 | `recommendations[].explanation` | Short clinical rationale for the dentist |
 | `recommendations[].icd10_codes` | ICD-10-CM suggestions for that line |
 | `recommendations[].required_supporting_documentation` | Docs typically expected for that CDT |
@@ -122,8 +122,8 @@ Without a valid Bearer token you should receive **HTTP 401**.
 
 1. Dentist / scribe finishes structured lines in your UI.
 2. You `POST /v1/suggest` with a new `request_id`.
-3. **Always render `recommendations[]`, regardless of `status`.** `needs_info` means "prompts are available", not "no usable codes" — the suggested CDTs are still there for review. Use `autonomy` (`auto` / `review` / `ask`) to style the line.
-4. If `status` is `needs_info`, prompt using `missing_info[].code` + `message`. Only **blocking** gaps (`TOOTH_MISSING`, `SURFACE_MISSING`, `FINDING_MISSING`, `PROCEDURE_EMPTY`, `CDT_UNCERTAIN`) set `needs_info`; the rest (`PAYER_MISSING`, `AGE_MISSING`, `SUPPORTING_NOTE_THIN`, `RADIOGRAPH_MISSING`) are advisory and keep `status = pending_review`.
+3. **Always render `recommendations[]`, regardless of `status`.** This is a chairside suggestion, not a claim. Use `autonomy` (`auto` / `review` / `ask`) to style the line.
+4. `needs_info` means we could not suggest a code on at least one line (blocking: `PROCEDURE_EMPTY`, `CDT_UNCERTAIN` when `cdt_code` is null). Tooth, surface, material, quadrant, payer, age, and radiograph notes are **advisory**: they stay on the line and keep `status = pending_review`. Prompt with `missing_info[].code` + `message` as optional dentist hints, not as a hard stop.
 5. Keep `coding_run_id` on your side for support / audit correlation.
 6. **At dentist sign-off, `POST /v1/decision`** with what the dentist actually did per line (see below). This is required for accuracy measurement.
 
@@ -180,7 +180,8 @@ Response: `{ "coding_run_id", "recorded": <count>, "status": "recorded" }`.
 
 ## Changelog
 
-- **v1.4** — Additive `procedures[].quadrant` (`UR`/`UL`/`LR`/`LL`) and `procedures[].arch` (`maxillary`/`mandibular`/`full_mouth`). SRP tooth-count chooses D4341 vs D4342; D4921 requires a quadrant. Findings token `quadrant: UR` still works.
+- **v1.5** — Chairside suggestion posture: missing teeth, surfaces, crown material, or per-line quadrant no longer force `needs_info` or a null code. Quadrant-only SRP suggests D4341; undocumented crown material keeps D2740 with a confirm warning; D4921 without a quadrant stays D4921. `needs_info` only when no CDT could be suggested.
+- **v1.4** — Additive `procedures[].quadrant` (`UR`/`UL`/`LR`/`LL`) and `procedures[].arch` (`maxillary`/`mandibular`/`full_mouth`). SRP tooth-count chooses D4341 vs D4342 when teeth are listed. Findings token `quadrant: UR` still works.
 - **v1.3** — Recognize `full_mouth_series` / `fmx` as radiographs; ignore anatomic "buccal mucosa" / furcation sites and existing-restoration narrative on crown lines for surface gaps; deterministic guards for missing crown material, D4346-as-laser, D4921 irrigation, and same-day D0150/D0180. Perio (`D43`) is high-stakes; D4346 always gets a verifier pass.
 - **v1.2** — Document live chairside flow: suggest → dentist review → decision write-back. Payer adjudication is not part of this path. `fast` skips retrieval on routine visits only.
 - **v1.1** — Add `POST /v1/decision` ground-truth write-back; split blocking vs advisory gaps (advisory gaps no longer force `needs_info`); crown/negated-recall false `needs_info` fixed via CDT documentation-requirement backfill.

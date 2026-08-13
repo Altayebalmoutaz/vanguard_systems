@@ -26,7 +26,7 @@ Synchronous. Scribe sends structured clinical JSON; coding returns line-level CD
 | `patient.age` | int | recommended | Age-gated payer rules |
 | `procedures[]` | array | yes (≥1) | One object per chart line |
 | `procedures[].line_id` | string | yes | Unique within the request |
-| `procedures[].tooth_numbers` | string[] | no | e.g. `["14"]`. Required for D4341 vs D4342 (1–3 vs 4+ teeth in the quadrant). |
+| `procedures[].tooth_numbers` | string[] | no | e.g. `["14"]`. Optional. Quadrant-only SRP suggests D4341; listed teeth choose D4341 (4+) vs D4342 (1–3). |
 | `procedures[].surfaces` | string[] | no | e.g. `["M","O"]` |
 | `procedures[].quadrant` | enum | no | `UR` \| `UL` \| `LR` \| `LL`. Additive; use for SRP, irrigation, perio surgery. Aliases like `upper right` are accepted. |
 | `procedures[].arch` | enum | no | `maxillary` \| `mandibular` \| `full_mouth` |
@@ -43,7 +43,7 @@ Example: see [`tests/fixtures/coding_suggest_request.json`](../tests/fixtures/co
 | Field | Type | Notes |
 | --- | --- | --- |
 | `coding_run_id` | uuid | Persisted system-of-record id |
-| `status` | enum | `pending_review` or `needs_info` |
+| `status` | enum | `pending_review` (codes ready) or `needs_info` (no CDT could be suggested) |
 | `recommendations[]` | array | One per `line_id` |
 | `recommendations[].cdt_code` | string\|null | Recommended CDT |
 | `recommendations[].confidence` | 0–1 | Per-line |
@@ -57,6 +57,8 @@ Example: see [`tests/fixtures/coding_suggest_request.json`](../tests/fixtures/co
 ##### `missing_info.code` enums
 
 `TOOTH_MISSING`, `SURFACE_MISSING`, `FINDING_MISSING`, `RADIOGRAPH_MISSING`, `PAYER_MISSING`, `AGE_MISSING`, `PROCEDURE_EMPTY`, `SUPPORTING_NOTE_THIN`, `CDT_UNCERTAIN`, `OTHER`
+
+Only `PROCEDURE_EMPTY` and `CDT_UNCERTAIN` (no code produced) are blocking and set `status = needs_info`. Tooth, surface, material, quadrant, payer, age, and radiograph notes are advisory.
 
 ## Health
 

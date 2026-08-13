@@ -250,7 +250,7 @@ class AutonomyTier(str, Enum):
 
     auto = "auto"  # calibrated-confident, valid, no blocking gaps, allowlisted/low-stakes
     review = "review"  # default: show for a quick dentist confirm
-    ask = "ask"  # cannot code / blocking gap / invalid — must resolve first
+    ask = "ask"  # no CDT, blocking gap, invalid, or low confidence — dentist must confirm
 
 
 class LineRecommendation(BaseModel):
