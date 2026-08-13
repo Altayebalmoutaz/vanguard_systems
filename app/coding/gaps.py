@@ -63,20 +63,106 @@ _IMAGING_CODES = frozenset(
         "D0372",
     }
 )
+# Whole-token aliases from scribe payloads (normalized: lowercase, non-alnum → _).
+_RADIOGRAPH_ATTACHMENT_ALIASES = frozenset(
+    {
+        "full_mouth_series",
+        "full_mouth_radiograph",
+        "fullmouth_series",
+        "complete_series",
+        "intraoral_complete_series",
+        "fmx",
+        "fms",
+        "bitewing",
+        "bitewings",
+        "bitewing_radiograph",
+        "periapical",
+        "periapical_radiograph",
+        "pano",
+        "panoramic",
+        "panoramic_radiograph",
+        "cbct",
+        "xray",
+        "x_ray",
+        "radiograph",
+    }
+)
 _RADIOGRAPH_ATTACHMENT_HINTS = (
     "radiograph",
     "xray",
     "x-ray",
+    "x_ray",
     "bitewing",
     "pano",
+    "panoramic",
     "periapical",
-    "pa",
+    "fmx",
+    "fms",
+    "full_mouth",
+    "fullmouth",
     "cbct",
     "image",
 )
 
 
+# Soft-tissue followers that mean buccal/lingual/mesial/distal is anatomy, not a
+# restorative surface (e.g. "buccal mucosa", "lingual gingiva").
+_SOFT_TISSUE_FOLLOWERS = (
+    "mucosa",
+    "mucosal",
+    "gingiva",
+    "gingival",
+    "papilla",
+    "vestibule",
+    "tissue",
+    "tissues",
+    "frenum",
+    "frena",
+)
+_ANATOMIC_SURFACE_WORDS = frozenset({"buccal", "lingual", "mesial", "distal", "facial", "labial"})
+
+# Exam / imaging / hygiene lines are not restorative even if they mention anatomy.
+_EXAM_OR_DIAGNOSTIC_TOKENS = (
+    "examination",
+    "exam",
+    "evaluation",
+    "periodic oral",
+    "comprehensive oral",
+    "limited oral",
+    "periodontal evaluation",
+    "periodontal chart",
+    "periodontal charting",
+    "oral hygiene",
+    "prophylaxis",
+    "prophy",
+    "pre-procedural",
+    "ppe",
+)
+_IMAGING_LINE_TOKENS = (
+    "x-ray",
+    "xray",
+    "radiograph",
+    "full mouth",
+    "bitewing",
+    "periapical",
+    "panoramic",
+    "cbct",
+    "fmx",
+)
+_CROWN_PROCEDURE_TOKENS = ("crown", "onlay", "inlay", "veneer")
+_FILLING_PROCEDURE_TOKENS = (
+    "composite",
+    "amalgam",
+    "filling",
+    "caries",
+    "decay",
+    "cavity",
+    "occlusal",
+    "interproximal",
+)
+
 # Findings that imply a tooth-specific procedure (restorative / crown / endo etc.).
+# Buccal/lingual/mesial/distal are handled separately — they are often anatomy.
 _RESTORATIVE_TOKENS = (
     "caries",
     "decay",
@@ -90,10 +176,6 @@ _RESTORATIVE_TOKENS = (
     "inlay",
     "occlusal",
     "interproximal",
-    "mesial",
-    "distal",
-    "buccal",
-    "lingual",
 )
 # Findings that specifically imply a *surface* is codeable (excludes crown/caries
 # alone, which need a tooth but not necessarily a surface).
@@ -131,9 +213,15 @@ _NEGATION_CUES = frozenset(
 )
 
 
+def findings_blob(line: ProcedureLine) -> str:
+    return " ".join(line.findings).lower()
+
+
 def _token_present_unnegated(blob: str, token: str) -> bool:
     """True if ``token`` appears on a word boundary and is not negated nearby."""
     for m in re.finditer(r"\b" + re.escape(token) + r"\b", blob):
+        if _anatomic_not_restorative(blob, m):
+            continue
         # Only look back within the current clause (stop at punctuation).
         clause_prefix = re.split(r"[.,;:]", blob[: m.start()])[-1]
         prev_words = re.findall(r"[a-z/]+", clause_prefix)[-3:]
@@ -143,9 +231,40 @@ def _token_present_unnegated(blob: str, token: str) -> bool:
     return False
 
 
+def _anatomic_not_restorative(blob: str, match: re.Match[str]) -> bool:
+    """Skip buccal/lingual/etc. when they name soft tissue or furcation sites."""
+    token = match.group(0).lower()
+    if token not in _ANATOMIC_SURFACE_WORDS:
+        return False
+    nxt = blob[match.end() :].lstrip()
+    if any(nxt.startswith(w) for w in _SOFT_TISSUE_FOLLOWERS):
+        return True
+    prefix = blob[max(0, match.start() - 48) : match.start()].lower()
+    return "furcation" in prefix or "recession" in prefix
+
+
 def _any_unnegated(findings: list[str], tokens: tuple[str, ...]) -> bool:
     blob = " ".join(findings).lower()
     return any(_token_present_unnegated(blob, tok) for tok in tokens)
+
+
+def looks_exam_or_diagnostic(line: ProcedureLine) -> bool:
+    """True for exam/eval/imaging/hygiene lines that are not the billed restoration."""
+    blob = findings_blob(line)
+    diagnostic = any(tok in blob for tok in _EXAM_OR_DIAGNOSTIC_TOKENS) or any(
+        tok in blob for tok in _IMAGING_LINE_TOKENS
+    )
+    if not diagnostic:
+        return False
+    return not looks_crown_procedure(line) and not looks_filling_procedure(line)
+
+
+def looks_crown_procedure(line: ProcedureLine) -> bool:
+    return _any_unnegated(line.findings, _CROWN_PROCEDURE_TOKENS)
+
+
+def looks_filling_procedure(line: ProcedureLine) -> bool:
+    return _any_unnegated(line.findings, _FILLING_PROCEDURE_TOKENS)
 
 
 def _looks_restorative_from_findings(line: ProcedureLine) -> bool:
@@ -161,11 +280,34 @@ def pre_check_line(line: ProcedureLine) -> list[MissingInfoItem]:
     """Gaps known before coding (tooth/surface/findings).
 
     A tooth is required whenever the finding is tooth-specific; a surface is only
-    required when the finding specifically implies one (so crowns/caries-only
-    notes do not spuriously demand a surface).
+    required when the finding specifically implies a filling (so crowns, exams,
+    and anatomic "buccal mucosa" / furcation notes do not demand a surface).
     """
     missing: list[MissingInfoItem] = []
-    restorative = _looks_restorative_from_findings(line)
+    empty = not line.findings and not line.tooth_numbers and not line.surfaces
+    if empty:
+        missing.append(
+            MissingInfoItem(
+                code=MissingInfoCode.FINDING_MISSING,
+                message=f"Line {line.line_id}: provide findings and/or tooth/surface detail",
+            )
+        )
+        return missing
+
+    if looks_exam_or_diagnostic(line):
+        return missing
+
+    if looks_crown_procedure(line):
+        if not line.tooth_numbers:
+            missing.append(
+                MissingInfoItem(
+                    code=MissingInfoCode.TOOTH_MISSING,
+                    message=f"Line {line.line_id}: tooth number required for restorative finding",
+                )
+            )
+        return missing
+
+    restorative = _looks_restorative_from_findings(line) or looks_filling_procedure(line)
     if restorative and not line.tooth_numbers:
         missing.append(
             MissingInfoItem(
@@ -178,13 +320,6 @@ def pre_check_line(line: ProcedureLine) -> list[MissingInfoItem]:
             MissingInfoItem(
                 code=MissingInfoCode.SURFACE_MISSING,
                 message=f"Line {line.line_id}: surface(s) required for this restorative finding",
-            )
-        )
-    if not line.findings and not line.tooth_numbers and not line.surfaces:
-        missing.append(
-            MissingInfoItem(
-                code=MissingInfoCode.FINDING_MISSING,
-                message=f"Line {line.line_id}: provide findings and/or tooth/surface detail",
             )
         )
     return missing
@@ -294,9 +429,21 @@ def post_check_line(
     return missing
 
 
+def _normalize_attachment(token: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", (token or "").lower()).strip("_")
+
+
 def _has_radiograph_attachment(attachments: list[str]) -> bool:
-    joined = " ".join(attachments).lower()
-    return any(hint in joined for hint in _RADIOGRAPH_ATTACHMENT_HINTS)
+    for raw in attachments:
+        text = (raw or "").strip().lower()
+        if not text:
+            continue
+        norm = _normalize_attachment(text)
+        if norm in _RADIOGRAPH_ATTACHMENT_ALIASES:
+            return True
+        if any(hint in text or hint in norm for hint in _RADIOGRAPH_ATTACHMENT_HINTS):
+            return True
+    return False
 
 
 def fetch_cdt_metadata(

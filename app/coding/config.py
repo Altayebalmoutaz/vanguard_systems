@@ -57,13 +57,15 @@ class CodingSettings(BaseSettings):
         default=True, validation_alias="CODING_RETRIEVAL_DEFAULT"
     )
     # Verifier/repair pass for low-confidence, high-stakes, or payer-conflict lines.
+    # D4346 is always verified (even when this flag is off) because it is a
+    # frequent false-positive for laser/SRP adjuncts.
     coding_verifier_enabled: bool = Field(default=False, validation_alias="CODING_VERIFIER_ENABLED")
     coding_verifier_confidence_threshold: float = Field(
         default=0.70, validation_alias="CODING_VERIFIER_CONFIDENCE_THRESHOLD"
     )
-    # CDT family prefixes considered high-stakes (crowns, endo, implants, surgery).
+    # CDT family prefixes considered high-stakes (crowns, endo, perio, implants, surgery).
     coding_high_stakes_prefixes: str = Field(
-        default="D27,D3,D6,D7", validation_alias="CODING_HIGH_STAKES_PREFIXES"
+        default="D27,D3,D43,D6,D7", validation_alias="CODING_HIGH_STAKES_PREFIXES"
     )
 
     # Autonomy tiers (auto-propose / review / ask) from calibrated confidence.

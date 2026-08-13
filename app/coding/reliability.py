@@ -63,6 +63,8 @@ _NON_ROUTINE_TOKENS = (
 _NON_ROUTINE_RE = re.compile(
     r"\b(?:" + "|".join(re.escape(t) for t in _NON_ROUTINE_TOKENS) + r")",
 )
+# D4346 is a frequent false-positive for laser / SRP adjuncts; always second-pass it.
+_ALWAYS_VERIFY_CODES = frozenset({"D4346"})
 
 
 def _blob(line: ProcedureLine) -> str:
@@ -103,11 +105,16 @@ def needs_verification(
     payer_conflict: bool,
     cfg: CodingSettings,
 ) -> bool:
-    if not cfg.coding_verifier_enabled or not cdt_code:
+    if not cdt_code:
+        return False
+    code = cdt_code.upper().strip()
+    if code in _ALWAYS_VERIFY_CODES:
+        return True
+    if not cfg.coding_verifier_enabled:
         return False
     return (
         confidence < cfg.coding_verifier_confidence_threshold
-        or is_high_stakes(cdt_code, cfg)
+        or is_high_stakes(code, cfg)
         or payer_conflict
     )
 

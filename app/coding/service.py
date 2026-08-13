@@ -31,6 +31,7 @@ from app.coding.gaps import (
     pre_check_line,
     pre_check_request,
 )
+from app.coding.guards import apply_clinical_guards
 from app.coding.reliability import (
     needs_verification,
     should_use_retrieval,
@@ -144,6 +145,8 @@ def run_coding_suggest(
             use_retrieval=use_retrieval,
             warnings=warnings,
         )
+
+    warnings.extend(apply_clinical_guards(request, line_recs_raw))
 
     cdt_codes = [str(r.get("cdt_code")).upper().strip() for r in line_recs_raw if r.get("cdt_code")]
     icd_codes: list[str] = []

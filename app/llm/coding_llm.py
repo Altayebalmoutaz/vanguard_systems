@@ -42,7 +42,12 @@ Rules:
 - Use current CDT and ICD-10-CM conventions; codes must be strings.
 - Emit exactly one recommendation object per input line_id.
 - If uncertain, lower confidence and still suggest a best-effort code when possible.
-- Do not invent line_ids that were not provided."""
+- Do not invent line_ids that were not provided.
+- D0150 and D0180 are mutually exclusive on the same date of service; pick one.
+- D4346 is gingivitis-only scaling. Do not use it for periodontitis, SRP, or laser therapy.
+- Gingival irrigation is D4921 (per quadrant), not D4999.
+- Do not guess a crown material code (D2740/D2750/D2790) when the planned material is not documented; return null.
+- Do not code PPE, pre-procedural rinse, or infection-control measures."""
 
 
 VERIFY_SYSTEM_PROMPT = """You are a senior dental coding auditor for US practices.

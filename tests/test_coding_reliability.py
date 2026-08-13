@@ -80,13 +80,25 @@ class TestVerifierGating(unittest.TestCase):
         cfg = CodingSettings()
         self.assertTrue(is_high_stakes("D2740", cfg))
         self.assertTrue(is_high_stakes("D3330", cfg))
+        self.assertTrue(is_high_stakes("D4341", cfg))
+        self.assertTrue(is_high_stakes("D4346", cfg))
         self.assertFalse(is_high_stakes("D0120", cfg))
+        self.assertFalse(is_high_stakes("D1110", cfg))
 
     def test_needs_verification_respects_flag(self) -> None:
         off = CodingSettings(coding_verifier_enabled=False)
         on = CodingSettings(coding_verifier_enabled=True, coding_verifier_confidence_threshold=0.7)
         self.assertFalse(
             needs_verification(cdt_code="D2740", confidence=0.4, payer_conflict=False, cfg=off)
+        )
+        self.assertTrue(  # D4346 is always verified
+            needs_verification(cdt_code="D4346", confidence=0.9, payer_conflict=False, cfg=off)
+        )
+        self.assertFalse(  # other perio codes still respect the global flag
+            needs_verification(cdt_code="D4341", confidence=0.9, payer_conflict=False, cfg=off)
+        )
+        self.assertTrue(  # high stakes (including D43) when verifier is on
+            needs_verification(cdt_code="D4341", confidence=0.99, payer_conflict=False, cfg=on)
         )
         self.assertTrue(  # high stakes
             needs_verification(cdt_code="D2740", confidence=0.99, payer_conflict=False, cfg=on)
