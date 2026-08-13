@@ -66,10 +66,210 @@
           }
         }
       }
+    },
+    "/v1/decision": {
+      "post": {
+        "summary": "Record Decision",
+        "description": "Record what the dentist did with a prior suggest run's lines\n(approved / edited / rejected / added). This is the coding agent's\nground truth for CDT top-1 accuracy and the live scorecard.",
+        "operationId": "record_decision_v1_decision_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodingDecisionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodingDecisionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "Arch": {
+        "type": "string",
+        "enum": [
+          "maxillary",
+          "mandibular",
+          "full_mouth"
+        ],
+        "title": "Arch"
+      },
+      "AutonomyTier": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "review",
+          "ask"
+        ],
+        "title": "AutonomyTier",
+        "description": "How much the scribe UI can trust this line without dentist scrutiny."
+      },
+      "CodingDecisionLine": {
+        "properties": {
+          "line_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Line Id"
+          },
+          "action": {
+            "$ref": "#/components/schemas/DecisionAction"
+          },
+          "suggested_cdt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Cdt"
+          },
+          "final_cdt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Final Cdt"
+          },
+          "edit_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Edit Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "line_id",
+          "action"
+        ],
+        "title": "CodingDecisionLine"
+      },
+      "CodingDecisionRequest": {
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "title": "Schema Version",
+            "default": "1.0"
+          },
+          "practice_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Practice Id"
+          },
+          "coding_run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Coding Run Id"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/CodingDecisionLine"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Decisions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "practice_id",
+          "coding_run_id"
+        ],
+        "title": "CodingDecisionRequest",
+        "description": "Dentist approve/edit/reject decisions for a prior suggest run (ground truth)."
+      },
+      "CodingDecisionResponse": {
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "title": "Schema Version",
+            "default": "1.0"
+          },
+          "coding_run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Coding Run Id"
+          },
+          "recorded": {
+            "type": "integer",
+            "title": "Recorded",
+            "default": 0
+          },
+          "status": {
+            "type": "string",
+            "const": "recorded",
+            "title": "Status",
+            "default": "recorded"
+          }
+        },
+        "type": "object",
+        "required": [
+          "coding_run_id"
+        ],
+        "title": "CodingDecisionResponse"
+      },
       "CodingSuggestRequest": {
         "properties": {
           "schema_version": {
@@ -228,6 +428,17 @@
         "title": "CodingSuggestResponse",
         "description": "Outbound result for real-time dentist review in the scribe UI."
       },
+      "DecisionAction": {
+        "type": "string",
+        "enum": [
+          "approved",
+          "edited",
+          "rejected",
+          "added"
+        ],
+        "title": "DecisionAction",
+        "description": "What the dentist did with a suggested line, for ground-truth capture."
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -301,6 +512,10 @@
             },
             "type": "array",
             "title": "Missing Info"
+          },
+          "autonomy": {
+            "$ref": "#/components/schemas/AutonomyTier",
+            "default": "review"
           }
         },
         "type": "object",
@@ -433,6 +648,28 @@
           "planned_or_performed": {
             "$ref": "#/components/schemas/PlannedOrPerformed",
             "default": "unknown"
+          },
+          "quadrant": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Quadrant"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "UR, UL, LR, or LL. Additive; omit when not a per-quadrant procedure."
+          },
+          "arch": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Arch"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "maxillary, mandibular, or full_mouth. Additive; omit when not applicable."
           }
         },
         "type": "object",
@@ -440,6 +677,17 @@
           "line_id"
         ],
         "title": "ProcedureLine"
+      },
+      "Quadrant": {
+        "type": "string",
+        "enum": [
+          "UR",
+          "UL",
+          "LR",
+          "LL"
+        ],
+        "title": "Quadrant",
+        "description": "ADA quadrant for per-quad CDT families (SRP, irrigation, perio surgery)."
       },
       "ValidationError": {
         "properties": {

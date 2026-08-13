@@ -26,9 +26,11 @@ Synchronous. Scribe sends structured clinical JSON; coding returns line-level CD
 | `patient.age` | int | recommended | Age-gated payer rules |
 | `procedures[]` | array | yes (≥1) | One object per chart line |
 | `procedures[].line_id` | string | yes | Unique within the request |
-| `procedures[].tooth_numbers` | string[] | no | e.g. `["14"]` |
+| `procedures[].tooth_numbers` | string[] | no | e.g. `["14"]`. Required for D4341 vs D4342 (1–3 vs 4+ teeth in the quadrant). |
 | `procedures[].surfaces` | string[] | no | e.g. `["M","O"]` |
-| `procedures[].findings` | string[] | no | Clinical findings |
+| `procedures[].quadrant` | enum | no | `UR` \| `UL` \| `LR` \| `LL`. Additive; use for SRP, irrigation, perio surgery. Aliases like `upper right` are accepted. |
+| `procedures[].arch` | enum | no | `maxillary` \| `mandibular` \| `full_mouth` |
+| `procedures[].findings` | string[] | no | Clinical findings. A `quadrant: UR` token is still honored if the field is omitted. |
 | `procedures[].planned_or_performed` | enum | no | `planned` \| `performed` \| `unknown` |
 | `supporting_note` | string | no | Optional prose |
 | `attachments_present` | string[] | no | Radiograph aliases: `full_mouth_series`, `fmx`, `bitewing_radiograph`, `periapical_radiograph`, `panoramic_radiograph`. `periodontal_chart` is accepted but does not satisfy radiograph gaps. |

@@ -129,6 +129,17 @@ def apply_clinical_guards(
                 "periodontal procedure."
             )
             warnings.append(f"Guard mapped line {line_id} to D4921")
+            code = "D4921"
+
+        n_teeth = len(line.tooth_numbers)
+        if code == "D4342" and n_teeth >= 4:
+            rec["cdt_code"] = "D4341"
+            rec["explanation"] = "Four or more teeth in this quadrant map to D4341, not D4342."
+            warnings.append(f"Guard mapped line {line_id} D4342 -> D4341")
+        elif code == "D4341" and 1 <= n_teeth <= 3:
+            rec["cdt_code"] = "D4342"
+            rec["explanation"] = "One to three teeth in this quadrant map to D4342, not D4341."
+            warnings.append(f"Guard mapped line {line_id} D4341 -> D4342")
 
     return warnings
 

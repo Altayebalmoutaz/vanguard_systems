@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from enum import Enum
 from typing import Literal
@@ -33,6 +34,130 @@ class PlannedOrPerformed(str, Enum):
     unknown = "unknown"
 
 
+class Quadrant(str, Enum):
+    """ADA quadrant for per-quad CDT families (SRP, irrigation, perio surgery)."""
+
+    UR = "UR"
+    UL = "UL"
+    LR = "LR"
+    LL = "LL"
+
+
+class Arch(str, Enum):
+    maxillary = "maxillary"
+    mandibular = "mandibular"
+    full_mouth = "full_mouth"
+
+
+_QUADRANT_ALIASES = {
+    "ur": Quadrant.UR,
+    "ul": Quadrant.UL,
+    "lr": Quadrant.LR,
+    "ll": Quadrant.LL,
+    "urq": Quadrant.UR,
+    "ulq": Quadrant.UL,
+    "lrq": Quadrant.LR,
+    "llq": Quadrant.LL,
+    "upper right": Quadrant.UR,
+    "upper left": Quadrant.UL,
+    "lower right": Quadrant.LR,
+    "lower left": Quadrant.LL,
+    "maxillary right": Quadrant.UR,
+    "maxillary left": Quadrant.UL,
+    "mandibular right": Quadrant.LR,
+    "mandibular left": Quadrant.LL,
+}
+_ARCH_ALIASES = {
+    "maxillary": Arch.maxillary,
+    "maxilla": Arch.maxillary,
+    "upper": Arch.maxillary,
+    "upper arch": Arch.maxillary,
+    "mandibular": Arch.mandibular,
+    "mandible": Arch.mandibular,
+    "lower": Arch.mandibular,
+    "lower arch": Arch.mandibular,
+    "full_mouth": Arch.full_mouth,
+    "full mouth": Arch.full_mouth,
+    "both": Arch.full_mouth,
+    "both arches": Arch.full_mouth,
+}
+_QUAD_TOKEN_RE = re.compile(r"quadrant\s*:\s*(UR|UL|LR|LL)\b", re.IGNORECASE)
+_ARCH_TOKEN_RE = re.compile(
+    r"\barch\s*:\s*(maxillary|mandibular|full[_\s-]?mouth)\b", re.IGNORECASE
+)
+
+
+def _norm_alias_key(value: object) -> str:
+    text = str(value or "").strip().lower()
+    text = text.replace("-", " ").replace("_", " ")
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def coerce_quadrant(value: object) -> Quadrant | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, Quadrant):
+        return value
+    key = _norm_alias_key(value)
+    mapped = _QUADRANT_ALIASES.get(key) or _QUADRANT_ALIASES.get(key.replace(" ", ""))
+    if mapped is None:
+        raise ValueError("quadrant must be UR, UL, LR, or LL")
+    return mapped
+
+
+def coerce_arch(value: object) -> Arch | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, Arch):
+        return value
+    key = _norm_alias_key(value)
+    mapped = _ARCH_ALIASES.get(key) or _ARCH_ALIASES.get(key.replace(" ", "_"))
+    if mapped is None:
+        raise ValueError("arch must be maxillary, mandibular, or full_mouth")
+    return mapped
+
+
+def try_coerce_quadrant(value: object) -> Quadrant | None:
+    try:
+        return coerce_quadrant(value)
+    except ValueError:
+        return None
+
+
+def try_coerce_arch(value: object) -> Arch | None:
+    try:
+        return coerce_arch(value)
+    except ValueError:
+        return None
+
+
+def resolved_quadrant(line: ProcedureLine) -> Quadrant | None:
+    """Prefer the structured field; fall back to a findings token like ``quadrant: UR``."""
+    if line.quadrant is not None:
+        return line.quadrant
+    for finding in line.findings:
+        match = _QUAD_TOKEN_RE.search(finding)
+        if match:
+            return Quadrant(match.group(1).upper())
+        mapped = try_coerce_quadrant(finding)
+        if mapped is not None:
+            return mapped
+    return None
+
+
+def resolved_arch(line: ProcedureLine) -> Arch | None:
+    if line.arch is not None:
+        return line.arch
+    for finding in line.findings:
+        match = _ARCH_TOKEN_RE.search(finding)
+        if match:
+            return try_coerce_arch(match.group(1))
+        mapped = try_coerce_arch(finding)
+        if mapped is not None:
+            return mapped
+    return None
+
+
 class PayerInfo(BaseModel):
     id: str | None = Field(default=None, description="Trading partner / Stedi payer id")
     name: str | None = Field(default=None, description="Display name, e.g. Delta Dental PPO")
@@ -48,6 +173,14 @@ class ProcedureLine(BaseModel):
     surfaces: list[str] = Field(default_factory=list)
     findings: list[str] = Field(default_factory=list)
     planned_or_performed: PlannedOrPerformed = PlannedOrPerformed.unknown
+    quadrant: Quadrant | None = Field(
+        default=None,
+        description="UR, UL, LR, or LL. Additive; omit when not a per-quadrant procedure.",
+    )
+    arch: Arch | None = Field(
+        default=None,
+        description="maxillary, mandibular, or full_mouth. Additive; omit when not applicable.",
+    )
 
     @field_validator("tooth_numbers", "surfaces", "findings", mode="before")
     @classmethod
@@ -59,6 +192,16 @@ class ProcedureLine(BaseModel):
         if isinstance(value, list):
             return [str(v).strip() for v in value if str(v).strip()]
         return []
+
+    @field_validator("quadrant", mode="before")
+    @classmethod
+    def _coerce_quadrant(cls, value: object) -> Quadrant | None:
+        return coerce_quadrant(value)
+
+    @field_validator("arch", mode="before")
+    @classmethod
+    def _coerce_arch(cls, value: object) -> Arch | None:
+        return coerce_arch(value)
 
 
 class CodingSuggestRequest(BaseModel):

@@ -14,6 +14,7 @@ from app.coding.schemas import (
     MissingInfoCode,
     MissingInfoItem,
     ProcedureLine,
+    resolved_quadrant,
 )
 from app.integrations.db_tables import CDT_CODES, PAYER_RULES
 from supabase import Client
@@ -43,6 +44,8 @@ def has_blocking(items: list[MissingInfoItem]) -> bool:
     return any(is_blocking(i) for i in items)
 
 
+_PER_QUADRANT_CODES = frozenset({"D4341", "D4342", "D4921"})
+_SRP_CODES = frozenset({"D4341", "D4342"})
 _IMAGING_CODES = frozenset(
     {
         "D0210",
@@ -284,7 +287,13 @@ def pre_check_line(line: ProcedureLine) -> list[MissingInfoItem]:
     and anatomic "buccal mucosa" / furcation notes do not demand a surface).
     """
     missing: list[MissingInfoItem] = []
-    empty = not line.findings and not line.tooth_numbers and not line.surfaces
+    empty = (
+        not line.findings
+        and not line.tooth_numbers
+        and not line.surfaces
+        and line.quadrant is None
+        and line.arch is None
+    )
     if empty:
         missing.append(
             MissingInfoItem(
@@ -399,7 +408,12 @@ def post_check_line(
         missing.append(
             MissingInfoItem(
                 code=MissingInfoCode.TOOTH_MISSING,
-                message=f"Line {line.line_id}: tooth number required for {code}",
+                message=(
+                    f"Line {line.line_id}: tooth numbers (or 1–3 vs 4+ count) required "
+                    f"in this quadrant for {code}"
+                    if code in _SRP_CODES and resolved_quadrant(line) is not None
+                    else f"Line {line.line_id}: tooth number required for {code}"
+                ),
             )
         )
     if needs_surface and not line.surfaces:
@@ -414,6 +428,13 @@ def post_check_line(
             MissingInfoItem(
                 code=MissingInfoCode.RADIOGRAPH_MISSING,
                 message=(f"Line {line.line_id}: radiographic documentation expected for {code}"),
+            )
+        )
+    if code in _PER_QUADRANT_CODES and resolved_quadrant(line) is None:
+        missing.append(
+            MissingInfoItem(
+                code=MissingInfoCode.CDT_UNCERTAIN,
+                message=f"Line {line.line_id}: quadrant (UR/UL/LR/LL) required for {code}",
             )
         )
     if confidence < threshold:

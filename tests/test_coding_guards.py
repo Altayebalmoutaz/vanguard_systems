@@ -13,6 +13,7 @@ from app.coding.schemas import (
     MissingInfoCode,
     PatientInfo,
     ProcedureLine,
+    resolved_quadrant,
 )
 
 
@@ -265,6 +266,50 @@ class TestClinicalGuards(unittest.TestCase):
         ]
         apply_clinical_guards(_request([line]), recs)
         self.assertEqual(recs[0]["cdt_code"], "D4346")
+
+    def test_resolved_quadrant_from_findings_token(self) -> None:
+        line = _line(findings=["quadrant: UR (upper right)", "Non-surgical periodontal therapy"])
+        self.assertEqual(resolved_quadrant(line).value, "UR")
+
+    def test_srp_tooth_count_rewrites_d4341_to_d4342(self) -> None:
+        line = _line(
+            line_id="P3-UR",
+            tooth_numbers=["2", "3"],
+            quadrant="UR",
+            findings=["Non-surgical periodontal therapy"],
+            planned_or_performed="planned",
+        )
+        recs = [
+            {
+                "line_id": "P3-UR",
+                "cdt_code": "D4341",
+                "confidence": 0.9,
+                "explanation": "srp",
+                "icd10_codes": [],
+            }
+        ]
+        apply_clinical_guards(_request([line]), recs)
+        self.assertEqual(recs[0]["cdt_code"], "D4342")
+
+    def test_srp_tooth_count_rewrites_d4342_to_d4341(self) -> None:
+        line = _line(
+            line_id="P3-UR",
+            tooth_numbers=["2", "3", "4", "5"],
+            quadrant="UR",
+            findings=["Non-surgical periodontal therapy"],
+            planned_or_performed="planned",
+        )
+        recs = [
+            {
+                "line_id": "P3-UR",
+                "cdt_code": "D4342",
+                "confidence": 0.9,
+                "explanation": "srp",
+                "icd10_codes": [],
+            }
+        ]
+        apply_clinical_guards(_request([line]), recs)
+        self.assertEqual(recs[0]["cdt_code"], "D4341")
 
 
 if __name__ == "__main__":
