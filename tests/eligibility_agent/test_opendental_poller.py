@@ -17,6 +17,7 @@ def _settings(window_days: int = 0, *, auto_poll_enabled: bool = False) -> Simpl
         opendental_auto_poll_date_window_days=window_days,
         opendental_auto_poll_cdt_codes="D1110",
         opendental_auto_poll_interval_seconds=60.0,
+        opendental_poll_skip_same_day_dedupe=False,
         opendental_writeback_enabled=False,
         eligibility_retry_worker_enabled=False,
         eligibility_retry_worker_interval_seconds=60.0,
@@ -50,6 +51,7 @@ def _run_once(  # type: ignore[no-untyped-def]
     queued_today,
     seen,
     procedurelogs_by_apt: dict[int, list[ODProcedureLog]] | None = None,
+    settings=None,
 ):
     enqueued: list[dict] = []
     procedurelogs_by_apt = procedurelogs_by_apt or {}
@@ -75,6 +77,7 @@ def _run_once(  # type: ignore[no-untyped-def]
         resolve=None,
         apt_nums=None,
         appointment_date=None,
+        skip_same_day_dedupe=False,
     ):
         enqueued.append(
             {
@@ -83,6 +86,7 @@ def _run_once(  # type: ignore[no-untyped-def]
                 "apt_nums": list(apt_nums or []),
                 "cdt_source": getattr(resolve, "cdt_source", None),
                 "appointment_date": appointment_date,
+                "skip_same_day_dedupe": skip_same_day_dedupe,
             }
         )
         return {"id": f"req-{pat_num}"}
@@ -103,7 +107,7 @@ def _run_once(  # type: ignore[no-untyped-def]
     monkeypatch.setattr(poller, "record_poll_result", lambda *a, **k: None)
 
     poller.run_connection_poll(
-        _settings(),
+        settings or _settings(),
         SimpleNamespace(),
         _connection(),
         seen=seen,
@@ -411,4 +415,21 @@ def test_auto_poll_loop_does_not_keep_process_lifetime_seen() -> None:
     assert "seen_by_practice" not in source
     assert "for_auto_poll=True" in source
     assert "seen=" not in source
+
+
+def test_poller_skip_same_day_dedupe_reenqueues_checked_patient(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    settings = _settings()
+    settings.opendental_poll_skip_same_day_dedupe = True
+    seen: set[int] = set()
+    enqueued = _run_once(
+        monkeypatch,
+        appointments=[{"AptNum": 1, "PatNum": 24, "AptStatus": "Scheduled"}],
+        checked_today={24},
+        queued_today={24},
+        seen=seen,
+        settings=settings,
+    )
+    assert len(enqueued) == 1
+    assert enqueued[0]["pat_num"] == 24
+    assert enqueued[0]["skip_same_day_dedupe"] is True
 

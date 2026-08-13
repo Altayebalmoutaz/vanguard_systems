@@ -182,6 +182,13 @@ class EligibilitySettings(BaseSettings):
     # When set, OpenDental client reads fixtures from disk instead of issuing HTTP calls.
     opendental_replay_dir: str = Field(default="", validation_alias="OPENDENTAL_REPLAY_DIR")
 
+    # Demo / ops lever: when true, Poll now (and auto-poll) ignore same-day
+    # eligibility_request + eligibility_checks dedupe and re-enqueue patients.
+    # Expect duplicate Stedi calls and a second OD writeback. Keep false in normal ops.
+    opendental_poll_skip_same_day_dedupe: bool = Field(
+        default=False,
+        validation_alias="OD_POLL_SKIP_SAME_DAY_DEDUPE",
+    )
     # Automatic appointment poller (in-process FastAPI background task). Off by default.
     opendental_auto_poll_enabled: bool = Field(
         default=False,

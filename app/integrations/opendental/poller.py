@@ -218,12 +218,21 @@ def run_connection_poll(
     processed = 0
     failed = 0
     skipped_today = 0
+    skip_same_day_dedupe = bool(
+        getattr(settings, "opendental_poll_skip_same_day_dedupe", False)
+    )
+    if skip_same_day_dedupe:
+        logger.warning(
+            "OD same-day poll dedupe disabled (OD_POLL_SKIP_SAME_DAY_DEDUPE) practice=%s",
+            practice_id,
+        )
     for pat_num, apt_nums in apts_by_pat.items():
         if pat_num in seen:
             skipped_today += 1
             continue
-        if _checked_today(pat_num) or od_request_exists_today(
-            app_settings, practice_id=practice_id, pat_num=pat_num
+        if not skip_same_day_dedupe and (
+            _checked_today(pat_num)
+            or od_request_exists_today(app_settings, practice_id=practice_id, pat_num=pat_num)
         ):
             seen.add(pat_num)
             skipped_today += 1
@@ -244,6 +253,7 @@ def run_connection_poll(
                 resolve=resolved,
                 apt_nums=apt_nums,
                 appointment_date=apt_date_by_pat.get(pat_num),
+                skip_same_day_dedupe=skip_same_day_dedupe,
             )
             if row:
                 seen.add(pat_num)

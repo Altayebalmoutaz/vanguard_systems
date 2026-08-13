@@ -211,3 +211,40 @@ def test_enqueue_proceeds_after_failed_request_today(monkeypatch) -> None:
         client=MagicMock(),
     )
     assert result == {"id": "req-retry-failed"}
+
+
+def test_enqueue_skip_same_day_dedupe_uses_unique_idempotency(monkeypatch) -> None:
+    exists = MagicMock(return_value=True)
+    monkeypatch.setattr(mod, "od_request_exists_today", exists)
+    captured: list[str] = []
+
+    monkeypatch.setattr(
+        mod,
+        "build_od_eligibility_payload",
+        lambda *a, **k: {
+            "first_name": "A",
+            "last_name": "B",
+            "dob": "1980-01-01",
+            "subscriber_id": "1",
+            "primary_payer_id": "84103",
+            "idempotency_key": "od:clinic_a:24:2026-08-13",
+            "input_json": {},
+        },
+    )
+
+    def fake_create(settings, *, practice_id, payload):  # type: ignore[no-untyped-def]
+        captured.append(str(payload["idempotency_key"]))
+        return {"id": "req-force"}
+
+    monkeypatch.setattr(mod, "create_eligibility_request", fake_create)
+    result = mod.enqueue_od_eligibility_check(
+        SimpleNamespace(),
+        practice_id="clinic_a",
+        pat_num=24,
+        connection={},
+        client=MagicMock(),
+        skip_same_day_dedupe=True,
+    )
+    assert result == {"id": "req-force"}
+    exists.assert_not_called()
+    assert captured[0].startswith("od:clinic_a:24:2026-08-13:r")

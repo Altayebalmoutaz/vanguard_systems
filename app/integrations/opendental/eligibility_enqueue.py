@@ -168,8 +168,11 @@ def enqueue_od_eligibility_check(
     resolve: ResolveResult | None = None,
     apt_nums: list[int] | None = None,
     appointment_date: date | None = None,
+    skip_same_day_dedupe: bool = False,
 ) -> dict[str, Any] | None:
-    if od_request_exists_today(app_settings, practice_id=practice_id, pat_num=pat_num):
+    if not skip_same_day_dedupe and od_request_exists_today(
+        app_settings, practice_id=practice_id, pat_num=pat_num
+    ):
         return None
     payload = build_od_eligibility_payload(
         client,
@@ -182,6 +185,10 @@ def enqueue_od_eligibility_check(
         apt_nums=apt_nums,
         appointment_date=appointment_date,
     )
+    # Forced re-enqueue after a completed same-day row always needs a unique key;
+    # pre-suffix when skip_same_day_dedupe so we do not depend on conflict alone.
+    if skip_same_day_dedupe:
+        payload["idempotency_key"] = f"{payload['idempotency_key']}:r{uuid4().hex[:8]}"
     try:
         return create_eligibility_request(app_settings, practice_id=practice_id, payload=payload)
     except ValueError as exc:
