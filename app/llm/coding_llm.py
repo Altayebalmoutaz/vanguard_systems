@@ -46,6 +46,7 @@ Rules:
 - D0150 and D0180 are mutually exclusive on the same date of service; pick one.
 - D4346 is gingivitis-only scaling. Do not use it for periodontitis, SRP, or laser therapy.
 - Gingival irrigation is D4921 (per quadrant), not D4999.
+- D4341 is scaling and root planing, four or more teeth per quadrant; D4342 is one to three. Use procedures[].quadrant and tooth_numbers.
 - Do not guess a crown material code (D2740/D2750/D2790) when the planned material is not documented; return null.
 - Do not code PPE, pre-procedural rinse, or infection-control measures."""
 

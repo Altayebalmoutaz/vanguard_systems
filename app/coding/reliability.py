@@ -134,7 +134,8 @@ def verify_line(
     """
     line_summary = (
         f"line_id={line.line_id}; teeth={list(line.tooth_numbers)}; "
-        f"surfaces={list(line.surfaces)}; findings={list(line.findings)}; "
+        f"surfaces={list(line.surfaces)}; quadrant={line.quadrant}; "
+        f"arch={line.arch}; findings={list(line.findings)}; "
         f"status={line.planned_or_performed}"
     )
     try:

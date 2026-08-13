@@ -82,9 +82,11 @@ Without a valid Bearer token you should receive **HTTP 401**.
 | `patient.age` | recommended | Clinical context for the model |
 | `procedures[]` | **yes** (≥1) | One object per chart line |
 | `procedures[].line_id` | **yes** | Unique within the request |
-| `procedures[].tooth_numbers` | no | e.g. `["14"]` |
+| `procedures[].tooth_numbers` | no | e.g. `["14"]`. Needed on SRP lines to choose D4341 (4+) vs D4342 (1–3). |
 | `procedures[].surfaces` | no | e.g. `["M","O"]` |
-| `procedures[].findings` | no | Clinical findings |
+| `procedures[].quadrant` | no | `UR` \| `UL` \| `LR` \| `LL`. Additive; does not bump `schema_version`. |
+| `procedures[].arch` | no | `maxillary` \| `mandibular` \| `full_mouth` |
+| `procedures[].findings` | no | Clinical findings. `quadrant: UR` in findings still works if the field is omitted. |
 | `procedures[].planned_or_performed` | no | `planned` \| `performed` \| `unknown` |
 | `supporting_note` | no | Optional free text |
 | `attachments_present` | no | Radiograph aliases: `full_mouth_series`, `fmx`, `bitewing_radiograph`, `periapical_radiograph`. `periodontal_chart` is not a radiograph. |
@@ -178,6 +180,7 @@ Response: `{ "coding_run_id", "recorded": <count>, "status": "recorded" }`.
 
 ## Changelog
 
+- **v1.4** — Additive `procedures[].quadrant` (`UR`/`UL`/`LR`/`LL`) and `procedures[].arch` (`maxillary`/`mandibular`/`full_mouth`). SRP tooth-count chooses D4341 vs D4342; D4921 requires a quadrant. Findings token `quadrant: UR` still works.
 - **v1.3** — Recognize `full_mouth_series` / `fmx` as radiographs; ignore anatomic "buccal mucosa" / furcation sites and existing-restoration narrative on crown lines for surface gaps; deterministic guards for missing crown material, D4346-as-laser, D4921 irrigation, and same-day D0150/D0180. Perio (`D43`) is high-stakes; D4346 always gets a verifier pass.
 - **v1.2** — Document live chairside flow: suggest → dentist review → decision write-back. Payer adjudication is not part of this path. `fast` skips retrieval on routine visits only.
 - **v1.1** — Add `POST /v1/decision` ground-truth write-back; split blocking vs advisory gaps (advisory gaps no longer force `needs_info`); crown/negated-recall false `needs_info` fixed via CDT documentation-requirement backfill.

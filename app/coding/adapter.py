@@ -36,9 +36,14 @@ def _format_procedure_line(proc: ProcedureLine) -> str:
     teeth = ", ".join(proc.tooth_numbers) if proc.tooth_numbers else "unspecified"
     surfaces = ", ".join(proc.surfaces) if proc.surfaces else "unspecified"
     findings = "; ".join(proc.findings) if proc.findings else "none listed"
+    extra = ""
+    if proc.quadrant is not None:
+        extra += f"; quadrant={proc.quadrant.value}"
+    if proc.arch is not None:
+        extra += f"; arch={proc.arch.value}"
     return (
         f"Line {proc.line_id}: tooth={teeth}; surfaces={surfaces}; "
-        f"findings={findings}; status={proc.planned_or_performed.value}"
+        f"findings={findings}{extra}; status={proc.planned_or_performed.value}"
     )
 
 
@@ -58,7 +63,8 @@ def structured_prompt_block(request: CodingSuggestRequest) -> str:
             "  * "
             + scrub_for_llm(
                 f"line_id={proc.line_id}; tooth={proc.tooth_numbers}; "
-                f"surfaces={proc.surfaces}; findings={proc.findings}; "
+                f"surfaces={proc.surfaces}; quadrant={proc.quadrant}; "
+                f"arch={proc.arch}; findings={proc.findings}; "
                 f"planned_or_performed={proc.planned_or_performed.value}"
             )
         )

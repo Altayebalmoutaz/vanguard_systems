@@ -46,6 +46,23 @@ class TestCodingSuggestSchemas(unittest.TestCase):
         with self.assertRaises(ValidationError):
             CodingSuggestRequest.model_validate(data)
 
+    def test_quadrant_and_arch_are_optional(self) -> None:
+        data = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        req = CodingSuggestRequest.model_validate(data)
+        self.assertIsNone(req.procedures[0].quadrant)
+        self.assertIsNone(req.procedures[0].arch)
+
+    def test_quadrant_aliases_normalize(self) -> None:
+        line = ProcedureLine.model_validate(
+            {"line_id": "P3-UR", "quadrant": "upper right", "arch": "maxilla"}
+        )
+        self.assertEqual(line.quadrant.value, "UR")
+        self.assertEqual(line.arch.value, "maxillary")
+
+    def test_invalid_quadrant_rejected(self) -> None:
+        with self.assertRaises(ValidationError):
+            ProcedureLine.model_validate({"line_id": "1", "quadrant": "front"})
+
 
 class TestCodingGaps(unittest.TestCase):
     def test_restorative_pre_check_requires_tooth_surface(self) -> None:
@@ -151,6 +168,80 @@ class TestCodingGaps(unittest.TestCase):
         self.assertIn(MissingInfoCode.RADIOGRAPH_MISSING, codes)
         self.assertFalse(has_blocking(missing))
 
+    def test_srp_with_quadrant_still_needs_tooth_count(self) -> None:
+        line = ProcedureLine(line_id="P3-UR", quadrant="UR", findings=["SRP"])
+        missing = post_check_line(
+            line,
+            cdt_code="D4341",
+            attachments_present=["full_mouth_series"],
+            confidence=0.9,
+            threshold=0.75,
+            cdt_meta={
+                "requires_tooth": True,
+                "requires_surfaces": False,
+                "requires_radiograph": False,
+            },
+        )
+        self.assertTrue(any(m.code == MissingInfoCode.TOOTH_MISSING for m in missing))
+
+    def test_srp_with_quadrant_and_four_teeth_is_complete(self) -> None:
+        line = ProcedureLine(
+            line_id="P3-UR",
+            quadrant="UR",
+            tooth_numbers=["2", "3", "4", "5"],
+            findings=["SRP"],
+        )
+        missing = post_check_line(
+            line,
+            cdt_code="D4341",
+            attachments_present=["full_mouth_series"],
+            confidence=0.9,
+            threshold=0.75,
+            cdt_meta={
+                "requires_tooth": True,
+                "requires_surfaces": False,
+                "requires_radiograph": False,
+            },
+        )
+        codes = {m.code for m in missing}
+        self.assertNotIn(MissingInfoCode.TOOTH_MISSING, codes)
+        self.assertNotIn(MissingInfoCode.CDT_UNCERTAIN, codes)
+
+    def test_irrigation_without_quadrant_is_uncertain(self) -> None:
+        line = ProcedureLine(line_id="P5", findings=["Gingival irrigation"])
+        missing = post_check_line(
+            line,
+            cdt_code="D4921",
+            attachments_present=[],
+            confidence=0.8,
+            threshold=0.75,
+            cdt_meta={
+                "requires_tooth": False,
+                "requires_surfaces": False,
+                "requires_radiograph": False,
+            },
+        )
+        self.assertTrue(any(m.code == MissingInfoCode.CDT_UNCERTAIN for m in missing))
+
+    def test_irrigation_with_findings_quadrant_token_is_complete(self) -> None:
+        line = ProcedureLine(
+            line_id="P5",
+            findings=["quadrant: UR (upper right)", "Gingival irrigation"],
+        )
+        missing = post_check_line(
+            line,
+            cdt_code="D4921",
+            attachments_present=[],
+            confidence=0.8,
+            threshold=0.75,
+            cdt_meta={
+                "requires_tooth": False,
+                "requires_surfaces": False,
+                "requires_radiograph": False,
+            },
+        )
+        self.assertFalse(any(m.code == MissingInfoCode.CDT_UNCERTAIN for m in missing))
+
 
 class TestCodingAdapter(unittest.TestCase):
     def test_build_clinical_note_includes_tooth(self) -> None:
@@ -158,6 +249,20 @@ class TestCodingAdapter(unittest.TestCase):
         note = build_clinical_note(req)
         self.assertIn("tooth=14", note)
         self.assertIn("surfaces=M, O", note)
+
+    def test_build_clinical_note_includes_quadrant(self) -> None:
+        data = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        data["procedures"] = [
+            {
+                "line_id": "P3-UR",
+                "tooth_numbers": ["2", "3", "4", "5"],
+                "quadrant": "UR",
+                "findings": ["SRP"],
+                "planned_or_performed": "planned",
+            }
+        ]
+        note = build_clinical_note(CodingSuggestRequest.model_validate(data))
+        self.assertIn("quadrant=UR", note)
 
     def test_map_flat_codes_to_lines(self) -> None:
         req = CodingSuggestRequest.model_validate(json.loads(FIXTURE.read_text(encoding="utf-8")))
