@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from typing import Any, Literal
 from uuid import UUID
 
@@ -41,6 +42,8 @@ from app.dashboard.store import (
 )
 from app.db.connection import NeonNotConfiguredError
 from app.pilot.shadow_store import get_shadow_summary
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -114,6 +117,19 @@ def get_eligibility_queue(tenant: PracticeContextDep) -> dict[str, Any]:
         raise _neon_unavailable(exc) from exc
     except RuntimeError as exc:
         raise _db_failure(exc, log_message="list_eligibility_queue failure") from exc
+
+    # Resolve Stedi ids → display names for payer logos (payer_network lives on Supabase).
+    try:
+        from app.eligibility.config import get_settings as get_eligibility_settings
+        from app.eligibility.db_reference import get_supabase
+        from app.integrations.payer_identity import enrich_queue_payer_labels
+
+        elig = get_eligibility_settings()
+        if elig.supabase_url and elig.supabase_key:
+            rows = enrich_queue_payer_labels(rows, supabase=get_supabase(elig))
+    except Exception as exc:
+        logger.warning("eligibility queue payer label enrichment skipped: %s", exc)
+
     return {"rows": rows, "practice_id": tenant.practice_id}
 
 

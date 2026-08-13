@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { findPayer } from "@/lib/payerCatalog";
 
 export function PayerLogo({ label, showName = true }: { label: string; showName?: boolean }) {
@@ -8,6 +8,11 @@ export function PayerLogo({ label, showName = true }: { label: string; showName?
   const isKnown = payer.slug !== "unknown";
   const [errored, setErrored] = useState(false);
   const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    setErrored(false);
+    setLoaded(false);
+  }, [payer.slug]);
 
   const showImage = isKnown && !errored;
 

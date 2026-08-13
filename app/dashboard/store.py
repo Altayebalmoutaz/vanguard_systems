@@ -228,7 +228,12 @@ select
   er.dob,
   er.subscriber_id,
   er.primary_payer_id,
-  coalesce(nullif(ec.payer_id, ''), er.primary_payer_id) as payer_label,
+  -- Prefer OD carrier name so the UI can match payer logos; fall back to Stedi ids.
+  coalesce(
+    nullif(trim(both from coalesce(er.input_json->>'primary_carrier_name', '')), ''),
+    nullif(ec.payer_id, ''),
+    er.primary_payer_id
+  ) as payer_label,
   er.secondary_payer_id,
   er.plan_id,
   er.cdt_codes,

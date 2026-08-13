@@ -41,11 +41,16 @@ const FALLBACK: PayerEntry = {
 export function findPayer(label: string | null | undefined): PayerEntry {
   if (!label) return FALLBACK;
   const key = label.toLowerCase().replace(/[^a-z]/g, "");
-  for (const payer of PAYER_CATALOG) {
-    const slugKey = payer.slug.replace(/-/g, "");
-    if (key.includes(slugKey)) return payer;
-    for (const alias of payer.aliases) {
-      if (key.includes(alias)) return payer;
+  if (key) {
+    for (const payer of PAYER_CATALOG) {
+      const slugKey = payer.slug.replace(/-/g, "");
+      if (key.includes(slugKey)) return payer;
+      const shortKey = payer.shortName.toLowerCase().replace(/[^a-z]/g, "");
+      if (shortKey.length >= 3 && key.includes(shortKey)) return payer;
+      for (const alias of payer.aliases) {
+        const aliasKey = alias.replace(/[^a-z]/g, "");
+        if (aliasKey && key.includes(aliasKey)) return payer;
+      }
     }
   }
   return { ...FALLBACK, displayName: label, shortName: label };

@@ -290,6 +290,12 @@ class EligibilityQueuePayloadTests(unittest.TestCase):
         self.assertIn("input_json->>'source' as request_source", _QUEUE_SQL)
         self.assertIn("output_json->'opendental_writeback' as opendental_writeback", _QUEUE_SQL)
 
+    def test_queue_sql_prefers_carrier_name_for_payer_label(self) -> None:
+        from app.dashboard.store import _QUEUE_SQL
+
+        self.assertIn("input_json->>'primary_carrier_name'", _QUEUE_SQL)
+        self.assertIn("as payer_label", _QUEUE_SQL)
+
     def test_shape_dashboard_row_keeps_opendental_fields(self) -> None:
         from app.dashboard.store import _shape_dashboard_row
 

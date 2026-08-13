@@ -73,6 +73,99 @@ def get_payer_directory_row(supabase: Client, payer_id: str) -> dict[str, Any] |
         return None
 
 
+def batch_payer_display_names(supabase: Client, payer_ids: set[str]) -> dict[str, str]:
+    """Map payer_id / trading_partner_service_id → display_name (best-effort)."""
+    cleaned = sorted({str(p).strip() for p in payer_ids if p and str(p).strip()})
+    if not cleaned:
+        return {}
+
+    out: dict[str, str] = {}
+
+    def _ingest(rows: list[dict[str, Any]]) -> None:
+        for row in rows:
+            dn = str(row.get("display_name") or "").strip()
+            if not dn:
+                continue
+            pid = str(row.get("payer_id") or "").strip()
+            tps = str(row.get("trading_partner_service_id") or "").strip()
+            if pid:
+                out[pid] = dn
+            if tps:
+                out[tps] = dn
+
+    try:
+        for i in range(0, len(cleaned), 100):
+            chunk = cleaned[i : i + 100]
+            res = (
+                supabase.table("payer_network")
+                .select("payer_id,trading_partner_service_id,display_name")
+                .in_("payer_id", chunk)
+                .execute()
+            )
+            _ingest(list(getattr(res, "data", None) or []))
+            missing = [c for c in chunk if c not in out]
+            if not missing:
+                continue
+            res2 = (
+                supabase.table("payer_network")
+                .select("payer_id,trading_partner_service_id,display_name")
+                .in_("trading_partner_service_id", missing)
+                .execute()
+            )
+            _ingest(list(getattr(res2, "data", None) or []))
+    except Exception as e:
+        logger.warning("batch_payer_display_names failed: %s", e)
+        return out
+    return out
+
+
+def payer_label_needs_directory_name(label: str | None) -> bool:
+    """True when label looks like a Stedi/ElectID code rather than a carrier name."""
+    s = (label or "").strip()
+    if not s:
+        return True
+    if any(ch.isspace() for ch in s):
+        return False
+    return any(ch.isdigit() for ch in s)
+
+
+def enrich_queue_payer_labels(
+    rows: list[dict[str, Any]],
+    *,
+    supabase: Client | None,
+) -> list[dict[str, Any]]:
+    """Replace bare payer ids on queue rows with payer_network display names when possible."""
+    if not rows or supabase is None:
+        return rows
+
+    ids: set[str] = set()
+    for row in rows:
+        label = str(row.get("payer_label") or "").strip()
+        pid = str(row.get("primary_payer_id") or "").strip()
+        if not payer_label_needs_directory_name(label):
+            continue
+        if label:
+            ids.add(label)
+        if pid:
+            ids.add(pid)
+    if not ids:
+        return rows
+
+    names = batch_payer_display_names(supabase, ids)
+    if not names:
+        return rows
+
+    for row in rows:
+        label = str(row.get("payer_label") or "").strip()
+        if not payer_label_needs_directory_name(label):
+            continue
+        pid = str(row.get("primary_payer_id") or "").strip()
+        dn = names.get(label) or names.get(pid)
+        if dn:
+            row["payer_label"] = dn
+    return rows
+
+
 def resolve_canonical_payer_id(supabase: Client, insurance_or_id: str) -> str | None:
     """
     Resolve a user-supplied insurance string or literal payer id to canonical `payer_id`.
