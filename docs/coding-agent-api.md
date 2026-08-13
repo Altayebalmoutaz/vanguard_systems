@@ -31,7 +31,7 @@ Synchronous. Scribe sends structured clinical JSON; coding returns line-level CD
 | `procedures[].findings` | string[] | no | Clinical findings |
 | `procedures[].planned_or_performed` | enum | no | `planned` \| `performed` \| `unknown` |
 | `supporting_note` | string | no | Optional prose |
-| `attachments_present` | string[] | no | e.g. `bitewing_radiograph` |
+| `attachments_present` | string[] | no | Radiograph aliases: `full_mouth_series`, `fmx`, `bitewing_radiograph`, `periapical_radiograph`, `panoramic_radiograph`. `periodontal_chart` is accepted but does not satisfy radiograph gaps. |
 | `fast` | bool | no | Skip vector retrieval for lower latency |
 
 Example: see [`tests/fixtures/coding_suggest_request.json`](../tests/fixtures/coding_suggest_request.json).
