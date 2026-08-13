@@ -88,6 +88,11 @@ class Settings(BaseSettings):
         validation_alias="PILOT_DEFAULT_PRACTICE_ID",
     )
 
+    # Standalone OD write-back service (default unset = in-process writeback).
+    odwb_service_url: str = Field(default="", validation_alias="ODWB_SERVICE_URL")
+    odwb_api_key: str = Field(default="", validation_alias="ODWB_API_KEY")
+    odwb_timeout_seconds: float = Field(default=60.0, validation_alias="ODWB_TIMEOUT_SECONDS")
+
     @model_validator(mode="after")
     def _resolve_database_dsn(self) -> Self:
         resolved = resolve_database_url(

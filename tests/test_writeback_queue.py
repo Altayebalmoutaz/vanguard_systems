@@ -51,7 +51,8 @@ class WritebackQueueTests(unittest.TestCase):
         self.assertEqual(kwargs["run_type"], "opendental_writeback")
         self.assertEqual(kwargs["max_attempts"], WRITEBACK_MAX_ATTEMPTS)
 
-    def test_enqueue_returns_none_without_neon(self) -> None:
+    @patch("app.pipeline.writeback_queue.get_neon_dsn", return_value=None)
+    def test_enqueue_returns_none_without_neon(self, _mock_dsn: MagicMock) -> None:
         settings = Settings(neon_database_url=None)
         payload = build_opendental_writeback_payload(
             pat_num=1,
@@ -68,7 +69,7 @@ class WritebackExecutorRetryTests(unittest.TestCase):
     @patch("app.pipeline.executor.fail_pipeline_run")
     @patch("app.pipeline.executor._execute_opendental_writeback")
     @patch("app.pipeline.executor.write_audit_log")
-    def test_partial_failure_triggers_retry(
+    def test_partial_failure_completes_run(
         self,
         _mock_audit: MagicMock,
         mock_execute: MagicMock,
@@ -78,9 +79,39 @@ class WritebackExecutorRetryTests(unittest.TestCase):
         from app.pipeline.executor import execute_pipeline_run
 
         mock_execute.return_value = {
-            "write_back_result": {},
+            "write_back_result": {"benefits_grid": {"error": "401"}},
             "partial_failure": True,
         }
+        settings = Settings(neon_database_url="postgresql://neon")
+        run = {
+            "id": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+            "practice_id": "practice-1",
+            "run_type": "opendental_writeback",
+            "payload": {"pat_num": 1},
+            "locked_by": "test_worker",
+        }
+
+        execute_pipeline_run(settings, run)
+
+        mock_complete.assert_called_once()
+        mock_fail.assert_not_called()
+        self.assertTrue(mock_complete.call_args.kwargs["result"]["partial_failure"])
+
+    @patch("app.pipeline.executor.complete_pipeline_run")
+    @patch("app.pipeline.executor.fail_pipeline_run")
+    @patch("app.pipeline.executor._execute_opendental_writeback")
+    @patch("app.pipeline.executor.write_audit_log")
+    def test_client_construction_failure_retries(
+        self,
+        _mock_audit: MagicMock,
+        mock_execute: MagicMock,
+        mock_fail: MagicMock,
+        mock_complete: MagicMock,
+    ) -> None:
+        from app.integrations.opendental.errors import OpenDentalConfigError
+        from app.pipeline.executor import execute_pipeline_run
+
+        mock_execute.side_effect = OpenDentalConfigError("Missing OpenDental developer/customer key")
         settings = Settings(neon_database_url="postgresql://neon")
         run = {
             "id": "cccccccc-cccc-cccc-cccc-cccccccccccc",
@@ -95,6 +126,22 @@ class WritebackExecutorRetryTests(unittest.TestCase):
         mock_fail.assert_called_once()
         mock_complete.assert_not_called()
         self.assertTrue(mock_fail.call_args.kwargs.get("retry"))
+
+
+class WritebackStepSummaryTests(unittest.TestCase):
+    def test_step_summary_maps_ok_error_skipped(self) -> None:
+        from app.integrations.opendental.writeback import writeback_step_summary
+
+        summary = writeback_step_summary(
+            {
+                "benefit_notes": {"ins_sub_num": 1},
+                "benefits_grid": {"error": "401"},
+                "inshist": {"skipped": True},
+            }
+        )
+        self.assertEqual(summary["benefit_notes"], "ok")
+        self.assertEqual(summary["benefits_grid"], "error")
+        self.assertEqual(summary["inshist"], "skipped")
 
 
 if __name__ == "__main__":

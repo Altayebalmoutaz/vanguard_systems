@@ -281,5 +281,40 @@ class DashboardRouteTests(unittest.TestCase):
         self.assertEqual(resp.json()["detail"], "patient_not_found")
 
 
+class EligibilityQueuePayloadTests(unittest.TestCase):
+    def test_queue_sql_exposes_opendental_fields(self) -> None:
+        from app.dashboard.store import _QUEUE_SQL
+
+        self.assertIn("er.appointment_date", _QUEUE_SQL)
+        self.assertIn("input_json->>'pat_num' as od_pat_num", _QUEUE_SQL)
+        self.assertIn("input_json->>'source' as request_source", _QUEUE_SQL)
+        self.assertIn("output_json->'opendental_writeback' as opendental_writeback", _QUEUE_SQL)
+
+    def test_shape_dashboard_row_keeps_opendental_fields(self) -> None:
+        from app.dashboard.store import _shape_dashboard_row
+
+        shaped = _shape_dashboard_row(
+            {
+                "request_id": "req-1",
+                "request_status": "completed",
+                "priority": "medium",
+                "appointment_date": "2026-08-13",
+                "od_pat_num": "24",
+                "request_source": "opendental",
+                "opendental_writeback": {"status": "partial", "partial_failure": True},
+                "check_id": "check-1",
+                "is_active": True,
+                "response_complete": True,
+                "missing_fields": None,
+                "integrity_warnings": None,
+                "routing_status": "CLEARED",
+            }
+        )
+        self.assertEqual(shaped["appointment_date"], "2026-08-13")
+        self.assertEqual(shaped["od_pat_num"], "24")
+        self.assertEqual(shaped["request_source"], "opendental")
+        self.assertEqual(shaped["opendental_writeback"]["status"], "partial")
+
+
 if __name__ == "__main__":
     unittest.main()

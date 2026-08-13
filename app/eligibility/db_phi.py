@@ -951,6 +951,29 @@ def complete_eligibility_request_processing(
     )
 
 
+def merge_eligibility_request_output_json(
+    settings: Settings,
+    *,
+    practice_id: str,
+    request_id: str | UUID,
+    patch: dict[str, Any],
+) -> None:
+    """Shallow-merge ``patch`` into ``rcm.eligibility_requests.output_json``."""
+    s = _resolve_settings(settings)
+    with neon_connection(s, practice_id=practice_id) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                update rcm.eligibility_requests
+                set output_json = coalesce(output_json, '{}'::jsonb) || %s,
+                    updated_at = now()
+                where practice_id = %s and id = %s
+                """,
+                (Jsonb(_json_safe(patch)), practice_id, UUID(str(request_id))),
+            )
+        conn.commit()
+
+
 def fail_eligibility_request_processing(
     settings: Settings,
     *,

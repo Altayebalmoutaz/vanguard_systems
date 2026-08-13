@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 from uuid import uuid4
 
 from app.integrations.opendental import post_check as mod
@@ -226,3 +227,61 @@ def test_maybe_enqueue_partial_writeback_omits_grid(monkeypatch) -> None:
     assert captured[0]["write_insadjust"] is False
     assert captured[0]["write_benefits_grid"] is False
     assert captured[0]["write_inshist"] is False
+
+
+def test_maybe_enqueue_honors_live_writeback_enabled(monkeypatch) -> None:
+    monkeypatch.setattr(
+        mod,
+        "get_eligibility_settings",
+        lambda: SimpleNamespace(
+            pilot_shadow_mode=False, opendental_write_benefits_grid_respect_manual_edits=True
+        ),
+    )
+    monkeypatch.setattr(
+        mod,
+        "get_connection",
+        lambda *a, **k: {"writeback_enabled": True, "writeback_full": False},
+    )
+    monkeypatch.setattr(mod, "build_opendental_writeback_payload", lambda **k: {"pat_num": 42})
+    monkeypatch.setattr(mod, "enqueue_opendental_writeback", lambda *a, **k: uuid4())
+    monkeypatch.setattr(
+        "app.eligibility.db_phi.merge_eligibility_request_output_json",
+        lambda *a, **k: None,
+    )
+
+    out = mod.maybe_enqueue_od_writeback(
+        SimpleNamespace(),
+        practice_id="clinic_a",
+        request_id=uuid4(),
+        row=_row(writeback_enabled=False),
+        result=_result(),
+    )
+    assert out is not None
+    assert out["queued"] is True
+
+
+def test_maybe_enqueue_skips_when_live_writeback_disabled(monkeypatch) -> None:
+    monkeypatch.setattr(
+        mod,
+        "get_eligibility_settings",
+        lambda: SimpleNamespace(
+            pilot_shadow_mode=False, opendental_write_benefits_grid_respect_manual_edits=True
+        ),
+    )
+    monkeypatch.setattr(
+        mod,
+        "get_connection",
+        lambda *a, **k: {"writeback_enabled": False, "writeback_full": True},
+    )
+    enqueue = MagicMock()
+    monkeypatch.setattr(mod, "enqueue_opendental_writeback", enqueue)
+
+    out = mod.maybe_enqueue_od_writeback(
+        SimpleNamespace(),
+        practice_id="clinic_a",
+        request_id=uuid4(),
+        row=_row(writeback_enabled=True, writeback_full=True),
+        result=_result(),
+    )
+    assert out is None
+    enqueue.assert_not_called()

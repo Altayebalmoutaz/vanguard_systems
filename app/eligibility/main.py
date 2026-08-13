@@ -57,15 +57,8 @@ from app.integrations.opendental import (
     OpenDentalClient,
     OpenDentalConfigError,
     OpenDentalMappingError,
-    od_to_eligibility_request,
 )
 from app.integrations.opendental.poller import start_appointment_poller
-from app.integrations.opendental.writeback import run_opendental_writeback
-from app.pilot.shadow import record_eligibility_shadow
-from app.pipeline.writeback_queue import (
-    build_opendental_writeback_payload,
-    enqueue_opendental_writeback,
-)
 from app.security.phi import scrub_for_log
 
 logging.basicConfig(level=logging.INFO)
@@ -121,7 +114,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     poller_task = None
     if settings.opendental_auto_poll_enabled:
-        poller_task = start_appointment_poller(run_from_opendental, settings)
+        poller_task = start_appointment_poller(settings)
         logger.info(
             "OpenDental auto-poll enabled (interval=%ss)",
             settings.opendental_auto_poll_interval_seconds,
@@ -253,95 +246,77 @@ def run_from_opendental(
     settings: EligibilitySettings | None = None,
     client: OpenDentalClient | None = None,
 ) -> dict[str, Any]:
-    """Core OpenDental -> eligibility -> write-back flow shared by the route and poller.
+    """Enqueue onto the live Poll now path (eligibility_requests + pipeline worker).
 
-    Raises OpenDental*/Stedi*/Layer1 errors to the caller (the HTTP route maps them to
-    responses; the poller logs and continues).
+    No longer runs Stedi or OD writeback inline. Writeback follows connection
+    flags after the worker completes the check.
     """
+    from app.eligibility.mock_clinic import DEFAULT_MOCK_PRACTICE_ID
+    from app.integrations.opendental.connections_store import get_connection
+    from app.integrations.opendental.eligibility_enqueue import enqueue_od_eligibility_check
+
     settings = settings or get_settings()
-    client = client or OpenDentalClient.from_settings(settings)
-
-    patient = client.get_patient(pat_num)
-    insurance_rows = client.get_patient_insurance(pat_num)
-
-    carriers_by_num: dict[int, Any] = {}
-    for row in insurance_rows:
-        if row.CarrierNum not in carriers_by_num:
-            carriers_by_num[row.CarrierNum] = client.get_carrier(row.CarrierNum)
-
-    mapped = od_to_eligibility_request(
-        patient,
-        insurance_rows,
-        carriers_by_num,
-        trigger_event=trigger_event,
-        cdt_codes=cdt_codes,
-        practice_id=practice_id,
-        rendering_provider_npi=rendering_provider_npi,
-    )
-    out = run_eligibility_check_endpoint(mapped.request, settings=settings)
-
-    writeback_detail: dict[str, Any] | None = None
-    primary = out.get("primary") or {}
-    if write_back and settings.opendental_writeback_allowed and primary:
-        wb_payload = build_opendental_writeback_payload(
-            pat_num=pat_num,
-            primary_pat_plan_num=mapped.primary_pat_plan_num,
-            primary_plan_num=mapped.primary_plan_num,
-            primary_ins_sub_num=mapped.primary_ins_sub_num,
-            primary_result=primary,
-            carrier_name=mapped.primary_carrier_name,
-            write_benefit_notes=settings.opendental_write_benefit_notes_enabled,
-            write_subscriber_note=settings.opendental_write_subscriber_note_enabled,
-            write_commlog=settings.opendental_write_commlog_enabled,
-            write_inshist=settings.opendental_write_inshist_enabled,
-            write_insadjust=settings.opendental_write_insadjust_enabled,
-            write_benefits_grid=settings.opendental_write_benefits_grid_enabled,
-            respect_manual_edits=settings.opendental_write_benefits_grid_respect_manual_edits,
-            check_id=primary.get("check_id"),
-            patient_id=mapped.request.patient_id,
-        )
-        effective_practice = practice_id or mapped.request.practice_id
-        pipeline_run_id = None
-        if effective_practice and get_neon_dsn(get_app_settings()):
-            check_id = primary.get("check_id")
-            idempotency_key = (
-                f"od_writeback:{effective_practice}:{pat_num}:{check_id}"
-                if check_id
-                else f"od_writeback:{effective_practice}:{pat_num}"
-            )
-            pipeline_run_id = enqueue_opendental_writeback(
-                get_app_settings(),
-                practice_id=str(effective_practice),
-                payload=wb_payload,
-                idempotency_key=idempotency_key,
-            )
-        if pipeline_run_id:
-            writeback_detail = {"queued": True, "pipeline_run_id": str(pipeline_run_id)}
-        else:
-            writeback_detail = run_opendental_writeback(client, **wb_payload)
-
-    opendental_detail = {
-        "pat_num": pat_num,
-        "primary_pat_plan_num": mapped.primary_pat_plan_num,
-        "primary_plan_num": mapped.primary_plan_num,
-        "primary_ins_sub_num": mapped.primary_ins_sub_num,
-        "write_back_requested": write_back,
-        "write_back_enabled": settings.opendental_writeback_allowed,
-        "write_back_result": (writeback_detail or {}).get("write_back_result"),
-        "write_back_notes": writeback_detail,
-    }
+    app_settings = get_app_settings()
     effective_practice = (
-        practice_id or mapped.request.practice_id or settings.pilot_default_practice_id
+        (practice_id or "").strip()
+        or (settings.pilot_default_practice_id or "").strip()
+        or DEFAULT_MOCK_PRACTICE_ID
     )
-    if effective_practice and settings.pilot_shadow_mode and primary:
-        app_settings = get_app_settings()
-        record_eligibility_shadow(
-            app_settings,
-            practice_id=str(effective_practice),
-            pat_num=pat_num,
-            primary_result=primary,
+    if not get_neon_dsn(app_settings):
+        raise RuntimeError(
+            "DATABASE_URL is required; /eligibility/from-opendental now enqueues "
+            "the live Poll now path instead of running Stedi inline"
         )
-    return {**out, "opendental": opendental_detail}
+
+    connection: dict[str, Any] | None = None
+    try:
+        connection = get_connection(app_settings, practice_id=effective_practice)
+    except Exception as exc:
+        logger.debug("from-opendental connection lookup skipped: %s", exc)
+    if not connection:
+        connection = {
+            "practice_id": effective_practice,
+            "base_url": settings.opendental_base_url,
+            "customer_key_ref": "",
+            "writeback_enabled": bool(write_back and settings.opendental_writeback_allowed),
+            "writeback_full": bool(settings.opendental_write_benefits_grid_enabled),
+            "writeback_shadow_compare": False,
+        }
+    elif write_back:
+        connection = {**connection, "writeback_enabled": True}
+
+    od_client = client
+    if od_client is None:
+        try:
+            od_client = OpenDentalClient.from_connection(connection, settings=settings)
+        except OpenDentalConfigError:
+            od_client = OpenDentalClient.from_settings(settings)
+
+    row = enqueue_od_eligibility_check(
+        app_settings,
+        practice_id=effective_practice,
+        pat_num=pat_num,
+        connection=connection,
+        client=od_client,
+        cdt_codes=cdt_codes,
+        trigger_event=trigger_event,
+    )
+    return {
+        "cached": False,
+        "layer0_warnings": [],
+        "primary": None,
+        "secondary": None,
+        "opendental": {
+            "pat_num": pat_num,
+            "practice_id": effective_practice,
+            "queued": bool(row),
+            "skipped": row is None,
+            "request_id": str(row["id"]) if row else None,
+            "pipeline_run_id": (row or {}).get("pipeline_run_id"),
+            "write_back_requested": write_back,
+            "write_back_enabled": bool(connection.get("writeback_enabled")),
+        },
+    }
 
 
 @app.post("/eligibility/from-opendental", response_model=FromOpenDentalResponse)

@@ -18,17 +18,28 @@ Auth header:
 ## Production flow (queue)
 
 1. Multi-clinic **poller** (or dashboard **Poll now**) loads appointments across
-   `poll_window_days` (auto-poll defaults toward a 3-day / 48–72h reverify window
-   when the connection is set to today-only).
-2. For each patient: `GET /patients`, `GET /familymodules/{PatNum}/Insurance`,
+   `poll_window_days`. Poll now uses the connection window as shown in the UI
+   (`0` = today only). Background auto-poll may expand a today-only window to
+   3 days. Only **Scheduled** and **ASAP** appointments are enqueued
+   (Complete / Broken / UnschedList / Planned are dropped client-side).
+2. OpenDental HTTP/network errors fail the poll (`status=error`); they are not
+   recorded as `ok` with 0 appointments.
+3. For each patient: `GET /patients`, `GET /familymodules/{PatNum}/Insurance`,
    carriers → map to `EligibilityRequest` (primary **and** secondary plan IDs).
-3. Enqueue `rcm.eligibility_requests` → pipeline worker → Stedi.
-4. On completion, `maybe_enqueue_od_writeback` queues `opendental_writeback`
-   pipeline run(s) for primary (and secondary when present + full writeback).
+4. Enqueue one `rcm.eligibility_requests` row with `appointment_date`,
+   `input_json.pat_num`, `apt_nums`, and `source=opendental`. Same-day
+   `queued` / `processing` / `completed` rows are skipped; `failed` /
+   `needs_attention` may re-enqueue. A completed Stedi check still blocks a
+   second 270/271 (`_checked_today`); retry writeback on the writeback pipeline.
+5. Pipeline worker → Stedi. On completion, live `writeback_enabled` on the
+   connection (not the poll-time snapshot) queues `opendental_writeback`
+   run(s). Partial per-step OD errors complete the run with
+   `partial_failure=true` and a step summary; only pre-step client/transport
+   failures retry.
 
-Legacy synchronous route `POST /eligibility-agent/eligibility/from-opendental`
-still exists for demos; it uses env `OPENDENTAL_WRITE_*` flags instead of the
-per-clinic connection toggles.
+`POST /eligibility-agent/eligibility/from-opendental` enqueues the same queue
+path (it does not run Stedi or writeback inline). Operational use is Poll now
+or auto-poll.
 
 ## Honest Phase 1 vs estimate-driving writeback
 
@@ -166,8 +177,9 @@ OPENDENTAL_AUTO_POLL_ENABLED=false
 PILOT_SHADOW_MODE=false
 ```
 
-Per-clinic writeback is controlled on the dashboard connection row; env flags
-apply mainly to the legacy `from-opendental` route. Confidence gating defaults
+Per-clinic writeback is controlled on the dashboard connection row (live
+`writeback_enabled` / `writeback_full` at enqueue time). Env flags are fallbacks
+for client construction, not a second operational path. Confidence gating defaults
 **off** for full writeback demos; set `OPENDENTAL_WRITE_BENEFITS_GRID_CONFIDENCE_GATING=true`
 for cautious production pilots.
 
@@ -200,11 +212,34 @@ py -3.12 scripts/seed_clinic_sim.py reset
 
 Sim fee overlays use effective date `2026-07-26` (no notes column on
 `payer_fee_schedules`). Network rows are tagged `[clinic_sim]` in
-`contract_label` / `notes`. After apply, re-run
-`POST /eligibility-agent/eligibility/from-opendental` with
-`practice_id=vgd_mock_brooklyn`, `rendering_provider_npi=1104023674`, and
-`write_back=true` (see script `--help`). For `missing_fees`, keep
+`contract_label` / `notes`. After apply, use dashboard **Poll now** (or
+`POST /eligibility-agent/eligibility/from-opendental`, which now enqueues the
+same path) with `practice_id=vgd_mock_brooklyn`. For `missing_fees`, keep
 `ELIGIBILITY_UCR_FALLBACK_ENABLED` off so fallback does not hide the gap.
+
+## Standalone OD write-back service (optional)
+
+By default the pipeline worker runs write-back **in-process** via
+`run_opendental_writeback`. To route through the extracted
+`opendental-writeback-service` instead, set on the monolith:
+
+```bash
+ODWB_SERVICE_URL=http://127.0.0.1:8080   # or internal HTTPS URL
+ODWB_API_KEY=<shared bearer>
+# ODWB_TIMEOUT_SECONDS=60
+```
+
+When `ODWB_SERVICE_URL` is **unset** (default), behavior is unchanged.
+Durability, retries, and durable idempotency stay on the Neon
+`opendental_writeback` queue either way. The service is DB-free: the worker
+loads provenance audit rows, calls `POST /v1/writeback`, then replays
+returned `audit_events` with `write_audit_event`.
+
+**Rollback:** unset `ODWB_SERVICE_URL` and recycle pipeline workers.
+
+See the sibling repo `opendental-writeback-service` (`README.md`,
+`docs/runbook.md`) for allowlist config, PHI/network notes, and staged
+enablement.
 
 ## Hard rules
 

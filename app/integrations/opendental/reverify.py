@@ -10,12 +10,14 @@ def effective_poll_window_days(
     connection: dict[str, Any],
     *,
     default_reverify_days: int = 3,
+    expand_when_zero: bool | None = None,
 ) -> int:
     """Return the appointment look-ahead window for a connection.
 
     Uses the connection's ``poll_window_days`` when explicitly set (>0).
-    When the clinic left the default at 0 (today only), prefer the configured
-    reverify window (48–72h ≈ 2–3 days) so pilots pick up next-day/next-few-day apts.
+    When the clinic left the default at 0 (today only), auto-poll may expand to
+    the configured reverify window (48–72h ≈ 2–3 days). Poll now never expands
+    (``expand_when_zero=False``) so the UI window matches what staff configured.
     """
     raw = connection.get("poll_window_days")
     try:
@@ -24,8 +26,12 @@ def effective_poll_window_days(
         configured = 0
     if configured > 0:
         return configured
-    # Only auto-expand when auto-poll is enabled — avoids surprising Poll-now "today" clinics.
-    if connection.get("poll_enabled") and default_reverify_days > 0:
+    should_expand = (
+        bool(expand_when_zero)
+        if expand_when_zero is not None
+        else bool(connection.get("poll_enabled"))
+    )
+    if should_expand and default_reverify_days > 0:
         return max(0, int(default_reverify_days))
     return max(0, configured)
 

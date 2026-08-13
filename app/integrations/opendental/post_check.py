@@ -81,6 +81,7 @@ def _enqueue_one(
         coverage_order=coverage_order,
     )
     wb_payload["practice_id"] = practice_id
+    wb_payload["eligibility_request_id"] = str(request_id)
     idempotency_key = (
         f"od_writeback:{practice_id}:{pat_num}:{coverage_order}:{check_id}"
         if check_id
@@ -125,20 +126,18 @@ def maybe_enqueue_od_writeback(
     input_json = row.get("input_json") or {}
     if not isinstance(input_json, dict) or input_json.get("source") != "opendental":
         return None
-    if not input_json.get("writeback_enabled"):
-        return None
 
     connection = get_connection(app_settings, practice_id=practice_id)
     if not connection or not connection.get("writeback_enabled"):
         return None
 
-    # Prefer live connection flags (dashboard) over stale input_json snapshot.
-    if connection.get("writeback_full") is not None:
-        input_json = {
-            **input_json,
-            "writeback_full": bool(connection.get("writeback_full")),
-            "writeback_shadow_compare": bool(connection.get("writeback_shadow_compare")),
-        }
+    # Live dashboard flags override the poll-time snapshot (including master gate).
+    input_json = {
+        **input_json,
+        "writeback_enabled": True,
+        "writeback_full": bool(connection.get("writeback_full")),
+        "writeback_shadow_compare": bool(connection.get("writeback_shadow_compare")),
+    }
 
     pat_num = input_json.get("pat_num")
     primary = result.get("primary")
@@ -207,4 +206,20 @@ def maybe_enqueue_od_writeback(
 
     if not queued:
         return None
-    return {"queued": True, "runs": queued}
+    summary = {"queued": True, "runs": queued}
+    try:
+        from app.eligibility.db_phi import merge_eligibility_request_output_json
+
+        merge_eligibility_request_output_json(
+            app_settings,
+            practice_id=practice_id,
+            request_id=request_id,
+            patch={"opendental_writeback": summary},
+        )
+    except Exception as exc:
+        logger.warning(
+            "failed to stamp OD writeback summary on request_id=%s: %s",
+            request_id,
+            exc,
+        )
+    return summary

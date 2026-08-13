@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC, date, datetime
 from typing import Any
-from uuid import NAMESPACE_DNS, uuid5
+from uuid import NAMESPACE_DNS, uuid4, uuid5
 
 from psycopg.rows import dict_row
 
@@ -72,6 +72,7 @@ def build_od_eligibility_payload(
     trigger_event: TriggerEvent = TriggerEvent.PRE_APPOINTMENT,
     resolve: ResolveResult | None = None,
     apt_nums: list[int] | None = None,
+    appointment_date: date | None = None,
 ) -> dict[str, Any]:
     patient = client.get_patient(pat_num)
     insurance_rows = client.get_patient_insurance(pat_num)
@@ -101,6 +102,7 @@ def build_od_eligibility_payload(
         "cdt_codes": list(req.cdt_codes or []),
         "trigger_event": trigger_event.value,
         "priority": "medium",
+        "appointment_date": appointment_date.isoformat() if appointment_date else None,
         "idempotency_key": f"od:{practice_id}:{pat_num}:{date.today().isoformat()}",
         "input_json": {
             **_od_input_json(
@@ -115,12 +117,21 @@ def build_od_eligibility_payload(
     }
 
 
+_BLOCKING_REQUEST_STATUSES = ("queued", "processing", "completed")
+
+
 def od_request_exists_today(
     settings: Settings,
     *,
     practice_id: str,
     pat_num: int,
 ) -> bool:
+    """True when a same-day request is still in-flight or already succeeded.
+
+    ``failed`` / ``needs_attention`` do not block a new enqueue (Stedi retry).
+    A completed Stedi check is blocked here and by ``_checked_today`` so
+    writeback retries go through the writeback pipeline, not a second 270/271.
+    """
     try:
         today_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
         with (
@@ -134,9 +145,10 @@ def od_request_exists_today(
                 where practice_id = %s
                   and (input_json->>'pat_num') = %s
                   and created_at >= %s
+                  and status = any(%s)
                 limit 1
                 """,
-                (practice_id, str(pat_num), today_start),
+                (practice_id, str(pat_num), today_start, list(_BLOCKING_REQUEST_STATUSES)),
             )
             return cur.fetchone() is not None
     except Exception as exc:
@@ -155,6 +167,7 @@ def enqueue_od_eligibility_check(
     trigger_event: TriggerEvent = TriggerEvent.PRE_APPOINTMENT,
     resolve: ResolveResult | None = None,
     apt_nums: list[int] | None = None,
+    appointment_date: date | None = None,
 ) -> dict[str, Any] | None:
     if od_request_exists_today(app_settings, practice_id=practice_id, pat_num=pat_num):
         return None
@@ -167,10 +180,18 @@ def enqueue_od_eligibility_check(
         trigger_event=trigger_event,
         resolve=resolve,
         apt_nums=apt_nums,
+        appointment_date=appointment_date,
     )
     try:
         return create_eligibility_request(app_settings, practice_id=practice_id, payload=payload)
     except ValueError as exc:
-        if str(exc) == "idempotency_conflict":
-            return None
-        raise
+        if str(exc) != "idempotency_conflict":
+            raise
+        # Same-day failed/needs_attention row still holds the base idempotency key.
+        payload["idempotency_key"] = f"{payload['idempotency_key']}:r{uuid4().hex[:8]}"
+        try:
+            return create_eligibility_request(app_settings, practice_id=practice_id, payload=payload)
+        except ValueError as retry_exc:
+            if str(retry_exc) == "idempotency_conflict":
+                return None
+            raise

@@ -9,9 +9,9 @@ the legacy single-clinic env configuration (``OPENDENTAL_*``).
 When ``PILOT_SHADOW_MODE=1``, write-back is disabled and eligibility results are logged
 to ``platform.pilot_shadow_events`` for ROI tracking.
 
-Idempotency: a patient is processed at most once per day, enforced by an in-memory set
-(fast path) plus a DB timestamp check (survives process restarts). All OD/Stedi
-failures are logged and never stop the loop.
+Idempotency: a patient is processed at most once per successful Stedi check per day.
+Same-day ``failed`` / ``needs_attention`` rows may be re-enqueued. Intra-pass PatNum
+dedup uses a local set; auto-poll does not keep a process-lifetime seen set.
 """
 
 from __future__ import annotations
@@ -39,15 +39,33 @@ from app.integrations.opendental.eligibility_enqueue import (
     od_request_exists_today,
     opendental_patient_uuid,
 )
-from app.integrations.opendental.errors import OpenDentalConfigError
+from app.integrations.opendental.errors import OpenDentalAPIError, OpenDentalConfigError
 from app.integrations.opendental.models import ODProcedureLog
 from app.integrations.opendental.reverify import effective_poll_window_days
 
 logger = logging.getLogger(__name__)
 
+# Client-side filter: OD Remote API may ignore AptStatus= query params.
+_LIVE_APT_STATUSES = frozenset({"scheduled", "asap"})
+
 
 def od_headers(developer_key: str, customer_key: str) -> dict[str, str]:
     return {"Authorization": f"ODFHIR {developer_key.strip()}/{customer_key.strip()}"}
+
+
+def is_live_appointment(apt: dict[str, Any]) -> bool:
+    """True for appointments that should trigger eligibility (not complete/broken)."""
+    status = str(apt.get("AptStatus") or "").strip().lower()
+    return status in _LIVE_APT_STATUSES
+
+
+def appointment_date_from_row(apt: dict[str, Any], *, fallback: str) -> date:
+    raw = apt.get("AptDateTime") or apt.get("AptDate") or fallback
+    text = str(raw).strip()[:10]
+    try:
+        return date.fromisoformat(text)
+    except ValueError:
+        return date.fromisoformat(fallback)
 
 
 def fetch_appointments(
@@ -57,19 +75,30 @@ def fetch_appointments(
     on_date: str,
     timeout: float,
 ) -> list[dict[str, Any]]:
-    """GET /appointments for a single date. Returns [] on any error (poller-friendly)."""
+    """GET /appointments for a single date. Raises on HTTP/network errors."""
     url = f"{base_url.rstrip('/')}/appointments"
     try:
         with httpx.Client(timeout=timeout) as client:
             resp = client.get(url, headers=headers, params={"date": on_date})
-        if resp.status_code >= 400:
-            logger.warning("OD GET /appointments %s: %s", resp.status_code, resp.text[:200])
-            return []
-        data = resp.json()
-        return data if isinstance(data, list) else []
+    except OpenDentalAPIError:
+        raise
     except Exception as exc:
-        logger.warning("OD appointment fetch failed: %s: %s", type(exc).__name__, exc)
-        return []
+        raise OpenDentalAPIError(
+            f"OpenDental appointment fetch failed: {type(exc).__name__}: {exc}"
+        ) from exc
+    if resp.status_code >= 400:
+        raise OpenDentalAPIError(
+            f"OpenDental GET /appointments failed: {resp.status_code}",
+            status_code=resp.status_code,
+            body=(resp.text or "")[:200],
+        )
+    try:
+        data = resp.json()
+    except Exception as exc:
+        raise OpenDentalAPIError("OpenDental appointments payload was not JSON") from exc
+    if not isinstance(data, list):
+        raise OpenDentalAPIError("OpenDental appointments payload was not a list")
+    return data
 
 
 def _poll_dates(window_days: int) -> list[str]:
@@ -79,7 +108,11 @@ def _poll_dates(window_days: int) -> list[str]:
 
 
 def _checked_today(pat_num: int) -> bool:
-    """True when this patient already has an eligibility_checks row dated today."""
+    """True when this patient already has an eligibility_checks row dated today.
+
+    Blocks a second Stedi run after a successful check so writeback retries stay
+    on the writeback pipeline, not a new 270/271.
+    """
     try:
         from app.eligibility.db import get_latest_eligibility_for_patient, get_supabase
 
@@ -106,6 +139,7 @@ def run_connection_poll(
     connection: dict[str, Any],
     *,
     seen: set[int] | None = None,
+    for_auto_poll: bool = False,
 ) -> dict[str, Any]:
     """One synchronous poll pass for one clinic connection row.
 
@@ -118,7 +152,15 @@ def run_connection_poll(
         client = OpenDentalClient.from_connection(connection, settings=settings)
     except OpenDentalConfigError as exc:
         record_poll_result(app_settings, practice_id=practice_id, status="error", error=str(exc))
-        return {"practice_id": practice_id, "status": "error", "error": str(exc)}
+        return {
+            "practice_id": practice_id,
+            "status": "error",
+            "error": str(exc),
+            "appointments": 0,
+            "processed": 0,
+            "skipped_today": 0,
+            "failed": 0,
+        }
 
     headers = od_headers(client.developer_key, client.customer_key)
     clinic_defaults = [
@@ -127,44 +169,65 @@ def run_connection_poll(
     window_days = effective_poll_window_days(
         connection,
         default_reverify_days=int(getattr(settings, "opendental_reverify_window_days", 3) or 3),
+        expand_when_zero=for_auto_poll,
     )
 
-    # Pass 1: collect AptNums per patient across the poll window.
     apts_by_pat: dict[int, list[int]] = {}
+    apt_date_by_pat: dict[int, date] = {}
     total_appointments = 0
-    for on_date in _poll_dates(window_days):
-        appointments = fetch_appointments(
-            base_url=client.base_url,
-            headers=headers,
-            on_date=on_date,
-            timeout=settings.opendental_timeout_seconds,
-        )
-        total_appointments += len(appointments)
-        for apt in appointments:
-            pat_raw = apt.get("PatNum")
-            if not pat_raw:
-                continue
-            pat_num = int(pat_raw)
-            apt_raw = apt.get("AptNum")
-            if apt_raw is None:
-                continue
-            apt_num = int(apt_raw)
-            bucket = apts_by_pat.setdefault(pat_num, [])
-            if apt_num not in bucket:
-                bucket.append(apt_num)
+    try:
+        for on_date in _poll_dates(window_days):
+            appointments = fetch_appointments(
+                base_url=client.base_url,
+                headers=headers,
+                on_date=on_date,
+                timeout=settings.opendental_timeout_seconds,
+            )
+            for apt in appointments:
+                if not is_live_appointment(apt):
+                    continue
+                pat_raw = apt.get("PatNum")
+                if not pat_raw:
+                    continue
+                pat_num = int(pat_raw)
+                apt_raw = apt.get("AptNum")
+                if apt_raw is None:
+                    continue
+                apt_num = int(apt_raw)
+                total_appointments += 1
+                bucket = apts_by_pat.setdefault(pat_num, [])
+                if apt_num not in bucket:
+                    bucket.append(apt_num)
+                apt_date = appointment_date_from_row(apt, fallback=on_date)
+                prev = apt_date_by_pat.get(pat_num)
+                if prev is None or apt_date < prev:
+                    apt_date_by_pat[pat_num] = apt_date
+    except OpenDentalAPIError as exc:
+        logger.warning("OD appointment fetch failed practice=%s: %s", practice_id, exc)
+        record_poll_result(app_settings, practice_id=practice_id, status="error", error=str(exc))
+        return {
+            "practice_id": practice_id,
+            "status": "error",
+            "error": str(exc),
+            "appointments": 0,
+            "processed": 0,
+            "skipped_today": 0,
+            "failed": 0,
+        }
 
-    # Pass 2: one eligibility enqueue per patient (merged CDTs from all their apts).
     processed = 0
     failed = 0
+    skipped_today = 0
     for pat_num, apt_nums in apts_by_pat.items():
         if pat_num in seen:
+            skipped_today += 1
             continue
         if _checked_today(pat_num) or od_request_exists_today(
             app_settings, practice_id=practice_id, pat_num=pat_num
         ):
             seen.add(pat_num)
+            skipped_today += 1
             continue
-        seen.add(pat_num)
         try:
             proc_rows: list[ODProcedureLog] = []
             for apt_num in apt_nums:
@@ -180,8 +243,10 @@ def run_connection_poll(
                 trigger_event=TriggerEvent.PRE_APPOINTMENT,
                 resolve=resolved,
                 apt_nums=apt_nums,
+                appointment_date=apt_date_by_pat.get(pat_num),
             )
             if row:
+                seen.add(pat_num)
                 processed += 1
                 logger.warning(
                     "poller enqueued practice=%s PatNum=%s request_id=%s cdt_source=%s cdts=%s",
@@ -191,6 +256,9 @@ def run_connection_poll(
                     resolved.cdt_source,
                     resolved.cdt_codes,
                 )
+            else:
+                seen.add(pat_num)
+                skipped_today += 1
         except Exception as exc:
             failed += 1
             logger.warning(
@@ -202,19 +270,22 @@ def run_connection_poll(
             )
 
     status = "ok" if failed == 0 else "error"
+    error = None if failed == 0 else f"{failed} patient(s) failed during poll"
     record_poll_result(
         app_settings,
         practice_id=practice_id,
         status=status,
         appointments=total_appointments,
-        error=None if failed == 0 else f"{failed} patient(s) failed during poll",
+        error=error,
     )
     return {
         "practice_id": practice_id,
         "status": status,
         "appointments": total_appointments,
         "processed": processed,
+        "skipped_today": skipped_today,
         "failed": failed,
+        "error": error,
     }
 
 
@@ -233,7 +304,6 @@ def _connection_due(connection: dict[str, Any], *, now: datetime, default_interv
 
 async def _poll_loop(settings: EligibilitySettings) -> None:
     app_settings = get_app_settings()
-    seen_by_practice: dict[str, set[int]] = {}
     interval = max(1.0, float(settings.opendental_auto_poll_interval_seconds))
     logger.info(
         "OpenDental poller loop started (interval=%ss, shadow_mode=%s)",
@@ -259,9 +329,11 @@ async def _poll_loop(settings: EligibilitySettings) -> None:
             for connection in connections:
                 if not _connection_due(connection, now=now, default_interval=interval):
                     continue
-                practice_id = str(connection.get("practice_id") or "")
-                seen = seen_by_practice.setdefault(practice_id, set())
-                run_connection_poll(settings, app_settings, connection, seen=seen)
+                # Fresh seen each pass so a same-day failed request can be retried;
+                # intra-pass PatNum dedup still happens inside run_connection_poll.
+                run_connection_poll(
+                    settings, app_settings, connection, for_auto_poll=True
+                )
             return "multi_clinic"
 
     while True:

@@ -210,6 +210,14 @@ def test_reverify_window_and_change_alerts() -> None:
         )
         == 0
     )
+    assert (
+        effective_poll_window_days(
+            {"poll_window_days": 0, "poll_enabled": True},
+            default_reverify_days=3,
+            expand_when_zero=False,
+        )
+        == 0
+    )
     items = material_change_alert_items(
         benefits_grid={
             "actions": [{"action": "proposed_update", "target": "BASIC", "type": "CoInsurance"}]

@@ -2307,10 +2307,18 @@ export default function EligibilityDashboard() {
                                 </div>
                                 <div className="text-[11px] text-slate-500">
                                   DOB: {formatDob(row.request.dob)}
+                                  {readRow?.od_pat_num
+                                    ? ` · OD ${readRow.od_pat_num}`
+                                    : ""}
                                   {readRow?.appointment_date ||
                                   row.request.appointment_date
                                     ? ` · Appt ${readRow?.appointment_date ?? row.request.appointment_date}`
                                     : ""}
+                                  {readRow?.opendental_writeback?.status
+                                    ? ` · OD ${readRow.opendental_writeback.status}`
+                                    : readRow?.opendental_writeback?.queued
+                                      ? " · OD writeback queued"
+                                      : ""}
                                 </div>
                               </div>
                             </div>

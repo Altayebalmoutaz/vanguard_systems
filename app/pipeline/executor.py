@@ -21,6 +21,7 @@ from app.integrations.opendental.client import OpenDentalClient
 from app.integrations.opendental.writeback import (
     run_opendental_writeback,
     writeback_has_failures,
+    writeback_step_summary,
 )
 from app.integrations.supabase_client import create_supabase
 from app.pipeline.gating import (
@@ -105,8 +106,10 @@ def execute_pipeline_run(settings: Settings, run: dict[str, Any]) -> None:
                 result = {"skipped": True, "reason": "pilot_shadow_mode"}
             else:
                 result = _execute_opendental_writeback(payload)
-                if result.get("partial_failure"):
-                    raise RuntimeError("OpenDental writeback partial failure")
+                # Per-step OD errors are isolated inside run_opendental_writeback
+                # and recorded on the result dict. Do not fail/retry the pipeline
+                # run — that discarded the payload and re-wrote notes 5 times.
+                # Client construction / transport exceptions still raise and retry.
         else:
             raise ValueError(f"Unknown pipeline run_type: {run_type}")
 
@@ -202,12 +205,19 @@ def _execute_opendental_poll(settings: Settings, *, practice_id: str) -> dict[st
     if not connection:
         raise ValueError(f"No OpenDental connection configured for practice {practice_id!r}")
     elig_settings = get_eligibility_settings()
-    return run_connection_poll(elig_settings, settings, connection)
+    return run_connection_poll(elig_settings, settings, connection, for_auto_poll=False)
 
 
 def _execute_opendental_writeback(payload: dict[str, Any]) -> dict[str, Any]:
     elig_settings = get_eligibility_settings()
     app_settings = get_app_settings()
+    # Feature flag: when ODWB_SERVICE_URL is set, call the standalone service.
+    # Default (unset) keeps the existing in-process path unchanged.
+    if (app_settings.odwb_service_url or "").strip():
+        return _execute_opendental_writeback_via_service(
+            app_settings, elig_settings, payload
+        )
+
     practice_id = str(payload.get("practice_id") or "").strip()
     if practice_id:
         from app.integrations.opendental.connections_store import get_connection
@@ -244,11 +254,162 @@ def _execute_opendental_writeback(payload: dict[str, Any]) -> dict[str, Any]:
         check_id=payload.get("check_id"),
         patient_id=payload.get("patient_id"),
     )
+    partial = writeback_has_failures(writeback_result)
+    coverage_order = str(payload.get("coverage_order") or "primary")
+    summary = {
+        "status": "partial" if partial else "written",
+        "partial_failure": partial,
+        "coverage_order": coverage_order,
+        "steps": writeback_step_summary(writeback_result),
+    }
+    request_id = payload.get("eligibility_request_id")
+    if request_id and practice_id:
+        try:
+            from app.eligibility.db_phi import merge_eligibility_request_output_json
+
+            merge_eligibility_request_output_json(
+                app_settings,
+                practice_id=practice_id,
+                request_id=str(request_id),
+                patch={"opendental_writeback": summary},
+            )
+        except Exception as exc:
+            logger.warning("failed to stamp writeback summary on request %s: %s", request_id, exc)
     return {
         "write_back_result": writeback_result,
-        "partial_failure": writeback_has_failures(writeback_result),
+        "partial_failure": partial,
         "dry_run_financial": bool(payload.get("dry_run_financial", False)),
-        "coverage_order": str(payload.get("coverage_order") or "primary"),
+        "coverage_order": coverage_order,
+        "opendental_writeback": summary,
+    }
+
+
+def _load_writeback_audit_rows(
+    elig_settings: Any,
+    *,
+    patient_id: Any,
+    practice_id: str,
+) -> list[dict[str, Any]]:
+    if not patient_id:
+        return []
+    try:
+        from uuid import UUID
+
+        from app.eligibility.db import get_supabase, list_audit_for_patient
+
+        supabase = get_supabase(elig_settings)
+        return list_audit_for_patient(
+            supabase,
+            UUID(str(patient_id)),
+            practice_id=practice_id or None,
+        )
+    except Exception as exc:
+        logger.warning("OpenDental audit load failed: %s", exc)
+        return []
+
+
+def _resolve_odwb_customer_key_ref(
+    app_settings: Settings, *, practice_id: str
+) -> str:
+    """Map practice connection customer_key_ref for the OD writeback service allowlist."""
+    if practice_id:
+        from app.integrations.opendental.connections_store import get_connection
+
+        connection = get_connection(app_settings, practice_id=practice_id)
+        if connection:
+            ref = str(connection.get("customer_key_ref") or "").strip()
+            if ref:
+                return ref
+    return "OPENDENTAL_CUSTOMER_KEY"
+
+
+def _execute_opendental_writeback_via_service(
+    app_settings: Settings,
+    elig_settings: Any,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    from app.eligibility.audit import write_audit_event
+    from app.integrations.opendental.writeback_client import (
+        call_opendental_writeback_service,
+    )
+
+    practice_id = str(payload.get("practice_id") or "").strip()
+    patient_id = payload.get("patient_id")
+    coverage_order = str(payload.get("coverage_order") or "primary")
+    check_id = payload.get("check_id")
+    pat_num = int(payload["pat_num"])
+    idempotency_key = (
+        f"od_writeback:{practice_id}:{pat_num}:{coverage_order}:{check_id}"
+        if check_id
+        else f"od_writeback:{practice_id}:{pat_num}:{coverage_order}"
+    )
+    audit_rows = _load_writeback_audit_rows(
+        elig_settings, patient_id=patient_id, practice_id=practice_id
+    )
+    body = {
+        "source_agent": "eligibility",
+        "idempotency_key": idempotency_key,
+        "od_target": {
+            "customer_key_ref": _resolve_odwb_customer_key_ref(
+                app_settings, practice_id=practice_id
+            )
+        },
+        "command": {
+            "type": "eligibility.apply_vob",
+            "payload": {
+                "pat_num": pat_num,
+                "primary_pat_plan_num": int(payload["primary_pat_plan_num"]),
+                "primary_plan_num": int(payload["primary_plan_num"]),
+                "primary_ins_sub_num": int(payload["primary_ins_sub_num"]),
+                "primary_result": payload.get("primary_result") or {},
+                "carrier_name": payload.get("carrier_name"),
+                "plan_name": payload.get("plan_name"),
+                "write_benefit_notes": bool(payload.get("write_benefit_notes", True)),
+                "write_subscriber_note": bool(payload.get("write_subscriber_note", True)),
+                "write_commlog": bool(payload.get("write_commlog", True)),
+                "write_inshist": bool(payload.get("write_inshist", False)),
+                "write_insadjust": bool(payload.get("write_insadjust", False)),
+                "write_benefits_grid": bool(payload.get("write_benefits_grid", False)),
+                "respect_manual_edits": bool(payload.get("respect_manual_edits", True)),
+                "dry_run_financial": bool(payload.get("dry_run_financial", False)),
+                "od_snapshot": payload.get("od_snapshot")
+                if isinstance(payload.get("od_snapshot"), dict)
+                else None,
+                "coverage_order": coverage_order,
+                "check_id": check_id,
+            },
+        },
+        "provenance": {"audit_rows": audit_rows},
+        "config": {
+            "confidence_gating": bool(
+                elig_settings.opendental_write_benefits_grid_confidence_gating
+            ),
+            "respect_manual_edits": bool(payload.get("respect_manual_edits", True)),
+        },
+    }
+    response = call_opendental_writeback_service(app_settings, body=body)
+    for event in response.get("audit_events") or []:
+        if not isinstance(event, dict):
+            continue
+        event_type = event.get("event_type")
+        detail = event.get("detail") if isinstance(event.get("detail"), dict) else {}
+        if not event_type or not patient_id:
+            continue
+        try:
+            write_audit_event(
+                patient_id=patient_id,
+                event_type=str(event_type),
+                detail=detail,
+                practice_id=practice_id or None,
+            )
+        except Exception as exc:
+            logger.warning("OD writeback audit replay failed: %s", exc)
+
+    return {
+        "write_back_result": response.get("write_back_result") or {},
+        "partial_failure": bool(response.get("partial_failure")),
+        "dry_run_financial": bool(payload.get("dry_run_financial", False)),
+        "coverage_order": coverage_order,
     }
 
 

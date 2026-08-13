@@ -234,6 +234,16 @@ export type EligibilityDashboardRow = {
   voice_merged_check_id: string | null;
   voice_extracted_fields: Record<string, unknown> | null;
   voice_call_reference: string | null;
+  od_pat_num?: string | null;
+  request_source?: string | null;
+  opendental_writeback?: {
+    queued?: boolean;
+    status?: string;
+    partial_failure?: boolean;
+    coverage_order?: string;
+    steps?: Record<string, string>;
+    runs?: { pipeline_run_id?: string; coverage_order?: string }[];
+  } | null;
 };
 
 export type EligibilityRequestEvent = {

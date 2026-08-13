@@ -201,6 +201,24 @@ export async function pollOpenDentalNow(
   return { ok: true, pipelineRunId: payload.pipeline_run_id };
 }
 
+export async function waitForOpenDentalRun(
+  runId: string,
+  { timeoutMs = 30_000, intervalMs = 1_500 } = {},
+): Promise<OpenDentalRun | null> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const listed = await fetchOpenDentalRuns(30);
+    if (listed.ok) {
+      const run = listed.runs.find((item) => item.id === runId);
+      if (run && (run.status === "completed" || run.status === "failed")) {
+        return run;
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+  return null;
+}
+
 export async function fetchOpenDentalRuns(limit = 50): Promise<{
   ok: boolean;
   runs: OpenDentalRun[];

@@ -111,9 +111,16 @@ def main() -> int:
     first_pass = True
 
     while True:
-        appointments = fetch_appointments(
-            base_url=od_base, headers=headers, on_date=args.date, timeout=od_timeout
-        )
+        try:
+            appointments = fetch_appointments(
+                base_url=od_base, headers=headers, on_date=args.date, timeout=od_timeout
+            )
+        except Exception as exc:
+            print(f"OD appointment fetch failed: {type(exc).__name__}: {exc}")
+            if args.once:
+                return 1
+            time.sleep(args.interval)
+            continue
         new_apts = [a for a in appointments if a.get("AptNum") not in seen_apt]
 
         for apt in new_apts:

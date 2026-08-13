@@ -12,6 +12,7 @@ import {
   fetchOpenDentalConnections,
   fetchOpenDentalRuns,
   pollOpenDentalNow,
+  waitForOpenDentalRun,
   testOpenDentalConnection,
   updateOpenDentalConnection,
   type OpenDentalConnection,
@@ -112,22 +113,45 @@ function ConnectionCard({
 
   const run = async (
     kind: "test" | "poll",
-    action: () => Promise<{ ok: boolean; error?: string; message?: string }>,
+    action: () => Promise<{ ok: boolean; error?: string; message?: string; pipelineRunId?: string }>,
   ) => {
     setBusy(kind);
     const result = await action();
-    setBusy(null);
     if (!result.ok) {
+      setBusy(null);
       onBanner(
         result.error ??
           result.message ??
           `${kind === "test" ? "Test" : "Poll"} failed`,
       );
+      onChanged();
+      return;
+    }
+    if (kind === "test") {
+      setBusy(null);
+      onBanner("Connection test passed.");
+      onChanged();
+      return;
+    }
+    onBanner("Polling appointments…");
+    const finished = result.pipelineRunId
+      ? await waitForOpenDentalRun(result.pipelineRunId)
+      : null;
+    setBusy(null);
+    if (!finished) {
+      onBanner("Poll queued — still running. Watch the runs feed below.");
+    } else if (finished.status === "failed") {
+      onBanner(finished.error_message ?? "Poll failed.");
     } else {
+      const counts = finished.result ?? {};
+      const appts = Number(counts.appointments ?? 0);
+      const enqueued = Number(counts.processed ?? 0);
+      const skipped = Number(counts.skipped_today ?? 0);
+      const failed = Number(counts.failed ?? 0);
+      const err =
+        typeof counts.error === "string" && counts.error ? ` ${counts.error}` : "";
       onBanner(
-        kind === "test"
-          ? "Connection test passed."
-          : "Poll queued — watch the runs feed below.",
+        `Poll finished: ${appts} scheduled appt(s), ${enqueued} enqueued, ${skipped} skipped, ${failed} failed.${err} View results on Eligibility.`,
       );
     }
     onChanged();
@@ -517,7 +541,9 @@ function OpenDentalConnectionsPage() {
       {banner ? (
         <div
           className={`mb-4 rounded-lg border px-3.5 py-2.5 text-[12.5px] ${
-            banner.includes("passed") || banner.includes("queued")
+            banner.includes("passed") ||
+            banner.includes("queued") ||
+            banner.includes("Poll finished")
               ? "border-emerald-200 bg-emerald-50 text-emerald-800"
               : "border-amber-200 bg-amber-50 text-amber-800"
           }`}
@@ -620,6 +646,22 @@ function OpenDentalConnectionsPage() {
                     <span className="text-[13px] font-medium text-slate-700">
                       {run.run_type}
                     </span>
+                    {run.run_type === "opendental_poll" && run.result ? (
+                      <span className="text-[12px] text-slate-500">
+                        {String(run.result.appointments ?? 0)} appt ·{" "}
+                        {String(run.result.processed ?? 0)} enqueued ·{" "}
+                        {String(run.result.skipped_today ?? 0)} skipped
+                      </span>
+                    ) : null}
+                    {run.run_type === "opendental_writeback" &&
+                    run.result &&
+                    typeof run.result.partial_failure === "boolean" ? (
+                      <span className="text-[12px] text-slate-500">
+                        {run.result.partial_failure
+                          ? "partial writeback"
+                          : "written"}
+                      </span>
+                    ) : null}
                   </div>
                   <div className="text-right">
                     <div className="text-[12px] text-slate-500">

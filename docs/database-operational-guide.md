@@ -174,7 +174,10 @@ sequenceDiagram
 | 6 route | `router.py` | `payer_prior_auth_rules` | `routing_status` on the check |
 | 7 COB | `cob.py` (separate `POST /eligibility/cob`) | `eligibility_checks`, `procedure_estimates` | `eligibility_audit_log` |
 
-**Alternate entry — OpenDental:** `app/integrations/opendental/poller.py` calls the agent directly (`/eligibility/from-opendental`) and **bypasses the `eligibility_requests` queue entirely**. Those checks land in `eligibility_checks` without a queue row.
+**Alternate entry — OpenDental:** dashboard **Poll now** or the auto-poller
+(`app/integrations/opendental/poller.py`) enqueues `rcm.eligibility_requests`
+the same way as the eligibility page. `POST /eligibility/from-opendental`
+also enqueues that path (it does not call Stedi inline).
 
 ### 4.2 RCM agent pipeline (synchronous; partially persisted)
 

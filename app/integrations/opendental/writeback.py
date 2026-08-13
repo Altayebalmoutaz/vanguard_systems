@@ -2213,6 +2213,22 @@ def writeback_has_failures(result: dict[str, Any]) -> bool:
     return False
 
 
+def writeback_step_summary(result: dict[str, Any]) -> dict[str, str]:
+    """Compact per-step status for dashboard/queue (no note text / PHI)."""
+    out: dict[str, str] = {}
+    for key in _WRITEBACK_STEP_KEYS:
+        step = result.get(key)
+        if not isinstance(step, dict):
+            continue
+        if step.get("error"):
+            out[key] = "error"
+        elif step.get("skipped"):
+            out[key] = "skipped"
+        else:
+            out[key] = "ok"
+    return out
+
+
 def _insverify_payload(resp: ODInsVerifyResponse, *, note_sent: str) -> dict[str, Any]:
     out = resp.model_dump(mode="json")
     out["note_sent"] = note_sent
