@@ -1,8 +1,9 @@
 """Deterministic clinical guards applied after the LLM, before gap checks.
 
 These catch high-frequency CDT mistakes the model still makes on scribe
-payloads: guessed crown material, D4346 used as a laser/SRP adjunct, D4999
-for gingival irrigation, and same-day D0150 + D0180.
+payloads: undocumented crown material (suggest D2740 + confirm), D4346 used
+as a laser/SRP adjunct, D4999 for gingival irrigation, same-day D0150 + D0180,
+and D4341 vs D4342 tooth-count remaps.
 """
 
 from __future__ import annotations
@@ -11,9 +12,11 @@ import re
 from typing import Any
 
 from app.coding.gaps import findings_blob, looks_crown_procedure
-from app.coding.schemas import CodingSuggestRequest, ProcedureLine
+from app.coding.schemas import CodingSuggestRequest, ProcedureLine, resolved_quadrant
 
 _CROWN_FAMILY_PREFIX = "D27"
+_DEFAULT_CROWN_CODE = "D2740"
+_CROWN_MATERIAL_CONFIRM_CONFIDENCE = 0.7
 _SRP_CODES = frozenset({"D4341", "D4342"})
 _EVAL_COMPREHENSIVE = "D0150"
 _EVAL_PERIODONTAL = "D0180"
@@ -94,18 +97,21 @@ def apply_clinical_guards(
         code = _code_of(rec)
         blob = findings_blob(line)
 
-        if (
-            looks_crown_procedure(line)
-            and code.startswith(_CROWN_FAMILY_PREFIX)
-            and not planned_crown_material_documented(line)
-        ):
-            _void(
-                rec,
-                "Planned crown material is not documented; cannot choose among "
-                "porcelain/ceramic, PFM, and full-cast codes.",
-            )
-            warnings.append(f"Guard cleared line {line_id}: crown material not documented")
-            continue
+        if looks_crown_procedure(line) and not planned_crown_material_documented(line):
+            if not code:
+                rec["cdt_code"] = _DEFAULT_CROWN_CODE
+                code = _DEFAULT_CROWN_CODE
+            if code.startswith(_CROWN_FAMILY_PREFIX):
+                _cap_confidence(rec, _CROWN_MATERIAL_CONFIRM_CONFIDENCE)
+                rec["explanation"] = _append_explanation(
+                    rec.get("explanation"),
+                    "Confirm crown material (porcelain/ceramic vs PFM vs full cast) "
+                    "before writeback.",
+                )
+                warnings.append(
+                    f"Guard kept line {line_id} as {code}: crown material not spoken; "
+                    "confirm before writeback"
+                )
 
         if code == "D4346" and (
             encounter_has_srp or encounter_has_periodontitis or _blob_has(blob, _LASER_TOKENS)
@@ -132,7 +138,15 @@ def apply_clinical_guards(
             code = "D4921"
 
         n_teeth = len(line.tooth_numbers)
-        if code == "D4342" and n_teeth >= 4:
+        if code in _SRP_CODES and n_teeth == 0 and resolved_quadrant(line) is not None:
+            if code != "D4341":
+                rec["cdt_code"] = "D4341"
+                warnings.append(f"Guard mapped line {line_id} {code} -> D4341")
+            rec["explanation"] = (
+                "Quadrant SRP without a tooth list is suggested as D4341 "
+                "(4+ teeth). Confirm D4342 if only 1–3 teeth will be treated."
+            )
+        elif code == "D4342" and n_teeth >= 4:
             rec["cdt_code"] = "D4341"
             rec["explanation"] = "Four or more teeth in this quadrant map to D4341, not D4342."
             warnings.append(f"Guard mapped line {line_id} D4342 -> D4341")
@@ -202,6 +216,22 @@ def _void(rec: dict[str, Any], explanation: str) -> None:
     rec["cdt_code"] = None
     rec["confidence"] = 0.0
     rec["explanation"] = explanation
+
+
+def _cap_confidence(rec: dict[str, Any], ceiling: float) -> None:
+    try:
+        rec["confidence"] = min(float(rec.get("confidence") or ceiling), ceiling)
+    except (TypeError, ValueError):
+        rec["confidence"] = ceiling
+
+
+def _append_explanation(existing: object, extra: str) -> str:
+    base = str(existing or "").strip()
+    if not base:
+        return extra
+    if extra.lower() in base.lower():
+        return base
+    return f"{base.rstrip('.')} {extra}"
 
 
 def _blob_has(blob: str, tokens: tuple[str, ...]) -> bool:

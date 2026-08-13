@@ -314,8 +314,10 @@ def run_coding_suggest(
     if recommendations:
         overall_confidence = sum(r.confidence for r in recommendations) / len(recommendations)
 
-    # Only blocking gaps force needs_info. Advisory gaps (payer/age/thin-note,
-    # radiograph hint) are still surfaced but keep the codes reviewable.
+    # Only "no usable suggestion" gaps force needs_info (empty procedures, or a
+    # line with no CDT). Advisory gaps (teeth/surface/material/quadrant, payer,
+    # age, radiograph hint) stay on the line for the dentist and keep status
+    # pending_review.
     needs_info = has_blocking(global_missing) or any(
         has_blocking(r.missing_info) for r in recommendations
     )

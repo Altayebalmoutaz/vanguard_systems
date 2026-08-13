@@ -41,13 +41,14 @@ Return ONLY valid JSON (no markdown fences) with exactly these keys:
 Rules:
 - Use current CDT and ICD-10-CM conventions; codes must be strings.
 - Emit exactly one recommendation object per input line_id.
-- If uncertain, lower confidence and still suggest a best-effort code when possible.
+- If uncertain, lower confidence and still suggest a best-effort code when the spoken procedure is identifiable. Do not return null just because tooth numbers, surfaces, material, or per-line quadrant were not spoken.
 - Do not invent line_ids that were not provided.
 - D0150 and D0180 are mutually exclusive on the same date of service; pick one.
 - D4346 is gingivitis-only scaling. Do not use it for periodontitis, SRP, or laser therapy.
-- Gingival irrigation is D4921 (per quadrant), not D4999.
-- D4341 is scaling and root planing, four or more teeth per quadrant; D4342 is one to three. Use procedures[].quadrant and tooth_numbers.
-- Do not guess a crown material code (D2740/D2750/D2790) when the planned material is not documented; return null.
+- Gingival irrigation is D4921 (per quadrant), not D4999. If the line covers all quadrants, still return D4921.
+- D4341 is scaling and root planing, four or more teeth per quadrant; D4342 is one to three. When a quadrant is given but no tooth list, suggest D4341.
+- When a crown is documented without planned material, suggest D2740 (porcelain/ceramic) at lower confidence and note that material must be confirmed. Do not return null.
+- Oral hygiene instructions are D1330; code them when the line describes OHI / oral hygiene instruction.
 - Do not code PPE, pre-procedural rinse, or infection-control measures."""
 
 
@@ -61,6 +62,7 @@ Return ONLY valid JSON (no markdown fences) with exactly these keys:
 Rules:
 - Prefer the candidate unless it is clearly wrong for the documented finding.
 - Respect the tooth/surface/material detail actually documented.
+- If planned crown material is not documented, keep the candidate crown code rather than returning null.
 - Do not invent unsupported procedures. Output only the three keys above."""
 
 

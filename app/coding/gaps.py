@@ -21,15 +21,13 @@ from supabase import Client
 
 logger = logging.getLogger(__name__)
 
-# Gaps that mean a suggested code is not yet reviewable/billable as-is. Anything
-# not listed here is advisory: surfaced to the UI but does NOT force needs_info.
-# Radiograph is advisory because the enforceable requirement is payer-specific
-# (payer_rules.documentation_required); cdt_codes.requires_radiograph is a hint.
+# Gaps that mean we could not produce a usable suggestion at all. Chairside
+# coding is suggestion-for-review, not claim completeness: missing teeth,
+# surfaces, findings, material, or per-line quadrant are advisory (surfaced to
+# the dentist, do NOT force needs_info). Radiograph is advisory because the
+# enforceable requirement is payer-specific (payer_rules.documentation_required).
 BLOCKING_MISSING_CODES = frozenset(
     {
-        MissingInfoCode.TOOTH_MISSING,
-        MissingInfoCode.SURFACE_MISSING,
-        MissingInfoCode.FINDING_MISSING,
         MissingInfoCode.PROCEDURE_EMPTY,
         MissingInfoCode.CDT_UNCERTAIN,
     }
@@ -280,11 +278,12 @@ def _surface_indicated_from_findings(line: ProcedureLine) -> bool:
 
 
 def pre_check_line(line: ProcedureLine) -> list[MissingInfoItem]:
-    """Gaps known before coding (tooth/surface/findings).
+    """Advisory gaps known before coding (tooth/surface/findings).
 
-    A tooth is required whenever the finding is tooth-specific; a surface is only
-    required when the finding specifically implies a filling (so crowns, exams,
-    and anatomic "buccal mucosa" / furcation notes do not demand a surface).
+    These notes help the dentist confirm the suggestion; they do not withhold a
+    code. A tooth/surface hint is only emitted for tooth-specific restorative
+    findings (crowns, exams, and anatomic "buccal mucosa" / furcation notes do
+    not demand a surface).
     """
     missing: list[MissingInfoItem] = []
     empty = (
@@ -404,23 +403,28 @@ def post_check_line(
         needs_surface = req.requires_surfaces
         needs_radio = req.requires_radiograph or code in _IMAGING_CODES
 
-    if needs_tooth and not line.tooth_numbers:
+    if code in _SRP_CODES and resolved_quadrant(line) is not None and not line.tooth_numbers:
+        missing.append(
+            MissingInfoItem(
+                code=MissingInfoCode.OTHER,
+                message=(
+                    f"Line {line.line_id}: quadrant-only SRP suggested as {code} "
+                    "(4+ teeth). Confirm D4342 if only 1–3 teeth will be treated."
+                ),
+            )
+        )
+    elif needs_tooth and not line.tooth_numbers:
         missing.append(
             MissingInfoItem(
                 code=MissingInfoCode.TOOTH_MISSING,
-                message=(
-                    f"Line {line.line_id}: tooth numbers (or 1–3 vs 4+ count) required "
-                    f"in this quadrant for {code}"
-                    if code in _SRP_CODES and resolved_quadrant(line) is not None
-                    else f"Line {line.line_id}: tooth number required for {code}"
-                ),
+                message=f"Line {line.line_id}: tooth number not spoken; confirm before writeback for {code}",
             )
         )
     if needs_surface and not line.surfaces:
         missing.append(
             MissingInfoItem(
                 code=MissingInfoCode.SURFACE_MISSING,
-                message=f"Line {line.line_id}: surface(s) required for {code}",
+                message=f"Line {line.line_id}: surface(s) not spoken; confirm before writeback for {code}",
             )
         )
     if needs_radio and not _has_radiograph_attachment(attachments_present):
@@ -433,17 +437,20 @@ def post_check_line(
     if code in _PER_QUADRANT_CODES and resolved_quadrant(line) is None:
         missing.append(
             MissingInfoItem(
-                code=MissingInfoCode.CDT_UNCERTAIN,
-                message=f"Line {line.line_id}: quadrant (UR/UL/LR/LL) required for {code}",
+                code=MissingInfoCode.OTHER,
+                message=(
+                    f"Line {line.line_id}: {code} is billed per quadrant; confirm "
+                    "UR/UL/LR/LL (or one writeback line per quadrant) before posting."
+                ),
             )
         )
     if confidence < threshold:
         missing.append(
             MissingInfoItem(
-                code=MissingInfoCode.CDT_UNCERTAIN,
+                code=MissingInfoCode.OTHER,
                 message=(
                     f"Line {line.line_id}: confidence {confidence:.2f} below "
-                    f"threshold {threshold:.2f}"
+                    f"threshold {threshold:.2f}; dentist should confirm the suggestion"
                 ),
             )
         )

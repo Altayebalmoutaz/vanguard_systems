@@ -127,7 +127,7 @@ class TestRadiographAttachmentAliases(unittest.TestCase):
 
 
 class TestClinicalGuards(unittest.TestCase):
-    def test_voids_crown_when_replacement_material_missing(self) -> None:
+    def test_keeps_crown_when_replacement_material_missing(self) -> None:
         line = _line(
             line_id="P1",
             tooth_numbers=["15"],
@@ -150,8 +150,29 @@ class TestClinicalGuards(unittest.TestCase):
             }
         ]
         warnings = apply_clinical_guards(_request([line]), recs)
-        self.assertIsNone(recs[0]["cdt_code"])
+        self.assertEqual(recs[0]["cdt_code"], "D2740")
+        self.assertLessEqual(recs[0]["confidence"], 0.7)
         self.assertTrue(any("crown material" in w for w in warnings))
+
+    def test_defaults_null_crown_to_d2740(self) -> None:
+        line = _line(
+            line_id="G",
+            tooth_numbers=["15"],
+            findings=["Replacement of existing full gold crown"],
+            planned_or_performed="planned",
+        )
+        recs = [
+            {
+                "line_id": "G",
+                "cdt_code": None,
+                "confidence": 0.0,
+                "explanation": "",
+                "icd10_codes": [],
+            }
+        ]
+        apply_clinical_guards(_request([line]), recs)
+        self.assertEqual(recs[0]["cdt_code"], "D2740")
+        self.assertLessEqual(recs[0]["confidence"], 0.7)
 
     def test_keeps_porcelain_crown_when_material_is_stated(self) -> None:
         line = _line(
@@ -295,6 +316,25 @@ class TestClinicalGuards(unittest.TestCase):
         line = _line(
             line_id="P3-UR",
             tooth_numbers=["2", "3", "4", "5"],
+            quadrant="UR",
+            findings=["Non-surgical periodontal therapy"],
+            planned_or_performed="planned",
+        )
+        recs = [
+            {
+                "line_id": "P3-UR",
+                "cdt_code": "D4342",
+                "confidence": 0.9,
+                "explanation": "srp",
+                "icd10_codes": [],
+            }
+        ]
+        apply_clinical_guards(_request([line]), recs)
+        self.assertEqual(recs[0]["cdt_code"], "D4341")
+
+    def test_quadrant_only_srp_defaults_d4342_to_d4341(self) -> None:
+        line = _line(
+            line_id="P3-UR",
             quadrant="UR",
             findings=["Non-surgical periodontal therapy"],
             planned_or_performed="planned",
