@@ -214,8 +214,28 @@ _NEGATION_CUES = frozenset(
 )
 
 
+_QUADRANT_DOC_TOKENS = (
+    "quadrant",
+    "upper right",
+    "upper left",
+    "lower right",
+    "lower left",
+    "maxillary right",
+    "maxillary left",
+    "mandibular right",
+    "mandibular left",
+)
+
+
 def findings_blob(line: ProcedureLine) -> str:
     return " ".join(line.findings).lower()
+
+
+def _quadrant_documented(line: ProcedureLine) -> bool:
+    blob = findings_blob(line)
+    if any(tok in blob for tok in _QUADRANT_DOC_TOKENS):
+        return True
+    return bool(re.search(r"\b(?:ur|ul|lr|ll)\b", blob))
 
 
 def _token_present_unnegated(blob: str, token: str) -> bool:
@@ -402,6 +422,9 @@ def post_check_line(
         needs_tooth = req.requires_tooth
         needs_surface = req.requires_surfaces
         needs_radio = req.requires_radiograph or code in _IMAGING_CODES
+
+    if code in {"D4341", "D4342"} and _quadrant_documented(line):
+        needs_tooth = False
 
     if code in _SRP_CODES and resolved_quadrant(line) is not None and not line.tooth_numbers:
         missing.append(

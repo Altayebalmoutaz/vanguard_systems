@@ -17,6 +17,7 @@ from app.config import Settings
 from app.schemas.denial import DenialAgentRequest
 
 GOLDEN_ROOT = Path(__file__).resolve().parent / "golden"
+REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 @dataclass
@@ -32,7 +33,15 @@ def _load_cases(agent: str) -> list[tuple[Path, dict[str, Any]]]:
         return []
     cases: list[tuple[Path, dict[str, Any]]] = []
     for path in sorted(agent_dir.glob("*.json")):
-        cases.append((path, json.loads(path.read_text(encoding="utf-8"))))
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(payload, list):
+            cases.extend((path, case) for case in payload if isinstance(case, dict))
+        elif isinstance(payload, dict) and isinstance(payload.get("cases"), list):
+            cases.extend(
+                (path, case) for case in payload["cases"] if isinstance(case, dict)
+            )
+        elif isinstance(payload, dict):
+            cases.append((path, payload))
     return cases
 
 
@@ -58,8 +67,19 @@ def _run_denial_case(path: Path, case: dict[str, Any]) -> EvalFailure | None:
 
 
 def _run_coding_case(path: Path, case: dict[str, Any]) -> EvalFailure | None:
+    from app.coding.catalog import (
+        clear_catalog,
+        eval_fixture_catalog,
+        eval_fixture_icd,
+        seed_catalog,
+    )
+
     name = str(case.get("name") or path.stem)
     request_raw = case.get("request")
+    fixture = case.get("request_fixture")
+    if request_raw is None and isinstance(fixture, str):
+        fixture_path = REPO_ROOT / fixture
+        request_raw = json.loads(fixture_path.read_text(encoding="utf-8"))
     expect = case.get("expect")
     mock_llm = case.get("mock_llm")
     if not isinstance(request_raw, dict) or not isinstance(expect, dict):
@@ -68,18 +88,22 @@ def _run_coding_case(path: Path, case: dict[str, Any]) -> EvalFailure | None:
         return EvalFailure(str(path), name, "coding case must include mock_llm")
 
     request = CodingSuggestRequest.model_validate(request_raw)
-    with (
-        patch("app.coding.service.llm_generate_line_recommendations", return_value=mock_llm),
-        patch("app.coding.service.fetch_run_by_request_id", return_value=None),
-        patch("app.coding.service.insert_coding_run", return_value=None),
-        patch("app.coding.service.write_audit_log"),
-        patch("app.coding.service.create_supabase", return_value=None),
-    ):
-        response = run_coding_suggest(
-            request,
-            settings=Settings(openrouter_api_key="eval-key"),
-            coding_settings=CodingSettings(coding_confidence_review_threshold=0.75),
-        )
+    seed_catalog(eval_fixture_catalog(), eval_fixture_icd())
+    try:
+        with (
+            patch("app.coding.service.llm_generate_line_recommendations", return_value=mock_llm),
+            patch("app.coding.service.fetch_run_by_request_id", return_value=None),
+            patch("app.coding.service.insert_coding_run", return_value=None),
+            patch("app.coding.service.write_audit_log"),
+            patch("app.coding.service.create_supabase", return_value=None),
+        ):
+            response = run_coding_suggest(
+                request,
+                settings=Settings(openrouter_api_key="eval-key"),
+                coding_settings=CodingSettings(coding_confidence_review_threshold=0.75),
+            )
+    finally:
+        clear_catalog()
 
     if "status" in expect and response.status != expect["status"]:
         return EvalFailure(

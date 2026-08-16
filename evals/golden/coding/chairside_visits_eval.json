@@ -1,0 +1,311 @@
+{
+  "cases": [
+    {
+      "name": "chairside_recall",
+      "request": {
+        "schema_version": "1.0",
+        "request_id": "11111111-aaaa-4aaa-8aaa-aaaaaaaaaaa1",
+        "practice_id": "vgd_mock_brooklyn",
+        "patient_id": "pat_chairside_recall",
+        "provider_id": "prov_eval_1",
+        "encounter_datetime": "2026-08-16T09:00:00-04:00",
+        "payer": { "id": "62308", "name": "Cigna" },
+        "patient": { "age": 42 },
+        "procedures": [
+          {
+            "line_id": "1",
+            "tooth_numbers": [],
+            "surfaces": [],
+            "findings": ["periodic oral evaluation"],
+            "planned_or_performed": "performed"
+          },
+          {
+            "line_id": "2",
+            "tooth_numbers": [],
+            "surfaces": [],
+            "findings": ["adult prophylaxis"],
+            "planned_or_performed": "performed"
+          },
+          {
+            "line_id": "3",
+            "tooth_numbers": [],
+            "surfaces": [],
+            "findings": ["full mouth set of x-rays taken and reviewed"],
+            "planned_or_performed": "performed"
+          }
+        ],
+        "supporting_note": "Recall exam, adult prophy, FMX.",
+        "attachments_present": ["full_mouth_series"],
+        "fast": true
+      },
+      "mock_llm": {
+        "recommendations": [],
+        "overall_confidence": 0.0,
+        "justification": "should not be called"
+      },
+      "expect": {
+        "status": "pending_review",
+        "line_cdt": { "1": "D0120", "2": "D1110", "3": "D0210" }
+      }
+    },
+    {
+      "name": "chairside_srp_four_quadrants",
+      "request": {
+        "schema_version": "1.0",
+        "request_id": "11111111-aaaa-4aaa-8aaa-aaaaaaaaaaa2",
+        "practice_id": "vgd_mock_brooklyn",
+        "patient_id": "pat_chairside_srp",
+        "provider_id": "prov_eval_1",
+        "encounter_datetime": "2026-08-16T09:10:00-04:00",
+        "payer": { "id": "62308", "name": "Cigna" },
+        "patient": { "age": 58 },
+        "procedures": [
+          {
+            "line_id": "1",
+            "tooth_numbers": [],
+            "surfaces": [],
+            "findings": ["scaling and root planing, 4 quadrants"],
+            "planned_or_performed": "planned"
+          }
+        ],
+        "supporting_note": "SRP all four quadrants.",
+        "attachments_present": ["periodontal_chart"],
+        "fast": true
+      },
+      "mock_llm": {
+        "recommendations": [],
+        "overall_confidence": 0.0,
+        "justification": "should not be called"
+      },
+      "expect": {
+        "status": "pending_review",
+        "line_cdt": { "1": "D4341" }
+      }
+    },
+    {
+      "name": "chairside_sealant",
+      "request": {
+        "schema_version": "1.0",
+        "request_id": "11111111-aaaa-4aaa-8aaa-aaaaaaaaaaa3",
+        "practice_id": "vgd_mock_brooklyn",
+        "patient_id": "pat_chairside_sealant",
+        "provider_id": "prov_eval_1",
+        "encounter_datetime": "2026-08-16T09:20:00-04:00",
+        "payer": { "id": "62308", "name": "Cigna" },
+        "patient": { "age": 14 },
+        "procedures": [
+          {
+            "line_id": "1",
+            "tooth_numbers": ["3", "14"],
+            "surfaces": ["O"],
+            "findings": ["sealant, deep pits and fissures"],
+            "planned_or_performed": "planned"
+          }
+        ],
+        "supporting_note": "Sealants #3 and #14.",
+        "attachments_present": [],
+        "fast": true
+      },
+      "mock_llm": {
+        "recommendations": [],
+        "overall_confidence": 0.0,
+        "justification": "should not be called"
+      },
+      "expect": {
+        "line_cdt": { "1": "D1351" }
+      }
+    },
+    {
+      "name": "chairside_extract_and_graft",
+      "request": {
+        "schema_version": "1.0",
+        "request_id": "11111111-aaaa-4aaa-8aaa-aaaaaaaaaaa4",
+        "practice_id": "vgd_mock_brooklyn",
+        "patient_id": "pat_chairside_ext",
+        "provider_id": "prov_eval_1",
+        "encounter_datetime": "2026-08-16T09:30:00-04:00",
+        "payer": { "id": "62308", "name": "Cigna" },
+        "patient": { "age": 61 },
+        "procedures": [
+          {
+            "line_id": "1",
+            "tooth_numbers": ["8"],
+            "surfaces": [],
+            "findings": ["extraction", "vertical root fracture"],
+            "planned_or_performed": "planned"
+          },
+          {
+            "line_id": "2",
+            "tooth_numbers": ["8"],
+            "surfaces": [],
+            "findings": ["socket preservation bone graft"],
+            "planned_or_performed": "planned"
+          }
+        ],
+        "supporting_note": "Extract #8 for vertical root fracture; socket graft.",
+        "attachments_present": ["periapical_radiograph"],
+        "fast": true
+      },
+      "mock_llm": {
+        "recommendations": [],
+        "overall_confidence": 0.0,
+        "justification": "should not be called"
+      },
+      "expect": {
+        "line_cdt": { "1": "D7140", "2": "D7953" }
+      }
+    },
+    {
+      "name": "chairside_rct_undocumented_crown",
+      "request": {
+        "schema_version": "1.0",
+        "request_id": "11111111-aaaa-4aaa-8aaa-aaaaaaaaaaa5",
+        "practice_id": "vgd_mock_brooklyn",
+        "patient_id": "pat_chairside_rct",
+        "provider_id": "prov_eval_1",
+        "encounter_datetime": "2026-08-16T09:40:00-04:00",
+        "payer": { "id": "62308", "name": "Cigna" },
+        "patient": { "age": 47 },
+        "procedures": [
+          {
+            "line_id": "1",
+            "tooth_numbers": ["30"],
+            "surfaces": [],
+            "findings": ["root canal", "irreversible pulpitis"],
+            "planned_or_performed": "planned"
+          },
+          {
+            "line_id": "2",
+            "tooth_numbers": ["30"],
+            "surfaces": [],
+            "findings": ["full coverage crown planned, material not documented"],
+            "planned_or_performed": "planned"
+          }
+        ],
+        "supporting_note": "RCT #30 for irreversible pulpitis; crown planned, material not named.",
+        "attachments_present": ["periapical_radiograph"],
+        "fast": true
+      },
+      "mock_llm": {
+        "recommendations": [],
+        "overall_confidence": 0.0,
+        "justification": "should not be called"
+      },
+      "expect": {
+        "line_cdt": { "1": "D3330", "2": "D2740" }
+      }
+    },
+    {
+      "name": "chairside_scribe_sample_02b",
+      "request_fixture": "docs/fixtures/coding-suggest-scribe-sample-02b-host-filled.json",
+      "mock_llm": {
+        "recommendations": [],
+        "overall_confidence": 0.0,
+        "justification": "should not be called"
+      },
+      "expect": {
+        "status": "needs_info",
+        "line_cdt": {
+          "A": null,
+          "B": "D0210",
+          "C": "D0180",
+          "D": null,
+          "E": "D1330",
+          "F": null,
+          "G": "D2740",
+          "H": "D2740",
+          "I": "D4341",
+          "J": "D4341",
+          "K": "D4341",
+          "L": "D4341",
+          "M": null,
+          "N": "D4921"
+        }
+      }
+    },
+    {
+      "name": "chairside_invented_cdt_voided",
+      "request": {
+        "schema_version": "1.0",
+        "request_id": "11111111-aaaa-4aaa-8aaa-aaaaaaaaaaa7",
+        "practice_id": "vgd_mock_brooklyn",
+        "patient_id": "pat_chairside_invented",
+        "provider_id": "prov_eval_1",
+        "encounter_datetime": "2026-08-16T09:50:00-04:00",
+        "payer": { "id": "62308", "name": "Cigna" },
+        "patient": { "age": 40 },
+        "procedures": [
+          {
+            "line_id": "1",
+            "tooth_numbers": [],
+            "surfaces": [],
+            "findings": ["custom occlusal guard delivered"],
+            "planned_or_performed": "performed"
+          }
+        ],
+        "supporting_note": "Night guard delivery.",
+        "attachments_present": [],
+        "fast": true
+      },
+      "mock_llm": {
+        "recommendations": [
+          {
+            "line_id": "1",
+            "cdt_code": "D9999",
+            "confidence": 0.7,
+            "explanation": "invented leftover",
+            "icd10_codes": []
+          }
+        ],
+        "overall_confidence": 0.7,
+        "justification": "invented"
+      },
+      "expect": {
+        "status": "needs_info",
+        "line_cdt": { "1": null }
+      }
+    },
+    {
+      "name": "chairside_filling_mismatch_voided",
+      "request": {
+        "schema_version": "1.0",
+        "request_id": "11111111-aaaa-4aaa-8aaa-aaaaaaaaaaa8",
+        "practice_id": "vgd_mock_brooklyn",
+        "patient_id": "pat_chairside_fill",
+        "provider_id": "prov_eval_1",
+        "encounter_datetime": "2026-08-16T10:00:00-04:00",
+        "payer": { "id": "62308", "name": "Cigna" },
+        "patient": { "age": 35 },
+        "procedures": [
+          {
+            "line_id": "1",
+            "tooth_numbers": ["14"],
+            "surfaces": ["O"],
+            "findings": ["odd chairside repair"],
+            "planned_or_performed": "planned"
+          }
+        ],
+        "supporting_note": "Unspecified repair on #14 O.",
+        "attachments_present": ["bitewing_radiograph"],
+        "fast": true
+      },
+      "mock_llm": {
+        "recommendations": [
+          {
+            "line_id": "1",
+            "cdt_code": "D2393",
+            "confidence": 0.8,
+            "explanation": "three-surface composite",
+            "icd10_codes": ["K02.9"]
+          }
+        ],
+        "overall_confidence": 0.8,
+        "justification": "mismatched filling"
+      },
+      "expect": {
+        "status": "needs_info",
+        "line_cdt": { "1": null }
+      }
+    }
+  ]
+}
