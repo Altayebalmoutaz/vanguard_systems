@@ -166,6 +166,24 @@ class TestClinicalGuards(unittest.TestCase):
         self.assertLessEqual(recs[0]["confidence"], 0.7)
         self.assertTrue(any("crown material" in w for w in warnings))
 
+    def test_does_not_default_recement_or_temp_or_implant_to_d2740(self) -> None:
+        recement = _line(line_id="1", tooth_numbers=["7"], findings=["recement crown"])
+        temp = _line(line_id="2", tooth_numbers=["30"], findings=["temporary crown placement"])
+        implant = _line(
+            line_id="3",
+            tooth_numbers=["19"],
+            findings=["implant-supported porcelain crown delivery"],
+        )
+        recs = [
+            {"line_id": "1", "cdt_code": None, "confidence": 0.0, "explanation": ""},
+            {"line_id": "2", "cdt_code": None, "confidence": 0.0, "explanation": ""},
+            {"line_id": "3", "cdt_code": None, "confidence": 0.0, "explanation": ""},
+        ]
+        apply_clinical_guards(_request([recement, temp, implant]), recs)
+        self.assertIsNone(recs[0]["cdt_code"])
+        self.assertIsNone(recs[1]["cdt_code"])
+        self.assertIsNone(recs[2]["cdt_code"])
+
     def test_defaults_null_crown_to_d2740(self) -> None:
         line = _line(
             line_id="G",

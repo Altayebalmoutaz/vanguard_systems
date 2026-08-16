@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from app.coding.gaps import findings_blob, looks_crown_procedure
+from app.coding.gaps import findings_blob, looks_definitive_tooth_crown
 from app.coding.schemas import CodingSuggestRequest, ProcedureLine, resolved_quadrant
 
 _CROWN_FAMILY_PREFIX = "D27"
@@ -113,7 +113,7 @@ def apply_clinical_guards(
         code = _code_of(rec)
         blob = findings_blob(line)
 
-        if looks_crown_procedure(line) and not planned_crown_material_documented(line):
+        if looks_definitive_tooth_crown(line) and not planned_crown_material_documented(line):
             if not code:
                 rec["cdt_code"] = _DEFAULT_CROWN_CODE
                 code = _DEFAULT_CROWN_CODE

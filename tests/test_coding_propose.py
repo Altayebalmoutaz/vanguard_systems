@@ -78,6 +78,18 @@ class TestExamRules(unittest.TestCase):
             "D0180",
         )
 
+    def test_limited_exam(self) -> None:
+        self.assertEqual(
+            _code(_request([_line(findings=["limited oral evaluation"])])),
+            "D0140",
+        )
+
+    def test_problem_focused_exam(self) -> None:
+        self.assertEqual(
+            _code(_request([_line(findings=["limited problem-focused evaluation"])])),
+            "D0140",
+        )
+
 
 class TestImagingRules(unittest.TestCase):
     def test_fmx(self) -> None:
@@ -116,6 +128,12 @@ class TestPreventiveRules(unittest.TestCase):
         self.assertEqual(
             _code(_request([_line(findings=["prophylaxis"])], age=8)),
             "D1120",
+        )
+
+    def test_child_prophy_token_does_not_override_adult_age(self) -> None:
+        self.assertEqual(
+            _code(_request([_line(findings=["child prophylaxis"])], age=22)),
+            "D1110",
         )
 
     def test_fluoride_varnish(self) -> None:
@@ -199,6 +217,16 @@ class TestSealantEndoExtraction(unittest.TestCase):
         hit = propose(req)[0]
         self.assertEqual(hit.cdt_code, "D1351")
         self.assertIn("× 2", hit.explanation)
+
+    def test_molar_retreatment(self) -> None:
+        self.assertEqual(
+            _code(
+                _request(
+                    [_line(tooth_numbers=["14"], findings=["molar root canal retreatment"])]
+                )
+            ),
+            "D3348",
+        )
 
     def test_molar_rct_from_irreversible_pulpitis(self) -> None:
         req = _request(
@@ -290,6 +318,53 @@ class TestCrownRules(unittest.TestCase):
                 )
             ),
             "D2740",
+        )
+
+    def test_recement_is_d2920_not_a_new_crown(self) -> None:
+        self.assertEqual(
+            _code(
+                _request(
+                    [
+                        _line(
+                            tooth_numbers=["7"],
+                            findings=["recement crown"],
+                            planned_or_performed="performed",
+                        )
+                    ]
+                )
+            ),
+            "D2920",
+        )
+
+    def test_temporary_crown_is_null(self) -> None:
+        self.assertIsNone(
+            _code(
+                _request(
+                    [
+                        _line(
+                            tooth_numbers=["30"],
+                            findings=["temporary crown placement"],
+                            planned_or_performed="performed",
+                        )
+                    ]
+                )
+            )
+        )
+
+    def test_implant_supported_crown_stays_unresolved(self) -> None:
+        self.assertEqual(
+            _code(
+                _request(
+                    [
+                        _line(
+                            tooth_numbers=["30"],
+                            findings=["implant-supported porcelain crown delivery"],
+                            planned_or_performed="performed",
+                        )
+                    ]
+                )
+            ),
+            "__unresolved__",
         )
 
     def test_existing_gold_without_planned_material_is_null(self) -> None:

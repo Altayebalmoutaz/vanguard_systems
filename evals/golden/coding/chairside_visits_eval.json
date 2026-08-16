@@ -306,6 +306,122 @@
         "status": "needs_info",
         "line_cdt": { "1": null }
       }
+    },
+    {
+      "name": "chairside_limited_exam",
+      "request": {
+        "schema_version": "1.0",
+        "request_id": "11111111-aaaa-4aaa-8aaa-aaaaaaaaaaa9",
+        "practice_id": "vgd_mock_brooklyn",
+        "patient_id": "pat_chairside_limited",
+        "provider_id": "prov_eval_1",
+        "encounter_datetime": "2026-08-16T10:10:00-04:00",
+        "payer": { "id": "62308", "name": "Cigna" },
+        "patient": { "age": 47 },
+        "procedures": [
+          {
+            "line_id": "1",
+            "tooth_numbers": [],
+            "surfaces": [],
+            "findings": ["limited problem-focused evaluation"],
+            "planned_or_performed": "performed"
+          },
+          {
+            "line_id": "2",
+            "tooth_numbers": ["19"],
+            "surfaces": [],
+            "findings": ["periapical radiograph of tooth 19"],
+            "planned_or_performed": "performed"
+          }
+        ],
+        "supporting_note": "Emergency visit, PA of #19.",
+        "attachments_present": ["periapical_radiograph"],
+        "fast": true
+      },
+      "mock_llm": {
+        "recommendations": [],
+        "overall_confidence": 0.0,
+        "justification": "should not be called"
+      },
+      "expect": {
+        "status": "pending_review",
+        "line_cdt": { "1": "D0140", "2": "D0220" }
+      }
+    },
+    {
+      "name": "chairside_recement_not_new_crown",
+      "request": {
+        "schema_version": "1.0",
+        "request_id": "11111111-aaaa-4aaa-8aaa-aaaaaaaaaa10",
+        "practice_id": "vgd_mock_brooklyn",
+        "patient_id": "pat_chairside_recement",
+        "provider_id": "prov_eval_1",
+        "encounter_datetime": "2026-08-16T10:20:00-04:00",
+        "payer": { "id": "62308", "name": "Cigna" },
+        "patient": { "age": 59 },
+        "procedures": [
+          {
+            "line_id": "1",
+            "tooth_numbers": ["7"],
+            "surfaces": [],
+            "findings": ["recement crown"],
+            "planned_or_performed": "performed"
+          },
+          {
+            "line_id": "2",
+            "tooth_numbers": ["7"],
+            "surfaces": [],
+            "findings": ["new crown for tooth 7"],
+            "planned_or_performed": "planned"
+          }
+        ],
+        "supporting_note": "Crown recemented; replacement planned.",
+        "attachments_present": [],
+        "fast": true
+      },
+      "mock_llm": {
+        "recommendations": [],
+        "overall_confidence": 0.0,
+        "justification": "should not be called"
+      },
+      "expect": {
+        "status": "pending_review",
+        "line_cdt": { "1": "D2920", "2": "D2740" }
+      }
+    },
+    {
+      "name": "chairside_molar_retreatment",
+      "request": {
+        "schema_version": "1.0",
+        "request_id": "11111111-aaaa-4aaa-8aaa-aaaaaaaaaa11",
+        "practice_id": "vgd_mock_brooklyn",
+        "patient_id": "pat_chairside_retreat",
+        "provider_id": "prov_eval_1",
+        "encounter_datetime": "2026-08-16T10:30:00-04:00",
+        "payer": { "id": "62308", "name": "Cigna" },
+        "patient": { "age": 50 },
+        "procedures": [
+          {
+            "line_id": "1",
+            "tooth_numbers": ["14"],
+            "surfaces": [],
+            "findings": ["molar root canal retreatment"],
+            "planned_or_performed": "performed"
+          }
+        ],
+        "supporting_note": "Nonsurgical retreatment of #14.",
+        "attachments_present": ["periapical_radiograph"],
+        "fast": true
+      },
+      "mock_llm": {
+        "recommendations": [],
+        "overall_confidence": 0.0,
+        "justification": "should not be called"
+      },
+      "expect": {
+        "status": "pending_review",
+        "line_cdt": { "1": "D3348" }
+      }
     }
   ]
 }

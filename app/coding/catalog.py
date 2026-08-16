@@ -129,6 +129,7 @@ def eval_fixture_catalog() -> dict[str, dict[str, Any]]:
     """Small CDT set covering golden + chairside evals. Excludes invented codes."""
     codes = (
         "D0120",
+        "D0140",
         "D0150",
         "D0180",
         "D0210",
@@ -155,9 +156,13 @@ def eval_fixture_catalog() -> dict[str, dict[str, Any]]:
         "D2740",
         "D2750",
         "D2790",
+        "D2920",
         "D3310",
         "D3320",
         "D3330",
+        "D3346",
+        "D3347",
+        "D3348",
         "D4341",
         "D4342",
         "D4910",

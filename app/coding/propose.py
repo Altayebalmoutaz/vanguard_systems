@@ -13,8 +13,11 @@ from app.coding.adapter import patient_age
 from app.coding.gaps import (
     _any_unnegated,
     findings_blob,
-    looks_crown_procedure,
+    looks_definitive_tooth_crown,
     looks_filling_procedure,
+    looks_implant_procedure,
+    looks_recement_procedure,
+    looks_temporary_crown,
 )
 from app.coding.guards import planned_crown_material_documented
 from app.coding.schemas import CodingSuggestRequest, ProcedureLine
@@ -80,6 +83,14 @@ _PERIODIC_TOKENS = (
     "recall exam",
     "recall evaluation",
 )
+_LIMITED_TOKENS = (
+    "limited oral",
+    "limited problem-focused",
+    "limited problem focused",
+    "problem-focused evaluation",
+    "problem focused evaluation",
+    "limited evaluation",
+)
 
 _OHI_TOKENS = ("oral hygiene instruction", "oral hygiene instructions", "ohi")
 _FLUORIDE_VARNISH_TOKENS = ("fluoride varnish", "varnish")
@@ -121,6 +132,7 @@ _ENDO_TOKENS = (
     "necrosis of pulp",
     "pulpal necrosis",
 )
+_ENDO_RETREAT_TOKENS = ("retreatment", "re-treatment", "re treatment")
 _EXTRACTION_TOKENS = (
     "extraction",
     "extracted",
@@ -205,6 +217,11 @@ def _propose_line(line: ProcedureLine, *, age: int) -> ProposedLine:
         return _hit(line, "D1351", explanation)
 
     if _has(line, _ENDO_TOKENS) and line.tooth_numbers:
+        if _has(line, _ENDO_RETREAT_TOKENS):
+            retreat = _endo_retreat_code(line)
+            if retreat:
+                return _hit(line, retreat, "Endodontic retreatment from tooth class.")
+            return _unresolved(line)
         endo = _endo_code(line)
         if endo:
             return _hit(line, endo, "Root canal therapy from tooth class.")
@@ -218,7 +235,19 @@ def _propose_line(line: ProcedureLine, *, age: int) -> ProposedLine:
     if _has(line, _SOCKET_GRAFT_TOKENS):
         return _hit(line, "D7953", "Socket/ridge preservation bone graft (D7953).")
 
-    if looks_crown_procedure(line):
+    if looks_recement_procedure(line):
+        return _hit(line, "D2920", "Recement an existing crown.")
+
+    if looks_temporary_crown(line):
+        return _resolved_null(
+            line,
+            "Temporary/provisional crown is included in the definitive crown, not a D27xx.",
+        )
+
+    if looks_implant_procedure(line):
+        return _unresolved(line)
+
+    if looks_definitive_tooth_crown(line):
         if not planned_crown_material_documented(line):
             return _resolved_null(
                 line,
@@ -245,6 +274,8 @@ def _propose_line(line: ProcedureLine, *, age: int) -> ProposedLine:
         return _hit(line, "D0150", "Comprehensive oral evaluation.")
     if _has(line, _PERIODIC_TOKENS):
         return _hit(line, "D0120", "Periodic oral evaluation.")
+    if _has(line, _LIMITED_TOKENS):
+        return _hit(line, "D0140", "Limited / problem-focused oral evaluation.")
 
     if _has(line, _OHI_TOKENS):
         return _hit(line, "D1330", "Oral hygiene instructions.")
@@ -262,6 +293,14 @@ def _endo_code(line: ProcedureLine) -> str | None:
         return None
     cls = next(iter(classes))
     return {"anterior": "D3310", "premolar": "D3320", "molar": "D3330"}.get(cls or "")
+
+
+def _endo_retreat_code(line: ProcedureLine) -> str | None:
+    classes = {_tooth_class(t) for t in line.tooth_numbers}
+    if len(classes) != 1:
+        return None
+    cls = next(iter(classes))
+    return {"anterior": "D3346", "premolar": "D3347", "molar": "D3348"}.get(cls or "")
 
 
 def _tooth_class(tooth: str) -> str | None:
@@ -358,6 +397,8 @@ def _imaging_code(blob: str) -> str | None:
 
 def _prophy_code(line: ProcedureLine, age: int) -> str:
     if _has(line, _CHILD_PROPHY_TOKENS):
+        if age > _CHILD_PROPHY_MAX_AGE:
+            return "D1110"
         return "D1120"
     if _has(line, _ADULT_PROPHY_TOKENS):
         return "D1110"
