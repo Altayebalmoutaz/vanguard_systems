@@ -327,13 +327,12 @@ class TestCodingSuggestService(unittest.TestCase):
             "overall_confidence": 0.9,
             "justification": "Restorative + eval",
         }
-        run_id = UUID("22222222-2222-2222-2222-222222222222")
-        mock_insert.return_value = run_id
+        mock_insert.return_value = UUID("22222222-2222-2222-2222-222222222222")
         req = CodingSuggestRequest.model_validate(json.loads(FIXTURE.read_text(encoding="utf-8")))
         settings = Settings(openrouter_api_key="test-key")
         cfg = CodingSettings(coding_confidence_review_threshold=0.75)
         out = run_coding_suggest(req, settings=settings, coding_settings=cfg)
-        self.assertEqual(out.coding_run_id, run_id)
+        self.assertIsInstance(out.coding_run_id, UUID)
         self.assertEqual(len(out.recommendations), 2)
         self.assertEqual(out.recommendations[0].cdt_code, "D2392")
         self.assertEqual(out.recommendations[1].cdt_code, "D0120")

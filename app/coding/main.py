@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import secrets
 
-from fastapi import FastAPI
+from fastapi import BackgroundTasks, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -85,13 +85,16 @@ def health() -> dict[str, str]:
 
 
 @app.post("/v1/suggest", response_model=CodingSuggestResponse)
-def suggest_codes(body: CodingSuggestRequest) -> CodingSuggestResponse:
+def suggest_codes(
+    body: CodingSuggestRequest,
+    background_tasks: BackgroundTasks,
+) -> CodingSuggestResponse:
     """
     Accept a structured scribe payload and return line-level coding recommendations
     synchronously for dentist approval in the scribe UI.
     """
     try:
-        return run_coding_suggest(body)
+        return run_coding_suggest(body, schedule_persist=background_tasks.add_task)
     except Exception as exc:
         raise sanitized_http_exception(
             500,

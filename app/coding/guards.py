@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from app.coding.gaps import findings_blob, looks_crown_procedure
+from app.coding.gaps import findings_blob, looks_definitive_tooth_crown
 from app.coding.schemas import CodingSuggestRequest, ProcedureLine, resolved_quadrant
 
 _CROWN_FAMILY_PREFIX = "D27"
@@ -67,6 +67,22 @@ _PERIODONTITIS_TOKENS = (
 )
 _LASER_TOKENS = ("laser",)
 _IRRIGATION_TOKENS = ("irrigation", "gingival lavage")
+_FILLING_FAMILY = frozenset(
+    {
+        "D2140",
+        "D2150",
+        "D2160",
+        "D2161",
+        "D2330",
+        "D2331",
+        "D2332",
+        "D2335",
+        "D2391",
+        "D2392",
+        "D2393",
+        "D2394",
+    }
+)
 
 
 def apply_clinical_guards(
@@ -97,7 +113,7 @@ def apply_clinical_guards(
         code = _code_of(rec)
         blob = findings_blob(line)
 
-        if looks_crown_procedure(line) and not planned_crown_material_documented(line):
+        if looks_definitive_tooth_crown(line) and not planned_crown_material_documented(line):
             if not code:
                 rec["cdt_code"] = _DEFAULT_CROWN_CODE
                 code = _DEFAULT_CROWN_CODE
@@ -155,6 +171,19 @@ def apply_clinical_guards(
             rec["explanation"] = "One to three teeth in this quadrant map to D4342, not D4341."
             warnings.append(f"Guard mapped line {line_id} D4341 -> D4342")
 
+        if code in _FILLING_FAMILY and line.tooth_numbers and line.surfaces:
+            from app.coding.propose import expected_filling_code
+
+            expected = expected_filling_code(line)
+            if expected and code != expected:
+                _void(
+                    rec,
+                    f"Filling {code} does not match tooth/surface count (expected {expected}).",
+                )
+                warnings.append(
+                    f"Guard cleared line {line_id}: filling {code} != {expected}"
+                )
+
     return warnings
 
 
@@ -164,13 +193,13 @@ def planned_crown_material_documented(line: ProcedureLine) -> bool:
     Material that only describes an existing restoration (e.g. "existing full
     gold crown") does not count — replacement material still has to be named.
     """
-    blob = findings_blob(line)
-    for clause in re.split(r"[.;\n]", blob):
-        if not any(tok in clause for tok in _PLANNED_MATERIAL_TOKENS):
-            continue
-        if any(cue in clause for cue in _EXISTING_MATERIAL_CUES):
-            continue
-        return True
+    for finding in line.findings:
+        for clause in re.split(r"[.;\n]", finding.lower()):
+            if not any(tok in clause for tok in _PLANNED_MATERIAL_TOKENS):
+                continue
+            if any(cue in clause for cue in _EXISTING_MATERIAL_CUES):
+                continue
+            return True
     return False
 
 
@@ -210,6 +239,11 @@ def _guard_eval_exclusivity(
 def _code_of(rec: dict[str, Any]) -> str:
     cdt = rec.get("cdt_code")
     return str(cdt).upper().strip() if cdt not in (None, "") else ""
+
+
+def void_recommendation(rec: dict[str, Any], explanation: str) -> None:
+    """Clear a proposed CDT so post_check emits CDT_UNCERTAIN."""
+    _void(rec, explanation)
 
 
 def _void(rec: dict[str, Any], explanation: str) -> None:

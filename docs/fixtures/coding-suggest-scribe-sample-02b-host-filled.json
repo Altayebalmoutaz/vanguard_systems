@@ -1,0 +1,194 @@
+{
+  "schema_version": "1.0",
+  "request_id": "a1b2c3d4-e5f6-4789-a012-3456789abcde",
+  "practice_id": "vgd_mock_brooklyn",
+  "patient_id": "pat_scribe_sample_02b",
+  "provider_id": "prov_scribe_sample_02b",
+  "encounter_datetime": "2026-08-11T09:00:00-05:00",
+  "payer": {
+    "id": "62308",
+    "name": "Cigna"
+  },
+  "patient": {
+    "age": 62
+  },
+  "procedures": [
+    {
+      "line_id": "A",
+      "tooth_numbers": [],
+      "surfaces": [],
+      "findings": [
+        "comprehensive examination",
+        "new patient",
+        "annual checkup",
+        "all hard and soft tissues within normal limits",
+        "sloughing of the labial and buccal mucosa",
+        "no other findings at this time"
+      ],
+      "planned_or_performed": "performed"
+    },
+    {
+      "line_id": "B",
+      "tooth_numbers": [],
+      "surfaces": [],
+      "findings": [
+        "full mouth set of x-rays taken and reviewed with patient",
+        "localized horizontal and vertical bone loss",
+        "ledges of calculus"
+      ],
+      "planned_or_performed": "performed"
+    },
+    {
+      "line_id": "C",
+      "tooth_numbers": [],
+      "surfaces": [],
+      "findings": [
+        "periodontal evaluation with periodontal charting",
+        "periodontal classification 4, localized moderate",
+        "pocket depths 1–6 mm",
+        "generalized bleeding on probing, 108 bleeding sites",
+        "clinical attachment loss 9 mm in the posterior regions",
+        "localized horizontal and vertical bone loss"
+      ],
+      "planned_or_performed": "performed"
+    },
+    {
+      "line_id": "D",
+      "tooth_numbers": [],
+      "surfaces": [],
+      "findings": [
+        "pre-procedural rinse with molecular iodine ready-to-use rinse"
+      ],
+      "planned_or_performed": "performed"
+    },
+    {
+      "line_id": "E",
+      "tooth_numbers": [],
+      "surfaces": [],
+      "findings": [
+        "oral hygiene instruction",
+        "interdental brush use demonstrated",
+        "home care recommendation handout provided"
+      ],
+      "planned_or_performed": "performed"
+    },
+    {
+      "line_id": "F",
+      "tooth_numbers": [],
+      "surfaces": [],
+      "findings": [
+        "high-level PPE utilized to minimize risks associated with aerosol production"
+      ],
+      "planned_or_performed": "performed"
+    },
+    {
+      "line_id": "G",
+      "tooth_numbers": [
+        "15"
+      ],
+      "surfaces": [
+        "M",
+        "B"
+      ],
+      "findings": [
+        "replacement of existing full gold crown",
+        "recurrent decay along the mesiobuccal margin of existing full gold crown",
+        "margins compromised",
+        "crown at least 10–15 years old per patient"
+      ],
+      "planned_or_performed": "planned"
+    },
+    {
+      "line_id": "H",
+      "tooth_numbers": [
+        "30"
+      ],
+      "surfaces": [],
+      "findings": [
+        "full porcelain crown",
+        "existing MOD amalgam fractured in multiple areas",
+        "lingual cusp compromised, wear and stress fractures",
+        "full coverage recommended to avoid further breakdown"
+      ],
+      "planned_or_performed": "planned"
+    },
+    {
+      "line_id": "I",
+      "tooth_numbers": [],
+      "surfaces": [],
+      "findings": [
+        "quadrant: UR (upper right)",
+        "non-surgical periodontal therapy",
+        "periodontal classification 4, localized moderate",
+        "pocket depths 1–6 mm, generalized bleeding on probing",
+        "moderate to heavy supragingival and moderate subgingival calculus"
+      ],
+      "planned_or_performed": "planned"
+    },
+    {
+      "line_id": "J",
+      "tooth_numbers": [],
+      "surfaces": [],
+      "findings": [
+        "quadrant: UL (upper left)",
+        "non-surgical periodontal therapy",
+        "periodontal classification 4, localized moderate",
+        "pocket depths 1–6 mm, generalized bleeding on probing",
+        "moderate to heavy supragingival and moderate subgingival calculus"
+      ],
+      "planned_or_performed": "planned"
+    },
+    {
+      "line_id": "K",
+      "tooth_numbers": [],
+      "surfaces": [],
+      "findings": [
+        "quadrant: LR (lower right)",
+        "non-surgical periodontal therapy",
+        "periodontal classification 4, localized moderate",
+        "pocket depths 1–6 mm, generalized bleeding on probing",
+        "moderate to heavy supragingival and moderate subgingival calculus"
+      ],
+      "planned_or_performed": "planned"
+    },
+    {
+      "line_id": "L",
+      "tooth_numbers": [],
+      "surfaces": [],
+      "findings": [
+        "quadrant: LL (lower left)",
+        "non-surgical periodontal therapy",
+        "periodontal classification 4, localized moderate",
+        "pocket depths 1–6 mm, generalized bleeding on probing",
+        "moderate to heavy supragingival and moderate subgingival calculus"
+      ],
+      "planned_or_performed": "planned"
+    },
+    {
+      "line_id": "M",
+      "tooth_numbers": [],
+      "surfaces": [],
+      "findings": [
+        "laser-assisted periodontal therapy",
+        "adjunct to non-surgical periodontal therapy in all four quadrants"
+      ],
+      "planned_or_performed": "planned"
+    },
+    {
+      "line_id": "N",
+      "tooth_numbers": [],
+      "surfaces": [],
+      "findings": [
+        "gingival irrigation",
+        "adjunct to non-surgical periodontal therapy in all four quadrants"
+      ],
+      "planned_or_performed": "planned"
+    }
+  ],
+  "supporting_note": "## Subjective\n\n### Chief Complaint\n- Bleeding with flossing\n- Generalized cold sensitivity\n- Discomfort when chewing on the lower right, patient pointing to the molar region\n\n### History of Present Illness (HPI)\n- **Location:** Lower right molar region; cold sensitivity is generalized\n- **Character:** Discomfort with chewing; sensitivity to cold; bleeding with flossing\n- **Aggravating Factors:** Chewing on the lower right; cold\n\n### Dental History\n- Seen every six months by his previous dentist for dental cleanings\n- Previously told that he is healthy\n- Last dental checkup one year ago\n- Previous dental hygiene visit preceded his cardiac event by approximately six months\n\n### Medical History\n- **Conditions:**\n  - **Cardiac** — Cardiac event approximately six months ago, following his previous dental hygiene visit\n  - **Endocrine** — Type 2 diabetes; originally diagnosed at approximately age 49 per patient\n  - **Cardiovascular** — Hypertension; currently being treated\n- **Medications:**\n  - **Lisinopril** — 5 mg — one per day\n  - **Pravastatin** — 40 mg — one time per day\n  - **Metoprolol** — 25 mg — one time per day\n  - **Furosemide** — 40 mg — one time per day\n  - **Aspirin** — 325 mg — one time per day\n  - **Januvia** — 100 mg — one time per day\n  - **Metformin** — 500 mg — one time per day\n- **Medication Reconciliation:** Medications reviewed and listed in patient alert based on what the patient stated he could remember; a list of medications and dosages has been requested for our records with the medical clearance request.\n- **Laboratory:** Last A1C taken earlier this month; patient does not remember the result. The result will be requested along with the medical clearance.\n- **Medical Clearance:** Required before scheduling any future dental care; requested from the patient's cardiologist; status requested and pending; blocks all treatment until received.\n\n### Social History\n- No history of smoking or chewing tobacco\n- Uses Listerine two to three times per day; warned of harmful ingredients in over-the-counter dental products\n- Drinks coffee daily along with red wine, likely contributing to stain\n\n### Patient Goals\n- Patient would like to get started with treatment as soon as possible\n\n## Objective\n\n### Vital Signs\n- **Blood Pressure:** 136/78 (left arm)\n- **Heart Rate:** 70\n- **Oxygen Saturation:** 98%\n\n### Radiographs and Scans\n- **Studies:**\n  - Full mouth set of x-rays taken and reviewed with patient\n- **Findings:**\n  - Localized areas of horizontal and vertical bone loss\n  - Ledges of calculus\n\n### Intraoral Examination\n\n#### Dentition\nComprehensive examination performed by the doctor. All hard tissues appear within normal limits at this time apart from the findings listed below. No other findings at this time.\n\n- **#1** — Missing; extracted more than one year ago\n- **#2** — MO amalgam\n- **#3** — Lingual composite\n- **#4** — Occlusal composite\n- **#8** — Mesial and distal composite\n- **#12** — Occlusal composite\n- **#14** — Full gold crown\n- **#15** — Full gold crown; recurrent decay noted along the mesiobuccal margin of the existing full gold crown; margins compromised; crown at least 10–15 years old per patient; replacement of full gold crown recommended\n- **#16** — Missing\n- **#17** — Missing\n- **#18** — DO amalgam\n- **#19** — MO composite\n- **#22** — Mesiolingual composite\n- **#24** — Incisal composite\n- **#25** — Incisal composite\n- **#28** — Occlusal composite\n- **#29** — DO composite\n- **#30** — MOD amalgam; amalgam appears fractured in multiple areas; lingual cusp compromised showing signs of wear and stress fractures; full porcelain crown recommended for full coverage and protection to avoid further breakdown of this tooth\n- **#31** — MO amalgam\n- **#32** — Missing\n\n#### Soft Tissue\nAll soft tissues appear within normal limits at this time.\n\n- **Lips:** Sloughing of the labial mucosa noted\n- **Cheeks:** Sloughing of the buccal mucosa noted\n\n### Periodontal Status\n- **Classification:** 4 (classification four, localized moderate)\n- **Pocket Depths:** 1–6 mm\n- **Bleeding on Probing:** Generalized; total count of 108 bleeding sites\n- **Furcation Involvement:** Furcation areas included in periodontal charting\n  - **#3** — Buccal\n  - **#15** — Class II, buccal\n  - **#19** — Class I, buccal\n  - **#30** — Class I\n- **Recession:** Gingival margins showing localized areas of 1–5 mm of recession\n- **Bone Loss:** Localized areas of horizontal and vertical bone loss noted from radiographs\n- **Clinical Attachment:** Total clinical attachment loss of 9 mm in the posterior regions\n- **Oral Hygiene:** Patient currently brushing with a manual toothbrush, flossing daily, and using \"the serene\"\n- **Tissues:** Boggy throughout with localized areas of edematous and erythematous tissues\n- **Interdental Papilla:** Blunted in the lower anteriors\n- **Calculus:** Biofilm moderate; calculus moderate to heavy supragingival and moderate subgingival deposits; radiographic ledges of calculus; areas of burnished calculus and rough root surfaces detected\n- **Stain:** Moderate throughout\n- **Mobility:** Mobility noted and included in periodontal charting; localized Grade II, slight, up to 1 mm, in the lower anterior region\n  - **#12** — Grade III\n  - **#24** — Grade III, moderate, greater than 1 mm\n  - **#25** — Grade III, moderate, greater than 1 mm\n- **Charting Reference:** See periodontal charting for notes",
+  "attachments_present": [
+    "full_mouth_series",
+    "periodontal_chart"
+  ],
+  "fast": false
+}

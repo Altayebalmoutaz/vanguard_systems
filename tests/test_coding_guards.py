@@ -113,6 +113,18 @@ class TestRadiographAttachmentAliases(unittest.TestCase):
         )
         self.assertFalse(any(m.code == MissingInfoCode.RADIOGRAPH_MISSING for m in missing))
 
+    def test_srp_with_quadrants_does_not_require_tooth(self) -> None:
+        line = _line(line_id="1", findings=["scaling and root planing, 4 quadrants"])
+        missing = post_check_line(
+            line,
+            cdt_code="D4341",
+            attachments_present=["full_mouth_series"],
+            confidence=0.97,
+            threshold=0.75,
+            cdt_meta={"requires_radiograph": True, "requires_tooth": True},
+        )
+        self.assertFalse(any(m.code == MissingInfoCode.TOOTH_MISSING for m in missing))
+
     def test_periodontal_chart_is_not_a_radiograph(self) -> None:
         line = _line(line_id="P3")
         missing = post_check_line(
@@ -153,6 +165,24 @@ class TestClinicalGuards(unittest.TestCase):
         self.assertEqual(recs[0]["cdt_code"], "D2740")
         self.assertLessEqual(recs[0]["confidence"], 0.7)
         self.assertTrue(any("crown material" in w for w in warnings))
+
+    def test_does_not_default_recement_or_temp_or_implant_to_d2740(self) -> None:
+        recement = _line(line_id="1", tooth_numbers=["7"], findings=["recement crown"])
+        temp = _line(line_id="2", tooth_numbers=["30"], findings=["temporary crown placement"])
+        implant = _line(
+            line_id="3",
+            tooth_numbers=["19"],
+            findings=["implant-supported porcelain crown delivery"],
+        )
+        recs = [
+            {"line_id": "1", "cdt_code": None, "confidence": 0.0, "explanation": ""},
+            {"line_id": "2", "cdt_code": None, "confidence": 0.0, "explanation": ""},
+            {"line_id": "3", "cdt_code": None, "confidence": 0.0, "explanation": ""},
+        ]
+        apply_clinical_guards(_request([recement, temp, implant]), recs)
+        self.assertIsNone(recs[0]["cdt_code"])
+        self.assertIsNone(recs[1]["cdt_code"])
+        self.assertIsNone(recs[2]["cdt_code"])
 
     def test_defaults_null_crown_to_d2740(self) -> None:
         line = _line(
@@ -350,6 +380,25 @@ class TestClinicalGuards(unittest.TestCase):
         ]
         apply_clinical_guards(_request([line]), recs)
         self.assertEqual(recs[0]["cdt_code"], "D4341")
+
+    def test_voids_filling_when_surface_count_does_not_match(self) -> None:
+        line = _line(
+            line_id="1",
+            tooth_numbers=["14"],
+            surfaces=["O"],
+            findings=["odd chairside repair"],
+        )
+        recs = [
+            {
+                "line_id": "1",
+                "cdt_code": "D2393",
+                "confidence": 0.8,
+                "explanation": "three-surface composite",
+                "icd10_codes": [],
+            }
+        ]
+        apply_clinical_guards(_request([line]), recs)
+        self.assertIsNone(recs[0]["cdt_code"])
 
 
 if __name__ == "__main__":

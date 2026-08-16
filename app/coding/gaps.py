@@ -151,6 +151,9 @@ _IMAGING_LINE_TOKENS = (
     "fmx",
 )
 _CROWN_PROCEDURE_TOKENS = ("crown", "onlay", "inlay", "veneer")
+_RECEMENT_TOKENS = ("recement", "re-cement", "re cement")
+_TEMPORARY_CROWN_TOKENS = ("temporary crown", "provisional crown", "temp crown")
+_IMPLANT_TOKENS = ("implant",)
 _FILLING_PROCEDURE_TOKENS = (
     "composite",
     "amalgam",
@@ -214,8 +217,28 @@ _NEGATION_CUES = frozenset(
 )
 
 
+_QUADRANT_DOC_TOKENS = (
+    "quadrant",
+    "upper right",
+    "upper left",
+    "lower right",
+    "lower left",
+    "maxillary right",
+    "maxillary left",
+    "mandibular right",
+    "mandibular left",
+)
+
+
 def findings_blob(line: ProcedureLine) -> str:
     return " ".join(line.findings).lower()
+
+
+def _quadrant_documented(line: ProcedureLine) -> bool:
+    blob = findings_blob(line)
+    if any(tok in blob for tok in _QUADRANT_DOC_TOKENS):
+        return True
+    return bool(re.search(r"\b(?:ur|ul|lr|ll)\b", blob))
 
 
 def _token_present_unnegated(blob: str, token: str) -> bool:
@@ -262,6 +285,30 @@ def looks_exam_or_diagnostic(line: ProcedureLine) -> bool:
 
 def looks_crown_procedure(line: ProcedureLine) -> bool:
     return _any_unnegated(line.findings, _CROWN_PROCEDURE_TOKENS)
+
+
+def looks_recement_procedure(line: ProcedureLine) -> bool:
+    return _any_unnegated(line.findings, _RECEMENT_TOKENS)
+
+
+def looks_temporary_crown(line: ProcedureLine) -> bool:
+    return looks_crown_procedure(line) and _any_unnegated(
+        line.findings, _TEMPORARY_CROWN_TOKENS
+    )
+
+
+def looks_implant_procedure(line: ProcedureLine) -> bool:
+    return _any_unnegated(line.findings, _IMPLANT_TOKENS)
+
+
+def looks_definitive_tooth_crown(line: ProcedureLine) -> bool:
+    """New/replacement tooth crown — not recement, temp, or implant restoration."""
+    return (
+        looks_crown_procedure(line)
+        and not looks_recement_procedure(line)
+        and not looks_temporary_crown(line)
+        and not looks_implant_procedure(line)
+    )
 
 
 def looks_filling_procedure(line: ProcedureLine) -> bool:
@@ -402,6 +449,9 @@ def post_check_line(
         needs_tooth = req.requires_tooth
         needs_surface = req.requires_surfaces
         needs_radio = req.requires_radiograph or code in _IMAGING_CODES
+
+    if code in {"D4341", "D4342"} and _quadrant_documented(line):
+        needs_tooth = False
 
     if code in _SRP_CODES and resolved_quadrant(line) is not None and not line.tooth_numbers:
         missing.append(

@@ -16,7 +16,7 @@ class TestGoldenCodingEvals(unittest.TestCase):
         cases = _load_cases("coding")
         self.assertGreaterEqual(len(cases), 3, "expected golden coding cases to exist")
         failures = [
-            f"{path.name}: {failure.message}"
+            f"{path.name} [{case.get('name') or path.stem}]: {failure.message}"
             for path, case in cases
             if (failure := _run_coding_case(path, case)) is not None
         ]

@@ -112,7 +112,6 @@ def code_range_requirements(cdt_code: str) -> CdtRequirements:
     elif (
         3000 <= n <= 3999
         or 4210 <= n <= 4249
-        or n in (4341, 4342)
         or 6000 <= n <= 6199
         or 6200 <= n <= 6999
         or 7000 <= n <= 7999

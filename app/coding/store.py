@@ -10,6 +10,7 @@ from uuid import UUID
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
+from app.coding.pending import peek_pending_by_id, peek_pending_by_request
 from app.config import Settings
 from app.db.connection import get_neon_dsn, neon_connection
 from app.db.json_safe import json_safe
@@ -26,6 +27,9 @@ def fetch_run_by_request_id(
     request_id: UUID,
 ) -> dict[str, Any] | None:
     """Return an existing coding_runs row for idempotent replay, or None."""
+    pending = peek_pending_by_request(practice_id, request_id)
+    if pending:
+        return pending
     if get_neon_dsn(settings):
         try:
             with (
@@ -82,6 +86,9 @@ def fetch_run_by_id(
     coding_run_id: UUID,
 ) -> dict[str, Any] | None:
     """Return a coding_runs row by id (used to backfill suggested_cdt), or None."""
+    pending = peek_pending_by_id(practice_id, coding_run_id)
+    if pending:
+        return pending
     if get_neon_dsn(settings):
         try:
             with (
@@ -218,6 +225,7 @@ def insert_coding_run(
     response_payload: dict[str, Any],
     status: str,
     overall_confidence: float,
+    coding_run_id: UUID | None = None,
 ) -> UUID | None:
     """Insert one coding_runs row; returns id (or existing id on unique conflict)."""
     if get_neon_dsn(settings):
@@ -233,6 +241,7 @@ def insert_coding_run(
             response_payload=response_payload,
             status=status,
             overall_confidence=overall_confidence,
+            coding_run_id=coding_run_id,
         )
 
     supabase = create_supabase(settings)
@@ -240,24 +249,21 @@ def insert_coding_run(
         logger.warning("coding_runs insert skipped: no Neon/Supabase configured")
         return None
     try:
-        result = (
-            supabase.table("coding_runs")
-            .insert(
-                {
-                    "practice_id": practice_id,
-                    "request_id": str(request_id),
-                    "patient_id": patient_id,
-                    "provider_id": provider_id,
-                    "encounter_datetime": encounter_datetime.isoformat(),
-                    "payer_id": payer_id,
-                    "request_payload": json_safe(request_payload),
-                    "response_payload": json_safe(response_payload),
-                    "status": status,
-                    "overall_confidence": overall_confidence,
-                }
-            )
-            .execute()
-        )
+        payload = {
+            "practice_id": practice_id,
+            "request_id": str(request_id),
+            "patient_id": patient_id,
+            "provider_id": provider_id,
+            "encounter_datetime": encounter_datetime.isoformat(),
+            "payer_id": payer_id,
+            "request_payload": json_safe(request_payload),
+            "response_payload": json_safe(response_payload),
+            "status": status,
+            "overall_confidence": overall_confidence,
+        }
+        if coding_run_id is not None:
+            payload["id"] = str(coding_run_id)
+        result = supabase.table("coding_runs").insert(payload).execute()
         rows = getattr(result, "data", None) or []
         if rows and rows[0].get("id"):
             return UUID(str(rows[0]["id"]))
@@ -286,6 +292,7 @@ def _insert_neon(
     response_payload: dict[str, Any],
     status: str,
     overall_confidence: float,
+    coding_run_id: UUID | None = None,
 ) -> UUID | None:
     try:
         with neon_connection(settings, practice_id=practice_id) as conn:
@@ -293,16 +300,20 @@ def _insert_neon(
                 cur.execute(
                     """
                     insert into agents.coding_runs (
-                      practice_id, request_id, patient_id, provider_id,
+                      id, practice_id, request_id, patient_id, provider_id,
                       encounter_datetime, payer_id, request_payload, response_payload,
                       status, overall_confidence
                     )
-                    values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    values (
+                      coalesce(%s::uuid, gen_random_uuid()),
+                      %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                    )
                     on conflict (practice_id, request_id) do update
                       set practice_id = excluded.practice_id
                     returning id
                     """,
                     (
+                        str(coding_run_id) if coding_run_id else None,
                         practice_id,
                         str(request_id),
                         patient_id,
