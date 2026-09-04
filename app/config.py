@@ -47,7 +47,7 @@ class Settings(BaseSettings):
     copilot_max_tool_iterations: int = 6
     # Flash defaults to a 65k completion cap; OpenRouter 402s when remaining
     # credits cannot reserve that many tokens. Copilot replies stay short.
-    copilot_max_tokens: int = 2048
+    copilot_max_tokens: int = 1024
 
     # Optional: Jina + Supabase RPC `match_cdt_codes` injects vector-retrieved CDT hints into the coding LLM.
     jina_api_key: str | None = None

@@ -5,8 +5,10 @@ from uuid import UUID
 
 import pytest
 
+import httpx
+
 from app.config import Settings
-from app.copilot.chat import run_copilot_chat
+from app.copilot.chat import CopilotBillingError, run_copilot_chat
 from app.dashboard.store import DashboardPatientNotFoundError
 from app.integrations.opendental.client import OpenDentalClient
 from app.security.phi import PhiScrubError
@@ -91,7 +93,7 @@ def test_tool_then_final_reply(monkeypatch: pytest.MonkeyPatch) -> None:
     result = _run(_settings(), monkeypatch, fake_llm)
     assert result.reply == "Coverage looks active."
     assert result.tool_trace == [{"name": "get_patient_overview", "args": {}}]
-    assert calls[0]["max_tokens"] == 2048
+    assert calls[0]["max_tokens"] == 1024
     tool_payload = calls[1]["messages"][-1]
     assert tool_payload["role"] == "tool"
     assert "123-45-6789" not in str(tool_payload["content"])
@@ -180,3 +182,13 @@ def test_od_only_patient_without_vanguard_row(monkeypatch: pytest.MonkeyPatch) -
         od_pat_num=1,
     )
     assert result.reply == "Balance is $40."
+
+
+def test_openrouter_402_raises_billing_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_llm(**kwargs):  # type: ignore[no-untyped-def]
+        request = httpx.Request("POST", "https://openrouter.ai/api/v1/chat/completions")
+        response = httpx.Response(402, request=request, text='{"error":{"message":"402"}}')
+        raise httpx.HTTPStatusError("Payment Required", request=request, response=response)
+
+    with pytest.raises(CopilotBillingError):
+        _run(_settings(), monkeypatch, fake_llm)

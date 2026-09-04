@@ -16,7 +16,7 @@ from app.api.errors import sanitized_http_exception
 from app.api.tenancy import PracticeContextDep
 from app.audit.writer import write_audit_log
 from app.config import get_settings
-from app.copilot.chat import CopilotConfigError, run_copilot_chat
+from app.copilot.chat import CopilotBillingError, CopilotConfigError, run_copilot_chat
 from app.copilot.patients import list_copilot_directory
 from app.dashboard.rcm_store import (
     get_dashboard_analytics,
@@ -515,6 +515,13 @@ def post_copilot_chat(body: CopilotChatBody, tenant: PracticeContextDep) -> dict
             503,
             public_message="Copilot is not configured",
             log_message="copilot missing OpenRouter key",
+            exc=exc,
+        ) from exc
+    except CopilotBillingError as exc:
+        raise sanitized_http_exception(
+            502,
+            public_message="OpenRouter credits are too low. Add credits at openrouter.ai/settings/credits.",
+            log_message="copilot OpenRouter 402",
             exc=exc,
         ) from exc
     except PhiScrubError as exc:

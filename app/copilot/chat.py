@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
+import httpx
+
 from app.config import Settings
 from app.copilot.patients import stub_profile_from_opendental
 from app.copilot.tools import TOOL_SPECS, ToolContext, UnknownCopilotToolError, execute_tool
@@ -54,6 +56,10 @@ class CopilotReply:
 
 class CopilotConfigError(RuntimeError):
     """Copilot cannot run (missing LLM key or disabled)."""
+
+
+class CopilotBillingError(RuntimeError):
+    """OpenRouter rejected the call because credits cannot cover max_tokens."""
 
 
 def _parse_tool_arguments(raw: str) -> dict[str, Any]:
@@ -166,14 +172,21 @@ def run_copilot_chat(
             "temperature": 0.35,
             "max_tokens": max(1, int(settings.copilot_max_tokens)),
         }
-        data = openrouter_chat_completion(
-            api_key=settings.openrouter_api_key,
-            payload=payload,
-            http_referer=settings.openrouter_http_referer or "https://localhost",
-            app_name=settings.app_name,
-            timeout_seconds=settings.openrouter_timeout_seconds,
-            max_retries=settings.openrouter_max_retries,
-        )
+        try:
+            data = openrouter_chat_completion(
+                api_key=settings.openrouter_api_key,
+                payload=payload,
+                http_referer=settings.openrouter_http_referer or "https://localhost",
+                app_name=settings.app_name,
+                timeout_seconds=settings.openrouter_timeout_seconds,
+                max_retries=settings.openrouter_max_retries,
+            )
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 402:
+                raise CopilotBillingError(
+                    "OpenRouter credits are too low for this request"
+                ) from exc
+            raise
         message = data["choices"][0]["message"]
         tool_calls = message.get("tool_calls") or []
         content = message.get("content")
