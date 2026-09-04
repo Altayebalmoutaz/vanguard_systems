@@ -66,7 +66,7 @@ class ApiKeyAuth(unittest.TestCase):
         self.assertEqual(resp.status_code, 401)
         self.assertEqual(resp.json()["detail"], "invalid_api_key")
 
-    def test_api_key_path_takes_precedence_over_jwt(self) -> None:
+    def test_bearer_jwt_wins_over_api_key(self) -> None:
         secret = "super-secret-key-that-is-32-bytes-long-aaaaaaaa"
         good_token = jwt.encode({"sub": "u-1"}, secret, algorithm="HS256")
         client = _build_app(
@@ -76,13 +76,13 @@ class ApiKeyAuth(unittest.TestCase):
                 internal_api_keys="ops-key-1",
             )
         )
-        # Wrong api key + valid JWT -> the api-key branch fires first and 401s.
         resp = client.get(
             "/whoami",
-            headers={"X-API-Key": "bogus", "Authorization": f"Bearer {good_token}"},
+            headers={"X-API-Key": "ops-key-1", "Authorization": f"Bearer {good_token}"},
         )
-        self.assertEqual(resp.status_code, 401)
-        self.assertEqual(resp.json()["detail"], "invalid_api_key")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["kind"], "jwt")
+        self.assertEqual(resp.json()["subject"], "u-1")
 
 
 class JwtAuth(unittest.TestCase):

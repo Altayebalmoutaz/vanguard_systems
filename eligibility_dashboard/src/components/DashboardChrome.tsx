@@ -15,7 +15,7 @@ export function DashboardChrome({ children }: { children: React.ReactNode }) {
   return (
     <>
       <Sidebar />
-      <div className="min-h-screen pl-[228px] [&>*]:!ml-0">{children}</div>
+      {children}
     </>
   );
 }

@@ -94,14 +94,6 @@ async def require_principal(
     if not settings.require_auth:
         return Principal(kind="anonymous", subject="anonymous", claims={})
 
-    if x_api_key:
-        if x_api_key in settings.internal_api_keys_set:
-            return Principal(kind="api_key", subject="internal", claims={})
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="invalid_api_key",
-        )
-
     if authorization and authorization.lower().startswith("bearer "):
         if not settings.supabase_jwt_secret:
             raise HTTPException(
@@ -129,6 +121,14 @@ async def require_principal(
                 detail="role_required",
             )
         return Principal(kind="jwt", subject=sub, claims=claims, practice_roles=practice_roles)
+
+    if x_api_key:
+        if x_api_key in settings.internal_api_keys_set:
+            return Principal(kind="api_key", subject="internal", claims={})
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="invalid_api_key",
+        )
 
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,

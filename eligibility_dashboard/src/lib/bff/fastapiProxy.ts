@@ -43,8 +43,7 @@ export async function proxyFastApi(path: string, options: FastApiProxyOptions = 
   // REQUIRE_AUTH=false pilot stacks still reach FastAPI without a session.
   if (token) {
     headers.authorization = `Bearer ${token}`;
-  }
-  if (API_KEY) {
+  } else if (API_KEY) {
     headers["x-api-key"] = API_KEY;
   }
   // /auth/me is identity-only and must not depend on a practice header.
