@@ -1,6 +1,5 @@
 "use client";
 
-import { ClinicSwitcher } from "@/components/ClinicSwitcher";
 import {
   dashboardAppName,
   dashboardAppSubtitle,
@@ -152,7 +151,6 @@ export function Sidebar() {
       </nav>
 
       <div className="px-2 pb-3">
-        <ClinicSwitcher />
         <div className="mb-2.5 flex items-center gap-2 overflow-hidden rounded-md border border-slate-100 bg-slate-50/80 px-2 py-1.5">
           <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-[var(--accent-primary-soft)] text-[var(--accent-primary)]">
             <ShieldCheck size={12} strokeWidth={2.2} />
