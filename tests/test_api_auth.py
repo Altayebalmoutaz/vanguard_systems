@@ -159,7 +159,27 @@ class JwtAuth(unittest.TestCase):
         resp = client.get("/whoami", headers={"Authorization": "Bearer not.a.real.jwt"})
         self.assertEqual(resp.status_code, 401)
 
-    def test_missing_jwt_secret_returns_503(self) -> None:
+    def test_missing_jwt_secret_falls_back_to_api_key(self) -> None:
+        token = jwt.encode(
+            {"sub": "u"},
+            "any-secret-padded-out-to-32-bytes-aaaa",
+            algorithm="HS256",
+        )
+        client = _build_app(
+            Settings(
+                require_auth=True,
+                supabase_jwt_secret=None,
+                internal_api_keys="ops-key-1",
+            )
+        )
+        resp = client.get(
+            "/whoami",
+            headers={"Authorization": f"Bearer {token}", "X-API-Key": "ops-key-1"},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["kind"], "api_key")
+
+    def test_missing_jwt_secret_without_api_key_returns_401(self) -> None:
         token = jwt.encode(
             {"sub": "u"},
             "any-secret-padded-out-to-32-bytes-aaaa",

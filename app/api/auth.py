@@ -94,12 +94,7 @@ async def require_principal(
     if not settings.require_auth:
         return Principal(kind="anonymous", subject="anonymous", claims={})
 
-    if authorization and authorization.lower().startswith("bearer "):
-        if not settings.supabase_jwt_secret:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="auth_not_configured",
-            )
+    if authorization and authorization.lower().startswith("bearer ") and settings.supabase_jwt_secret:
         token = authorization.split(" ", 1)[1].strip()
         claims = _verify_supabase_jwt(token, settings.supabase_jwt_secret)
         sub = str(claims.get("sub") or claims.get("user_id") or "unknown")
@@ -128,6 +123,12 @@ async def require_principal(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="invalid_api_key",
+        )
+
+    if authorization and authorization.lower().startswith("bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="auth_not_configured",
         )
 
     raise HTTPException(
