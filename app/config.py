@@ -37,12 +37,13 @@ class Settings(BaseSettings):
     openrouter_timeout_seconds: float = 120.0
     openrouter_max_retries: int = 3
 
-    # Read-only patient-scoped OD chat copilot (dashboard). Off by default.
-    copilot_enabled: bool = False
-    # Scrub tool outputs before the third-party LLM. Keep on until a BAA-covered
-    # provider is wired; set COPILOT_SCRUB_PHI=0 only for non-real local data.
-    copilot_scrub_phi: bool = True
-    copilot_model: str | None = None
+    # Read-only patient-scoped OD chat copilot (dashboard). On for the
+    # synthetic/non-PHI pilot; set COPILOT_ENABLED=0 to hide it.
+    copilot_enabled: bool = True
+    # Scrub tool outputs before the third-party LLM. Off while data is not real
+    # patients; set COPILOT_SCRUB_PHI=1 before any real PHI.
+    copilot_scrub_phi: bool = False
+    copilot_model: str | None = "openai/gpt-4o"
     copilot_max_tool_iterations: int = 6
 
     # Optional: Jina + Supabase RPC `match_cdt_codes` injects vector-retrieved CDT hints into the coding LLM.
