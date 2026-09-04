@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     # Scrub tool outputs before the third-party LLM. Off while data is not real
     # patients; set COPILOT_SCRUB_PHI=1 before any real PHI.
     copilot_scrub_phi: bool = False
-    copilot_model: str | None = "openai/gpt-4o"
+    copilot_model: str | None = "google/gemini-3.8-flash"
     copilot_max_tool_iterations: int = 6
 
     # Optional: Jina + Supabase RPC `match_cdt_codes` injects vector-retrieved CDT hints into the coding LLM.
