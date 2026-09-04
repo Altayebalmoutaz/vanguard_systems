@@ -92,7 +92,7 @@ def tool_get_patient_overview(ctx: ToolContext, _args: dict[str, Any]) -> dict[s
     if ctx.client is not None and ctx.od_pat_num is not None:
         od_patient = _dump(ctx.client.get_patient(ctx.od_pat_num))
     return {
-        "source": "vanguard_patient_360" + ("+opendental" if od_patient else ""),
+        "source": "smilesuites_patient_360" + ("+opendental" if od_patient else ""),
         "patient": patient,
         "latest_eligibility_check": latest,
         "opendental_patient": od_patient,
@@ -253,7 +253,7 @@ def tool_get_eligibility_history(ctx: ToolContext, _args: dict[str, Any]) -> dic
             eligibility_check_id=UUID(str(check_id)),
         )
     return {
-        "source": "vanguard.eligibility",
+        "source": "smilesuites.eligibility",
         "latest_eligibility_check": latest,
         "procedure_estimates": estimates,
     }
@@ -267,13 +267,13 @@ def tool_explain_carc_code(ctx: ToolContext, args: dict[str, Any]) -> dict[str, 
     policy = lookup_carc(reason, remark_codes=remarks)
     if policy is None:
         return {
-            "source": "vanguard.carc_policy",
+            "source": "smilesuites.carc_policy",
             "reason_code": reason,
             "found": False,
             "note": "No v1 posting policy for this CARC.",
         }
     return {
-        "source": "vanguard.carc_policy",
+        "source": "smilesuites.carc_policy",
         "reason_code": reason,
         "found": True,
         "policy": asdict(policy),
@@ -309,7 +309,7 @@ TOOL_SPECS: list[dict[str, Any]] = [
             "name": "get_patient_overview",
             "description": (
                 "Demographics and latest eligibility summary for the anchored patient "
-                "from Vanguard, plus the OpenDental patient record when connected."
+                "from SmileSuites, plus the OpenDental patient record when connected."
             ),
             "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
         },
@@ -470,7 +470,7 @@ TOOL_SPECS: list[dict[str, Any]] = [
         "function": {
             "name": "get_eligibility_history",
             "description": (
-                "Latest Vanguard eligibility check and per-procedure estimates "
+                "Latest SmileSuites eligibility check and per-procedure estimates "
                 "(allowed, insurance pays, patient responsibility)."
             ),
             "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
@@ -481,7 +481,7 @@ TOOL_SPECS: list[dict[str, Any]] = [
         "function": {
             "name": "explain_carc_code",
             "description": (
-                "Explain an 835 CARC/reason code using Vanguard posting policy "
+                "Explain an 835 CARC/reason code using SmileSuites posting policy "
                 "(next action, whether to bill the patient, whether to appeal)."
             ),
             "parameters": {
