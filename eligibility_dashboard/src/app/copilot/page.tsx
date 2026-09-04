@@ -75,7 +75,7 @@ export default function CopilotPage() {
       <PageHeader
         icon={Smile}
         title="SmileSuites Copilot"
-        subtitle="Your assistant for this patient's chart"
+        subtitle="Ask about a patient the way you would a teammate"
       />
 
       {banner ? (
@@ -169,10 +169,10 @@ export default function CopilotPage() {
               <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--accent-primary-soft)] text-[var(--accent-primary)]">
                 <Smile size={18} strokeWidth={2} />
               </div>
-              <h2 className="text-[15px] font-bold text-slate-900">Pick a patient to start</h2>
+              <h2 className="text-[15px] font-bold text-slate-900">Pick someone to chat about</h2>
               <p className="mt-1 text-[13px] font-medium text-slate-600">
-                Choose a patient on the left, then ask your assistant about their coverage,
-                appointments, or account. It reads the chart only and cannot make changes.
+                Choose a patient on the left, then ask the way you’d ask a teammate —
+                coverage, appointments, the account. It only reads the chart.
               </p>
             </div>
           </section>

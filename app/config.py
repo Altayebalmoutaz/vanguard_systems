@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     copilot_scrub_phi: bool = False
     copilot_model: str | None = "google/gemini-3.8-flash"
     copilot_max_tool_iterations: int = 6
+    # Flash defaults to a 65k completion cap; OpenRouter 402s when remaining
+    # credits cannot reserve that many tokens. Copilot replies stay short.
+    copilot_max_tokens: int = 2048
 
     # Optional: Jina + Supabase RPC `match_cdt_codes` injects vector-retrieved CDT hints into the coding LLM.
     jina_api_key: str | None = None

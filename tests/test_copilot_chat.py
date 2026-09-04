@@ -90,6 +90,7 @@ def test_tool_then_final_reply(monkeypatch: pytest.MonkeyPatch) -> None:
     result = _run(_settings(), monkeypatch, fake_llm)
     assert result.reply == "Coverage looks active."
     assert result.tool_trace == [{"name": "get_patient_overview", "args": {}}]
+    assert calls[0]["max_tokens"] == 2048
     tool_payload = calls[1]["messages"][-1]
     assert tool_payload["role"] == "tool"
     assert "123-45-6789" not in str(tool_payload["content"])

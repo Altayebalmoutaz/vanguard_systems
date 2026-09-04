@@ -37,10 +37,10 @@ const SOURCE_LABELS: Record<string, string> = {
 };
 
 const SUGGESTIONS = [
-  "What’s on file for coverage?",
-  "Any upcoming appointments?",
-  "What’s the account balance?",
-  "List active medications.",
+  "What’s their coverage looking like?",
+  "Anything coming up on the schedule?",
+  "Where do they stand on the account?",
+  "Any meds I should know about?",
 ];
 
 function sourceLabel(name: string): string {
@@ -115,9 +115,9 @@ export function CopilotPanel({
             <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--accent-primary-soft)] text-[var(--accent-primary)]">
               <Smile size={20} strokeWidth={2} />
             </div>
-            <p className="text-[13px] font-bold text-slate-800">Ask your assistant about this patient</p>
+            <p className="text-[13px] font-bold text-slate-800">What do you want to know?</p>
             <p className="mt-1 max-w-xs text-[12px] font-medium text-slate-600">
-              It reads the chart only — it never changes anything.
+              Ask in plain language. I’ll look it up in the chart and I can’t change anything.
             </p>
             <div className="mt-4 flex flex-wrap justify-center gap-2">
               {SUGGESTIONS.map((suggestion) => (
@@ -180,7 +180,7 @@ export function CopilotPanel({
         {busy ? (
           <div className="flex items-center gap-2 text-[12px] text-slate-500">
             <Loader2 size={14} className="animate-spin" />
-            Looking up this patient…
+            One sec, looking that up…
           </div>
         ) : null}
       </div>
@@ -201,7 +201,7 @@ export function CopilotPanel({
         <input
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
-          placeholder="Ask about coverage, procedures, or claims…"
+          placeholder="Ask me about this patient…"
           disabled={busy}
           className="h-10 flex-1 rounded-lg border border-slate-200 px-3 text-[13px] font-medium outline-none transition-colors focus:border-[var(--accent-primary)] disabled:opacity-60"
         />
