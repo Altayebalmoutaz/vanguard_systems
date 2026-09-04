@@ -7,6 +7,7 @@ import pytest
 
 from app.config import Settings
 from app.copilot.chat import run_copilot_chat
+from app.dashboard.store import DashboardPatientNotFoundError
 from app.integrations.opendental.client import OpenDentalClient
 from app.security.phi import PhiScrubError
 
@@ -158,3 +159,24 @@ def test_names_pass_when_scrub_disabled(monkeypatch: pytest.MonkeyPatch) -> None
     result = _run(_settings(copilot_scrub_phi=False), monkeypatch, fake_llm)
     assert result.reply == "Aardvark is active."
     assert "Aardvark" in str(calls[1]["messages"][-1]["content"])
+
+
+def test_od_only_patient_without_vanguard_row(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_llm(**kwargs):  # type: ignore[no-untyped-def]
+        return {"choices": [{"message": {"role": "assistant", "content": "Balance is $40."}}]}
+
+    monkeypatch.setattr("app.copilot.chat.openrouter_chat_completion", fake_llm)
+    monkeypatch.setattr(
+        "app.copilot.chat.get_patient_360",
+        lambda *args, **kwargs: (_ for _ in ()).throw(DashboardPatientNotFoundError("missing")),
+    )
+    monkeypatch.setattr("app.copilot.chat.get_patient_eligibility_profile", lambda *args, **kwargs: None)
+    result = run_copilot_chat(
+        _settings(copilot_scrub_phi=False),
+        practice_id="practice-1",
+        patient_id=_PATIENT_ID,
+        messages=[{"role": "user", "content": "Balance?"}],
+        od_client=_client(),
+        od_pat_num=1,
+    )
+    assert result.reply == "Balance is $40."

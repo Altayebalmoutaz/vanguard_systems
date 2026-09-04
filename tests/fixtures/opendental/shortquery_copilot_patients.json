@@ -1,0 +1,16 @@
+[
+  {
+    "PatNum": 1,
+    "FName": "Aardvark",
+    "LName": "Dent",
+    "Birthdate": "1970-12-12",
+    "ChartNumber": "AV-1"
+  },
+  {
+    "PatNum": 8,
+    "FName": "Mira",
+    "LName": "Chen",
+    "Birthdate": "1991-03-02",
+    "ChartNumber": ""
+  }
+]

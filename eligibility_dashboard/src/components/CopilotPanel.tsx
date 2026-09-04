@@ -4,7 +4,7 @@ import {
   postCopilotChat,
   type CopilotChatMessage,
   type CopilotToolTrace,
-} from "@/lib/dashboardApi";
+} from "@/lib/copilotApi";
 import { Loader2, Lock, Send, Smile } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -50,9 +50,11 @@ function sourceLabel(name: string): string {
 export function CopilotPanel({
   patientId,
   patientName,
+  odPatNum,
 }: {
   patientId: string;
   patientName: string;
+  odPatNum?: number | null;
 }) {
   const [messages, setMessages] = useState<VisibleMessage[]>([]);
   const [draft, setDraft] = useState("");
@@ -76,7 +78,7 @@ export function CopilotPanel({
     setError(null);
     setMessages((prev) => [...prev, nextUser]);
     setBusy(true);
-    const result = await postCopilotChat(patientId, history);
+    const result = await postCopilotChat(patientId, history, odPatNum);
     setBusy(false);
     if (!result.ok || !result.reply) {
       setError(result.message ?? "Copilot request failed");

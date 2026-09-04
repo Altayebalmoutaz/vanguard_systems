@@ -9,6 +9,7 @@ from typing import Any
 from uuid import UUID
 
 from app.config import Settings
+from app.copilot.patients import stub_profile_from_opendental
 from app.copilot.tools import TOOL_SPECS, ToolContext, UnknownCopilotToolError, execute_tool
 from app.dashboard.store import (
     DashboardPatientNotFoundError,
@@ -89,6 +90,14 @@ def run_copilot_chat(
 
     resolved_profile = profile
     resolved_pat = od_pat_num
+    resolved_client = od_client
+    if resolved_client is None:
+        try:
+            resolved_client = _resolve_od_client(settings, practice_id=practice_id)
+        except Exception:
+            logger.warning("copilot: failed to resolve OpenDental client", exc_info=True)
+            resolved_client = None
+
     if resolved_profile is None:
         try:
             resolved_profile = get_patient_360(
@@ -103,27 +112,25 @@ def run_copilot_chat(
                 )
                 resolved_pat = anchor.get("od_pat_num")
         except DashboardPatientNotFoundError:
-            # Patient exists only as an eligibility request (no patient.patients
-            # row yet) — anchor the copilot on eligibility data instead.
             fallback = get_patient_eligibility_profile(
                 settings, practice_id=practice_id, patient_id=patient_id
             )
-            if fallback is None:
+            if fallback is not None:
+                resolved_profile = {
+                    "patient": fallback["patient"],
+                    "latest_eligibility_check": fallback["latest_eligibility_check"],
+                    "agent_runs": fallback["agent_runs"],
+                }
+                if resolved_pat is None:
+                    resolved_pat = fallback["od_pat_num"]
+            elif resolved_pat is not None and resolved_client is not None:
+                resolved_profile = stub_profile_from_opendental(
+                    resolved_client,
+                    patient_id=patient_id,
+                    od_pat_num=int(resolved_pat),
+                )
+            else:
                 raise
-            resolved_profile = {
-                "patient": fallback["patient"],
-                "latest_eligibility_check": fallback["latest_eligibility_check"],
-                "agent_runs": fallback["agent_runs"],
-            }
-            if resolved_pat is None:
-                resolved_pat = fallback["od_pat_num"]
-    resolved_client = od_client
-    if resolved_client is None:
-        try:
-            resolved_client = _resolve_od_client(settings, practice_id=practice_id)
-        except Exception:
-            logger.warning("copilot: failed to resolve OpenDental client", exc_info=True)
-            resolved_client = None
 
     ctx = ToolContext(
         settings=settings,

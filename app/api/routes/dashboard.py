@@ -17,6 +17,7 @@ from app.api.tenancy import PracticeContextDep
 from app.audit.writer import write_audit_log
 from app.config import get_settings
 from app.copilot.chat import CopilotConfigError, run_copilot_chat
+from app.copilot.patients import list_copilot_directory
 from app.dashboard.rcm_store import (
     get_dashboard_analytics,
     get_dashboard_overview,
@@ -97,6 +98,7 @@ class CopilotChatMessage(BaseModel):
 class CopilotChatBody(BaseModel):
     patient_id: UUID
     messages: list[CopilotChatMessage] = Field(min_length=1, max_length=40)
+    od_pat_num: int | None = Field(default=None, ge=1)
 
 
 def _require_hitl_resolve_role(tenant: PracticeContextDep) -> None:
@@ -468,6 +470,25 @@ def get_patient_profile(patient_id: UUID, tenant: PracticeContextDep) -> dict[st
     return {"practice_id": tenant.practice_id, **profile}
 
 
+@router.get("/copilot/patients")
+def get_copilot_patients(
+    tenant: PracticeContextDep,
+    q: str | None = Query(default=None, max_length=80),
+) -> dict[str, Any]:
+    _require_hitl_resolve_role(tenant)
+    settings = get_settings()
+    if not settings.copilot_enabled:
+        raise HTTPException(status_code=403, detail="copilot_disabled")
+    try:
+        return list_copilot_directory(
+            settings, practice_id=tenant.practice_id, query=q
+        )
+    except NeonNotConfiguredError as exc:
+        raise _neon_unavailable(exc) from exc
+    except RuntimeError as exc:
+        raise _db_failure(exc, log_message="copilot patients directory failure") from exc
+
+
 @router.post("/copilot/chat")
 def post_copilot_chat(body: CopilotChatBody, tenant: PracticeContextDep) -> dict[str, Any]:
     _require_hitl_resolve_role(tenant)
@@ -483,6 +504,7 @@ def post_copilot_chat(body: CopilotChatBody, tenant: PracticeContextDep) -> dict
             practice_id=tenant.practice_id,
             patient_id=body.patient_id,
             messages=[item.model_dump() for item in body.messages],
+            od_pat_num=body.od_pat_num,
         )
     except NeonNotConfiguredError as exc:
         raise _neon_unavailable(exc) from exc
