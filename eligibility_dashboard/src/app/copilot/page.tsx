@@ -47,10 +47,17 @@ export default function CopilotPage() {
           setOptions([]);
           setOdConnected(false);
         } else {
+          const odTitle = result.opendentalError?.title?.trim();
+          const odDetail = result.opendentalError?.message?.trim();
+          const odBanner =
+            odTitle && odDetail
+              ? `${odTitle}. ${odDetail}`
+              : odDetail || odTitle || "";
           setBanner(
             result.opendentalConnected
               ? null
-              : "OpenDental isn’t connected yet — showing eligibility patients only.",
+              : odBanner ||
+                  "OpenDental isn’t connected yet — showing eligibility patients only.",
           );
           setBannerTone("warning");
           setOptions(result.patients);

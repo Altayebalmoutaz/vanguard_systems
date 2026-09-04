@@ -9,6 +9,7 @@ from app.copilot.patients import (
     safe_search_fragment,
 )
 from app.integrations.opendental.client import OpenDentalClient
+from app.integrations.opendental.errors import OpenDentalAPIError
 
 _FIXTURES = Path(__file__).parent / "fixtures" / "opendental"
 
@@ -71,3 +72,30 @@ def test_merge_prefers_eligibility_uuid(monkeypatch) -> None:  # type: ignore[no
     assert mira["patient_id"] == str(copilot_patient_uuid(practice_id, 8))
     assert mira["sources"] == ["opendental"]
     assert result["opendental_connected"] is True
+    assert result["opendental_error"] is None
+
+
+def test_directory_surfaces_econnector_error(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    def _fail(*_args: object, **_kwargs: object) -> list[dict[str, object]]:
+        raise OpenDentalAPIError(
+            "OpenDental PUT failed for /queries/ShortQuery",
+            status_code=400,
+            body='"The office\'s eConnector is not running. Please contact the office to start their eConnector."',
+        )
+
+    monkeypatch.setattr(
+        "app.copilot.patients.get_connection",
+        lambda *args, **kwargs: {"practice_id": "partner_clinic"},
+    )
+    monkeypatch.setattr(
+        "app.copilot.patients.OpenDentalClient.from_connection",
+        lambda *args, **kwargs: _client(),
+    )
+    monkeypatch.setattr("app.copilot.patients.list_opendental_directory", _fail)
+    monkeypatch.setattr("app.copilot.patients.list_eligibility_queue", lambda *args, **kwargs: [])
+
+    result = list_copilot_directory(object(), practice_id="partner_clinic")  # type: ignore[arg-type]
+    assert result["opendental_connected"] is False
+    assert result["patients"] == []
+    assert result["opendental_error"] is not None
+    assert result["opendental_error"]["code"] == "econnector_down"

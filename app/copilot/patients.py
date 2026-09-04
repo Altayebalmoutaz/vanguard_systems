@@ -15,6 +15,7 @@ from app.eligibility.config import get_settings as get_elig_settings
 from app.integrations.opendental.client import OpenDentalClient
 from app.integrations.opendental.connections_store import get_connection
 from app.integrations.opendental.errors import OpenDentalAPIError, OpenDentalConfigError
+from app.integrations.opendental.onboarding_errors import friendly_opendental_test_error
 
 logger = logging.getLogger(__name__)
 
@@ -105,14 +106,17 @@ def list_copilot_directory(
     needle = safe_search_fragment(query)
     od_rows: list[dict[str, Any]] = []
     od_connected = False
+    od_error: dict[str, str] | None = None
     try:
         connection = get_connection(settings, practice_id=practice_id)
         if connection:
             client = OpenDentalClient.from_connection(connection, settings=get_elig_settings())
             od_rows = list_opendental_directory(client, search=needle or None)
             od_connected = True
-    except (OpenDentalConfigError, OpenDentalAPIError, NeonNotConfiguredError):
+    except (OpenDentalConfigError, OpenDentalAPIError, NeonNotConfiguredError) as exc:
         logger.warning("copilot directory: OpenDental unavailable", exc_info=True)
+        raw = exc.body if isinstance(exc, OpenDentalAPIError) else str(exc)
+        od_error = friendly_opendental_test_error(raw)
 
     eligibility_rows: list[dict[str, Any]] = []
     try:
@@ -188,5 +192,6 @@ def list_copilot_directory(
     return {
         "practice_id": practice_id,
         "opendental_connected": od_connected,
+        "opendental_error": od_error,
         "patients": patients[:75],
     }

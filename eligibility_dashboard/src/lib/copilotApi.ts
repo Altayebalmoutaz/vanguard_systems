@@ -19,6 +19,7 @@ export type CopilotDirectoryPatient = {
 export type CopilotDirectoryResponse = {
   ok: boolean;
   opendentalConnected: boolean;
+  opendentalError?: { code?: string; title?: string; message?: string };
   patients: CopilotDirectoryPatient[];
   message?: string;
 };
@@ -58,6 +59,7 @@ export async function fetchCopilotPatients(query?: string): Promise<CopilotDirec
   });
   const payload = await parseJson<{
     opendental_connected?: boolean;
+    opendental_error?: { code?: string; title?: string; message?: string };
     patients?: CopilotDirectoryPatient[];
     error?: string;
     detail?: string;
@@ -73,6 +75,7 @@ export async function fetchCopilotPatients(query?: string): Promise<CopilotDirec
   return {
     ok: true,
     opendentalConnected: Boolean(payload.opendental_connected),
+    opendentalError: payload.opendental_error,
     patients: payload.patients ?? [],
   };
 }
