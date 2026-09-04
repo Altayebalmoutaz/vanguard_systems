@@ -1,8 +1,8 @@
+import { getActivePracticeId } from "@/lib/bff/activePractice";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const BASE_URL = process.env.FASTAPI_BASE_URL ?? process.env.NEXT_PUBLIC_FASTAPI_BASE_URL ?? "";
 const API_KEY = process.env.RCM_API_KEY ?? "";
-const PRACTICE_ID = process.env.DASHBOARD_PRACTICE_ID ?? "";
 
 export type FastApiProxyOptions = {
   method?: string;
@@ -47,8 +47,12 @@ export async function proxyFastApi(path: string, options: FastApiProxyOptions = 
   if (API_KEY) {
     headers["x-api-key"] = API_KEY;
   }
-  if (PRACTICE_ID) {
-    headers["x-practice-id"] = PRACTICE_ID;
+  // /auth/me is identity-only and must not depend on a practice header.
+  if (path !== "/auth/me") {
+    const practiceId = await getActivePracticeId(token);
+    if (practiceId) {
+      headers["x-practice-id"] = practiceId;
+    }
   }
 
   try {

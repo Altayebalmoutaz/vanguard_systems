@@ -47,17 +47,22 @@ export function useStaffSession(): User | null {
 export function useStaffProfile(): {
   role: StaffRole | null;
   practiceId: string | null;
+  practiceRoles: { practice_id: string; role: StaffRole }[];
   loading: boolean;
 } {
   const user = useStaffSession();
   const [role, setRole] = useState<StaffRole | null>(null);
   const [practiceId, setPracticeId] = useState<string | null>(null);
+  const [practiceRoles, setPracticeRoles] = useState<{ practice_id: string; role: StaffRole }[]>(
+    [],
+  );
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!user) {
       setRole(null);
       setPracticeId(null);
+      setPracticeRoles([]);
       setLoading(false);
       return;
     }
@@ -65,11 +70,16 @@ export function useStaffProfile(): {
     let active = true;
     void fetchAuthMe().then((profile) => {
       if (!active) return;
-      if (profile?.practice_roles?.length) {
-        const primary = profile.practice_roles[0];
-        setPracticeId(primary.practice_id);
-        setRole(coerceStaffRole(primary.role));
+      const roles = profile?.practice_roles ?? [];
+      if (roles.length) {
+        const extra = profile as { active_practice_id?: string };
+        const match =
+          roles.find((row) => row.practice_id === extra.active_practice_id) ?? roles[0];
+        setPracticeRoles(roles);
+        setPracticeId(match.practice_id);
+        setRole(coerceStaffRole(match.role));
       } else {
+        setPracticeRoles([]);
         setPracticeId(null);
         setRole(staffRoleFromMetadata(user));
       }
@@ -81,7 +91,7 @@ export function useStaffProfile(): {
     };
   }, [user]);
 
-  return { role, practiceId, loading };
+  return { role, practiceId, practiceRoles, loading };
 }
 
 export function staffDisplayName(user: User | null, fallback: string): string {

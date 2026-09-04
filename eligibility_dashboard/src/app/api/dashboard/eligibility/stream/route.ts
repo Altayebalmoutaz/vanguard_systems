@@ -1,3 +1,4 @@
+import { getActivePracticeId } from "@/lib/bff/activePractice";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 // SSE must run on the Node runtime and never be statically optimized or buffered.
@@ -6,7 +7,6 @@ export const dynamic = "force-dynamic";
 
 const BASE_URL = process.env.FASTAPI_BASE_URL ?? process.env.NEXT_PUBLIC_FASTAPI_BASE_URL ?? "";
 const API_KEY = process.env.RCM_API_KEY ?? "";
-const PRACTICE_ID = process.env.DASHBOARD_PRACTICE_ID ?? "";
 
 export async function GET(request: Request) {
   if (!BASE_URL) {
@@ -23,8 +23,9 @@ export async function GET(request: Request) {
   } else if (API_KEY) {
     headers["x-api-key"] = API_KEY;
   }
-  if (PRACTICE_ID) {
-    headers["x-practice-id"] = PRACTICE_ID;
+  const practiceId = await getActivePracticeId(token);
+  if (practiceId) {
+    headers["x-practice-id"] = practiceId;
   }
   const lastEventId = request.headers.get("last-event-id");
   if (lastEventId) {
