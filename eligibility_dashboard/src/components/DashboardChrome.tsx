@@ -2,7 +2,6 @@
 
 import { usePathname } from "next/navigation";
 
-import { ClinicSwitcher } from "@/components/ClinicSwitcher";
 import { Sidebar } from "@/components/Sidebar";
 import { isPublicAuthPath } from "@/lib/authConfig";
 
@@ -16,8 +15,7 @@ export function DashboardChrome({ children }: { children: React.ReactNode }) {
   return (
     <>
       <Sidebar />
-      <ClinicSwitcher />
-      <div className="pt-10">{children}</div>
+      <div className="min-h-screen pl-[228px] [&>*]:!ml-0">{children}</div>
     </>
   );
 }

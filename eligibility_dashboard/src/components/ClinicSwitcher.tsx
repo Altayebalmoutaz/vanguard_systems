@@ -1,7 +1,7 @@
 "use client";
 
-import { Building2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Building2, Check, ChevronDown } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 import { fetchAuthMe } from "@/lib/dashboardApi";
 import { practiceLabel } from "@/lib/practice";
@@ -11,8 +11,9 @@ type PracticeRole = { practice_id: string; role: string };
 export function ClinicSwitcher() {
   const [roles, setRoles] = useState<PracticeRole[]>([]);
   const [activeId, setActiveId] = useState<string>("");
+  const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [loaded, setLoaded] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let alive = true;
@@ -24,15 +25,25 @@ export function ClinicSwitcher() {
       const extra = profile as { active_practice_id?: string };
       setRoles(nextRoles);
       setActiveId(extra.active_practice_id ?? nextRoles[0]?.practice_id ?? "");
-      setLoaded(true);
     });
     return () => {
       alive = false;
     };
   }, []);
 
-  const onChange = async (practiceId: string) => {
+  useEffect(() => {
+    const onPointerDown = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, []);
+
+  const onSelect = async (practiceId: string) => {
     if (!practiceId || practiceId === activeId || saving) {
+      setOpen(false);
       return;
     }
     setSaving(true);
@@ -43,40 +54,65 @@ export function ClinicSwitcher() {
     });
     if (!resp.ok) {
       setSaving(false);
+      setOpen(false);
       return;
     }
     window.location.reload();
   };
 
+  if (!activeId && roles.length === 0) {
+    return null;
+  }
+
+  const canSwitch = roles.length > 1;
+
   return (
-    <div className="fixed top-0 right-0 left-[60px] z-20 flex h-10 items-center gap-2 border-b border-slate-200 bg-white px-6">
-      <Building2 size={15} className="shrink-0 text-slate-500" />
-      <span className="text-[11px] font-semibold uppercase tracking-[0.04em] text-slate-500">
-        Clinic
-      </span>
-      {!loaded ? (
-        <span className="text-[13px] font-semibold text-slate-400">Loading…</span>
-      ) : roles.length > 1 ? (
-        <select
-          id="clinic-switcher"
-          value={activeId}
-          disabled={saving}
-          onChange={(event) => {
-            void onChange(event.target.value);
-          }}
-          className="h-7 rounded-md border border-slate-200 bg-white px-2 text-[13px] font-semibold text-slate-900 outline-none hover:border-slate-300"
-        >
-          {roles.map((row) => (
-            <option key={row.practice_id} value={row.practice_id}>
-              {practiceLabel(row.practice_id)}
-            </option>
-          ))}
-        </select>
-      ) : (
-        <span className="text-[13px] font-semibold text-slate-900">
-          {activeId ? practiceLabel(activeId) : "No clinic assigned"}
+    <div ref={rootRef} className="relative px-2 pb-2">
+      <button
+        type="button"
+        disabled={!canSwitch || saving}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => {
+          if (canSwitch) {
+            setOpen((value) => !value);
+          }
+        }}
+        className="flex h-9 w-full items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2.5 text-left hover:bg-slate-100 disabled:cursor-default disabled:hover:bg-slate-50"
+      >
+        <Building2 size={15} className="shrink-0 text-slate-500" />
+        <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-slate-900">
+          {activeId ? practiceLabel(activeId) : "Select clinic"}
         </span>
-      )}
+        {canSwitch ? <ChevronDown size={14} className="shrink-0 text-slate-400" /> : null}
+      </button>
+      {open && canSwitch ? (
+        <ul
+          role="listbox"
+          className="absolute inset-x-2 top-full z-40 mt-1 overflow-hidden rounded-md border border-slate-200 bg-white py-1 shadow-lg"
+        >
+          {roles.map((row) => {
+            const selected = row.practice_id === activeId;
+            return (
+              <li key={row.practice_id}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  disabled={saving}
+                  onClick={() => {
+                    void onSelect(row.practice_id);
+                  }}
+                  className="flex w-full items-center gap-2 px-2.5 py-2 text-left text-[13px] font-semibold text-slate-800 hover:bg-slate-50"
+                >
+                  <span className="min-w-0 flex-1 truncate">{practiceLabel(row.practice_id)}</span>
+                  {selected ? <Check size={14} className="shrink-0 text-[var(--accent-primary)]" /> : null}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
     </div>
   );
 }

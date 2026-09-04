@@ -68,8 +68,12 @@ def database_connection(
     """Open a Postgres connection; optionally bind ``app.practice_id`` for RLS."""
     dsn = require_database_dsn(settings)
     with psycopg.connect(dsn) as conn:
-        if practice_id is not None:
-            apply_tenant_context(conn, practice_id=practice_id, bypass_rls=bypass_rls)
+        if practice_id is not None or bypass_rls:
+            apply_tenant_context(
+                conn,
+                practice_id=practice_id or "",
+                bypass_rls=bypass_rls,
+            )
         yield conn
 
 

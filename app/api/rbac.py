@@ -83,7 +83,7 @@ def _fetch_neon_roles(settings: Settings, user_id: str) -> tuple[PracticeRole, .
         raise RbacNotConfiguredError("NEON_DATABASE_URL is not configured")
 
     try:
-        with neon_connection(settings) as conn, conn.cursor() as cur:
+        with neon_connection(settings, bypass_rls=True) as conn, conn.cursor() as cur:
             cur.execute(
                 """
                     select practice_id, role
