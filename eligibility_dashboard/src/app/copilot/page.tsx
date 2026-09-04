@@ -66,16 +66,18 @@ export default function CopilotPage() {
   }, [query]);
 
   return (
-    <main className="ml-[60px] min-h-screen overflow-y-auto px-6 pb-12 pt-6">
-      <PageHeader
-        icon={Smile}
-        title="SmileSuites Copilot"
-        subtitle="Ask about a patient the way you would a teammate"
-      />
+    <main className="ml-[60px] flex h-dvh flex-col overflow-hidden px-6 pb-4 pt-6">
+      <div className="shrink-0">
+        <PageHeader
+          icon={Smile}
+          title="SmileSuites Copilot"
+          subtitle="Ask about a patient the way you would a teammate"
+        />
+      </div>
 
       {banner ? (
         <div
-          className={`mb-5 rounded-xl border px-4 py-3 text-[13px] ${
+          className={`mb-4 shrink-0 rounded-xl border px-4 py-3 text-[13px] ${
             bannerTone === "error"
               ? "border-red-200 bg-red-50 text-red-700"
               : "border-amber-200 bg-amber-50 text-amber-800"
@@ -85,9 +87,9 @@ export default function CopilotPage() {
         </div>
       ) : null}
 
-      <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
-        <section className="card flex min-h-[28rem] flex-col p-4">
-          <div className="relative mb-3">
+      <div className="grid min-h-0 flex-1 grid-rows-[16rem_minmax(0,1fr)] gap-4 xl:grid-cols-[320px_minmax(0,1fr)] xl:grid-rows-none">
+        <section className="card flex min-h-0 flex-col overflow-hidden p-4">
+          <div className="relative mb-3 shrink-0">
             <Search
               size={14}
               className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
@@ -112,8 +114,8 @@ export default function CopilotPage() {
                 : "No patients found in OpenDental or the eligibility queue."}
             </p>
           ) : (
-            <>
-              <p className="mb-1.5 px-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">
+            <div className="flex min-h-0 flex-1 flex-col">
+              <p className="mb-1.5 shrink-0 px-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">
                 {options.length} patient{options.length === 1 ? "" : "s"}
               </p>
               <ul className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
@@ -155,19 +157,20 @@ export default function CopilotPage() {
                   );
                 })}
               </ul>
-            </>
+            </div>
           )}
         </section>
 
-        {selected ? (
+          {selected ? (
           <CopilotPanel
             key={selected.patient_id}
             patientId={selected.patient_id}
             patientName={selected.name}
             odPatNum={selected.od_pat_num}
+            className="h-full min-h-0"
           />
         ) : (
-          <section className="card flex min-h-[28rem] items-center justify-center p-6 text-center">
+          <section className="card flex h-full min-h-0 items-center justify-center p-6 text-center">
             <div className="max-w-sm">
               <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--accent-primary-soft)] text-[var(--accent-primary)]">
                 <Smile size={18} strokeWidth={2} />

@@ -51,10 +51,12 @@ export function CopilotPanel({
   patientId,
   patientName,
   odPatNum,
+  className,
 }: {
   patientId: string;
   patientName: string;
   odPatNum?: number | null;
+  className?: string;
 }) {
   const [messages, setMessages] = useState<VisibleMessage[]>([]);
   const [draft, setDraft] = useState("");
@@ -91,8 +93,12 @@ export function CopilotPanel({
   }
 
   return (
-    <section className="card flex min-h-[28rem] flex-col overflow-hidden p-0 xl:min-h-[36rem]">
-      <header className="flex items-center gap-3 border-b border-slate-100 px-5 py-3.5">
+    <section
+      className={`card flex min-h-0 flex-col overflow-hidden p-0 ${
+        className ?? "min-h-[28rem] xl:min-h-[36rem]"
+      }`}
+    >
+      <header className="flex shrink-0 items-center gap-3 border-b border-slate-100 px-5 py-3.5">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--accent-primary-soft-strong)] text-[var(--accent-primary-hover)]">
           <Smile size={18} strokeWidth={2} />
         </div>
@@ -188,13 +194,13 @@ export function CopilotPanel({
       </div>
 
       {error ? (
-        <div className="mx-5 mb-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700">
+        <div className="mx-5 mb-2 shrink-0 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700">
           {error}
         </div>
       ) : null}
 
       <form
-        className="flex gap-2 border-t border-slate-100 px-5 py-3.5"
+        className="flex shrink-0 gap-2 border-t border-slate-100 px-5 py-3.5"
         onSubmit={(event) => {
           event.preventDefault();
           void send(draft);
