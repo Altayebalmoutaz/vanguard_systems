@@ -14,7 +14,9 @@ from starlette.responses import StreamingResponse
 
 from app.api.errors import sanitized_http_exception
 from app.api.tenancy import PracticeContextDep
+from app.audit.writer import write_audit_log
 from app.config import get_settings
+from app.copilot.chat import CopilotConfigError, run_copilot_chat
 from app.dashboard.rcm_store import (
     get_dashboard_analytics,
     get_dashboard_overview,
@@ -41,7 +43,9 @@ from app.dashboard.store import (
     update_eligibility_agent_settings,
 )
 from app.db.connection import NeonNotConfiguredError
+from app.integrations.opendental.errors import OpenDentalAPIError
 from app.pilot.shadow_store import get_shadow_summary
+from app.security.phi import PhiScrubError, scrub_detail_for_storage
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +87,16 @@ class ResolveHitlTaskBody(BaseModel):
     final_codes: list[str] | None = None
     override_codes: list[str] | None = None
     final_summary: str | None = Field(default=None, max_length=4000)
+
+
+class CopilotChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=8000)
+
+
+class CopilotChatBody(BaseModel):
+    patient_id: UUID
+    messages: list[CopilotChatMessage] = Field(min_length=1, max_length=40)
 
 
 def _require_hitl_resolve_role(tenant: PracticeContextDep) -> None:
@@ -452,6 +466,74 @@ def get_patient_profile(patient_id: UUID, tenant: PracticeContextDep) -> dict[st
     except RuntimeError as exc:
         raise _db_failure(exc, log_message="get_patient_360 failure") from exc
     return {"practice_id": tenant.practice_id, **profile}
+
+
+@router.post("/copilot/chat")
+def post_copilot_chat(body: CopilotChatBody, tenant: PracticeContextDep) -> dict[str, Any]:
+    _require_hitl_resolve_role(tenant)
+    settings = get_settings()
+    if not settings.copilot_enabled:
+        raise HTTPException(status_code=403, detail="copilot_disabled")
+    performed_by = tenant.principal.subject
+    if not isinstance(performed_by, str):
+        performed_by = "dashboard_staff"
+    try:
+        result = run_copilot_chat(
+            settings,
+            practice_id=tenant.practice_id,
+            patient_id=body.patient_id,
+            messages=[item.model_dump() for item in body.messages],
+        )
+    except NeonNotConfiguredError as exc:
+        raise _neon_unavailable(exc) from exc
+    except DashboardPatientNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="patient_not_found") from exc
+    except CopilotConfigError as exc:
+        raise sanitized_http_exception(
+            503,
+            public_message="Copilot is not configured",
+            log_message="copilot missing OpenRouter key",
+            exc=exc,
+        ) from exc
+    except PhiScrubError as exc:
+        raise sanitized_http_exception(
+            502,
+            public_message="Copilot could not safely complete this turn",
+            log_message="copilot PHI scrub failed",
+            exc=exc,
+        ) from exc
+    except OpenDentalAPIError as exc:
+        raise sanitized_http_exception(
+            502,
+            public_message="OpenDental is unavailable",
+            log_message="copilot OpenDental failure",
+            exc=exc,
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="invalid_copilot_messages") from exc
+    except Exception as exc:
+        raise sanitized_http_exception(
+            502,
+            public_message="Copilot request failed",
+            log_message="copilot chat failure",
+            exc=exc,
+        ) from exc
+    write_audit_log(
+        settings,
+        practice_id=tenant.practice_id,
+        action="copilot_chat",
+        entity_type="patient",
+        entity_id=body.patient_id,
+        performed_by=performed_by,
+        metadata=scrub_detail_for_storage({"model": result.model, "tool_trace": result.tool_trace}),
+    )
+    return {
+        "practice_id": tenant.practice_id,
+        "patient_id": str(body.patient_id),
+        "reply": result.reply,
+        "tool_trace": result.tool_trace,
+        "model": result.model,
+    }
 
 
 @router.get("/overview")

@@ -14,7 +14,7 @@ import {
   useStaffSession,
   type StaffRole,
 } from "@/hooks/useStaffSession";
-import { Phone, PlugZap, Settings, ShieldCheck } from "lucide-react";
+import { Phone, PlugZap, Settings, ShieldCheck, Smile } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -38,6 +38,12 @@ const NAV: NavItem[] = [
     label: "OpenDental",
     href: "/opendental",
     icon: PlugZap,
+    roles: ["admin", "billing_lead"],
+  },
+  {
+    label: "SmileSuites Copilot",
+    href: "/copilot",
+    icon: Smile,
     roles: ["admin", "billing_lead"],
   },
   { label: "Settings", href: "/settings", icon: Settings, roles: ["admin"] },

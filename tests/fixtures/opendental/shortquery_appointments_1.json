@@ -1,0 +1,14 @@
+[
+  {
+    "AptNum": 42,
+    "PatNum": 1,
+    "AptDateTime": "2026-09-10 09:00:00",
+    "AptStatus": "Scheduled",
+    "Pattern": "XXXX",
+    "Confirmed": 1,
+    "IsHygiene": 0,
+    "Op": 3,
+    "ProvAbbr": "DOC",
+    "Note": "Recall prophy"
+  }
+]

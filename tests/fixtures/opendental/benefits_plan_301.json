@@ -1,0 +1,10 @@
+[
+  {
+    "BenefitNum": 1,
+    "PlanNum": 301,
+    "BenefitType": "CoInsurance",
+    "Percent": 80,
+    "CoverageLevel": "Individual",
+    "TimePeriod": "CalendarYear"
+  }
+]

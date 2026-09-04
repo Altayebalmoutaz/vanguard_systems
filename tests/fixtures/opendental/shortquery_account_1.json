@@ -1,0 +1,13 @@
+[
+  {
+    "PatNum": 1,
+    "BalTotal": 240.0,
+    "Bal_0_30": 120.0,
+    "Bal_31_60": 80.0,
+    "Bal_61_90": 40.0,
+    "BalOver90": 0.0,
+    "InsEst": 96.0,
+    "EstBalance": 144.0,
+    "PayPlanDue": 0.0
+  }
+]

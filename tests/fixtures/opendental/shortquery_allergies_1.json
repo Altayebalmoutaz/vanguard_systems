@@ -1,0 +1,10 @@
+[
+  {
+    "AllergyNum": 3,
+    "PatNum": 1,
+    "Description": "Penicillin",
+    "Reaction": "Rash",
+    "DateAdverseReaction": "2019-03-01",
+    "StatusIsActive": 1
+  }
+]

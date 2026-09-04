@@ -90,6 +90,14 @@ export type OpenDentalConnectionUpdate = {
 function errorMessage(payload: { error?: unknown; detail?: unknown }, fallback: string): string {
   if (typeof payload.error === "string") return payload.error;
   if (typeof payload.detail === "string") return payload.detail;
+  if (
+    payload.detail &&
+    typeof payload.detail === "object" &&
+    "message" in payload.detail &&
+    typeof payload.detail.message === "string"
+  ) {
+    return payload.detail.message;
+  }
   return fallback;
 }
 
@@ -238,4 +246,49 @@ export async function fetchAuthMe(): Promise<AuthMeResponse | null> {
     return null;
   }
   return parseJson<AuthMeResponse>(resp);
+}
+
+export type CopilotChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+export type CopilotToolTrace = {
+  name: string;
+  args?: Record<string, unknown>;
+};
+
+export type CopilotChatResponse = {
+  ok: boolean;
+  reply?: string;
+  toolTrace?: CopilotToolTrace[];
+  model?: string;
+  message?: string;
+};
+
+export async function postCopilotChat(
+  patientId: string,
+  messages: CopilotChatMessage[],
+): Promise<CopilotChatResponse> {
+  const resp = await fetch("/api/dashboard/copilot/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ patient_id: patientId, messages }),
+  });
+  const payload = await parseJson<{
+    reply?: string;
+    tool_trace?: CopilotToolTrace[];
+    model?: string;
+    error?: string;
+    detail?: string | { message?: string };
+  }>(resp);
+  if (!resp.ok) {
+    return { ok: false, message: errorMessage(payload, "Copilot request failed") };
+  }
+  return {
+    ok: true,
+    reply: payload.reply ?? "",
+    toolTrace: payload.tool_trace ?? [],
+    model: payload.model,
+  };
 }

@@ -1,0 +1,13 @@
+[
+  {
+    "ClaimProcNum": 900,
+    "ClaimNum": 77,
+    "ProcNum": 11,
+    "Status": "Received",
+    "InsPayEst": 96.0,
+    "InsPayAmt": 96.0,
+    "DedApplied": 0.0,
+    "WriteOff": 0.0,
+    "DateCP": "2026-08-20"
+  }
+]

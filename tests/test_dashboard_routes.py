@@ -269,6 +269,97 @@ class DashboardRouteTests(unittest.TestCase):
         self.assertEqual(body["latest_eligibility_check"]["id"], "check-1")
         self.assertEqual(body["agent_runs"][0]["id"], "run-1")
 
+    @patch("app.api.routes.dashboard.get_settings")
+    @patch("app.api.routes.dashboard.write_audit_log")
+    @patch("app.api.routes.dashboard.run_copilot_chat")
+    def test_copilot_chat_ok(
+        self, mock_chat: MagicMock, mock_audit: MagicMock, mock_settings: MagicMock
+    ) -> None:
+        patient_id = UUID("55555555-5555-5555-5555-555555555555")
+        mock_settings.return_value = Settings(
+            neon_database_url="postgresql://neon",
+            copilot_enabled=True,
+            openrouter_api_key="test-key",
+        )
+        mock_chat.return_value = MagicMock(
+            reply="Coverage is active.",
+            tool_trace=[{"name": "get_patient_overview", "args": {}}],
+            model="openai/gpt-4o-mini",
+        )
+        app_client = _build_client()
+
+        resp = app_client.post(
+            "/dashboard/copilot/chat",
+            json={"patient_id": str(patient_id), "messages": [{"role": "user", "content": "Hi"}]},
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertEqual(body["reply"], "Coverage is active.")
+        self.assertEqual(body["tool_trace"][0]["name"], "get_patient_overview")
+        mock_audit.assert_called_once()
+
+    @patch("app.api.routes.dashboard.get_settings")
+    def test_copilot_chat_disabled(self, mock_settings: MagicMock) -> None:
+        patient_id = UUID("55555555-5555-5555-5555-555555555555")
+        mock_settings.return_value = Settings(
+            neon_database_url="postgresql://neon",
+            copilot_enabled=False,
+        )
+        client = _build_client()
+        resp = client.post(
+            "/dashboard/copilot/chat",
+            json={"patient_id": str(patient_id), "messages": [{"role": "user", "content": "Hi"}]},
+        )
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.json()["detail"], "copilot_disabled")
+
+    def test_copilot_chat_role_forbidden(self) -> None:
+        patient_id = UUID("55555555-5555-5555-5555-555555555555")
+        app = FastAPI()
+        app.include_router(dashboard.router)
+
+        async def _tenant_override() -> PracticeContext:
+            return PracticeContext(
+                practice_id="practice-1",
+                role="front_office",
+                principal=MagicMock(subject="staff"),
+            )
+
+        app.dependency_overrides[require_practice_context] = _tenant_override
+        app.dependency_overrides[get_settings] = lambda: Settings(
+            neon_database_url="postgresql://neon",
+            copilot_enabled=True,
+            openrouter_api_key="test-key",
+        )
+        client = TestClient(app)
+        resp = client.post(
+            "/dashboard/copilot/chat",
+            json={"patient_id": str(patient_id), "messages": [{"role": "user", "content": "Hi"}]},
+        )
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.json()["detail"], "role_forbidden")
+
+    @patch("app.api.routes.dashboard.get_settings")
+    @patch("app.api.routes.dashboard.run_copilot_chat")
+    def test_copilot_chat_patient_not_found(
+        self, mock_chat: MagicMock, mock_settings: MagicMock
+    ) -> None:
+        patient_id = UUID("66666666-6666-6666-6666-666666666666")
+        mock_settings.return_value = Settings(
+            neon_database_url="postgresql://neon",
+            copilot_enabled=True,
+            openrouter_api_key="test-key",
+        )
+        mock_chat.side_effect = DashboardPatientNotFoundError("missing")
+        app_client = _build_client()
+        resp = app_client.post(
+            "/dashboard/copilot/chat",
+            json={"patient_id": str(patient_id), "messages": [{"role": "user", "content": "Hi"}]},
+        )
+        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.json()["detail"], "patient_not_found")
+
     @patch("app.api.routes.dashboard.get_patient_360")
     def test_patient_360_not_found(self, mock_profile: MagicMock) -> None:
         patient_id = UUID("66666666-6666-6666-6666-666666666666")

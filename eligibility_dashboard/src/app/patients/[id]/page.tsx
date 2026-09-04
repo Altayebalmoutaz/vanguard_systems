@@ -1,5 +1,6 @@
 "use client";
 
+import { CopilotPanel } from "@/components/CopilotPanel";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { fetchPatient360 } from "@/lib/dashboardApi";
@@ -75,65 +76,71 @@ export default function Patient360Page() {
           Loading patient…
         </div>
       ) : patient ? (
-        <div className="grid gap-4 lg:grid-cols-2">
-          <section className="card p-5">
-            <h2 className="mb-3 text-[14px] font-semibold text-slate-900">Demographics</h2>
-            <dl className="grid grid-cols-2 gap-3 text-[13px]">
-              <div>
-                <dt className="text-slate-500">DOB</dt>
-                <dd className="font-medium text-slate-900">{asString(patient.dob)}</dd>
-              </div>
-              <div>
-                <dt className="text-slate-500">External ID</dt>
-                <dd className="font-medium text-slate-900">{asString(patient.external_id)}</dd>
-              </div>
-              <div>
-                <dt className="text-slate-500">Created</dt>
-                <dd className="font-medium text-slate-900">{asString(patient.created_at)}</dd>
-              </div>
-            </dl>
-          </section>
-
-          <section className="card p-5">
-            <h2 className="mb-3 text-[14px] font-semibold text-slate-900">Latest Eligibility</h2>
-            {latestCheck ? (
-              <div className="space-y-2 text-[13px]">
-                <div className="flex flex-wrap gap-2">
-                  <StatusPill
-                    label={latestCheck.is_active === true ? "Active" : latestCheck.is_active === false ? "Inactive" : "Unknown"}
-                    tone={latestCheck.is_active === true ? "success" : "warn"}
-                  />
-                  <StatusPill label={asString(latestCheck.payer_id, "Payer")} tone="info" />
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <section className="card p-5">
+              <h2 className="mb-3 text-[14px] font-semibold text-slate-900">Demographics</h2>
+              <dl className="grid grid-cols-2 gap-3 text-[13px]">
+                <div>
+                  <dt className="text-slate-500">DOB</dt>
+                  <dd className="font-medium text-slate-900">{asString(patient.dob)}</dd>
                 </div>
-                <p className="text-slate-600">Checked {asString(latestCheck.checked_at)}</p>
-                <p className="text-slate-600">
-                  Coverage {asString(latestCheck.coverage_percent, "—")}% · Deductible remaining{" "}
-                  {asString(latestCheck.deductible_remaining)}
-                </p>
-              </div>
-            ) : (
-              <p className="text-[13px] text-slate-500">No eligibility checks on file.</p>
-            )}
-          </section>
+                <div>
+                  <dt className="text-slate-500">External ID</dt>
+                  <dd className="font-medium text-slate-900">{asString(patient.external_id)}</dd>
+                </div>
+                <div>
+                  <dt className="text-slate-500">Created</dt>
+                  <dd className="font-medium text-slate-900">{asString(patient.created_at)}</dd>
+                </div>
+              </dl>
+            </section>
 
-          <section className="card p-5 lg:col-span-2">
-            <h2 className="mb-3 text-[14px] font-semibold text-slate-900">Recent Agent Runs</h2>
-            {agentRuns.length === 0 ? (
-              <p className="text-[13px] text-slate-500">No agent activity recorded.</p>
-            ) : (
-              <ul className="divide-y divide-slate-100">
-                {agentRuns.map((run, index) => (
-                  <li key={asString(run.id, `${asString(run.agent)}-${asString(run.created_at)}-${index}`)} className="flex items-center justify-between py-3 text-[13px]">
-                    <div>
-                      <div className="font-semibold text-slate-900">{asString(run.agent, "Agent")}</div>
-                      <div className="text-slate-500">{asString(run.created_at)}</div>
-                    </div>
-                    <StatusPill label={asString(run.status, "unknown")} tone="indigo" />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+            <section className="card p-5">
+              <h2 className="mb-3 text-[14px] font-semibold text-slate-900">Latest Eligibility</h2>
+              {latestCheck ? (
+                <div className="space-y-2 text-[13px]">
+                  <div className="flex flex-wrap gap-2">
+                    <StatusPill
+                      label={latestCheck.is_active === true ? "Active" : latestCheck.is_active === false ? "Inactive" : "Unknown"}
+                      tone={latestCheck.is_active === true ? "success" : "warn"}
+                    />
+                    <StatusPill label={asString(latestCheck.payer_id, "Payer")} tone="info" />
+                  </div>
+                  <p className="text-slate-600">Checked {asString(latestCheck.checked_at)}</p>
+                  <p className="text-slate-600">
+                    Coverage {asString(latestCheck.coverage_percent, "—")}% · Deductible remaining{" "}
+                    {asString(latestCheck.deductible_remaining)}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-[13px] text-slate-500">No eligibility checks on file.</p>
+              )}
+            </section>
+
+            <section className="card p-5 lg:col-span-2">
+              <h2 className="mb-3 text-[14px] font-semibold text-slate-900">Recent Agent Runs</h2>
+              {agentRuns.length === 0 ? (
+                <p className="text-[13px] text-slate-500">No agent activity recorded.</p>
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {agentRuns.map((run, index) => (
+                    <li
+                      key={asString(run.id, `${asString(run.agent)}-${asString(run.created_at)}-${index}`)}
+                      className="flex items-center justify-between py-3 text-[13px]"
+                    >
+                      <div>
+                        <div className="font-semibold text-slate-900">{asString(run.agent, "Agent")}</div>
+                        <div className="text-slate-500">{asString(run.created_at)}</div>
+                      </div>
+                      <StatusPill label={asString(run.status, "unknown")} tone="indigo" />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </div>
+          <CopilotPanel patientId={patientId} patientName={displayName} />
         </div>
       ) : null}
     </main>
