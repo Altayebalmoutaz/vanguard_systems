@@ -1,0 +1,11 @@
+[
+  {
+    "CommlogNum": 77,
+    "PatNum": 1,
+    "CommDateTime": "2026-08-12 14:22:00",
+    "CommType": 1,
+    "Mode_": "Phone",
+    "SentOrReceived": "Sent",
+    "Note": "Confirmed recall appointment"
+  }
+]

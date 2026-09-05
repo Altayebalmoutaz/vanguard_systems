@@ -1,0 +1,11 @@
+[
+  {
+    "ClaimNum": 77,
+    "PatNum": 1,
+    "DateService": "2026-08-01",
+    "ClaimStatus": "S",
+    "ClaimFee": 120.0,
+    "InsPayAmt": 96.0,
+    "ClaimIdentifier": "CLM-77"
+  }
+]

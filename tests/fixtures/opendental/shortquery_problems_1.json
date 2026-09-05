@@ -1,0 +1,11 @@
+[
+  {
+    "DiseaseNum": 6,
+    "PatNum": 1,
+    "DiseaseName": "Hypertension",
+    "ProbStatus": "Active",
+    "DateStart": "2020-01-01",
+    "DateStop": null,
+    "PatNote": "Controlled"
+  }
+]

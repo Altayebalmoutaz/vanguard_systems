@@ -1,0 +1,10 @@
+[
+  {
+    "MedicationPatNum": 8,
+    "PatNum": 1,
+    "MedName": "Amoxicillin",
+    "PatNote": "500mg TID",
+    "DateStart": "2026-07-15",
+    "DateStop": null
+  }
+]

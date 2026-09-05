@@ -61,6 +61,19 @@ class NeonConnectionTests(unittest.TestCase):
 
         conn.cursor.assert_called()
 
+    @patch("app.db.connection.psycopg.connect")
+    def test_bypass_rls_applies_without_practice_id(self, mock_connect: MagicMock) -> None:
+        conn = MagicMock()
+        mock_connect.return_value.__enter__.return_value = conn
+        settings = Settings(neon_database_url="postgresql://test")
+
+        from app.db.connection import neon_connection
+
+        with neon_connection(settings, bypass_rls=True):
+            pass
+
+        conn.cursor.assert_called()
+
 
 if __name__ == "__main__":
     unittest.main()

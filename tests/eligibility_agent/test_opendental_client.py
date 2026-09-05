@@ -100,6 +100,37 @@ def test_replay_mode_short_circuits_http(tmp_path: Path) -> None:
     assert out.FName == "A"
 
 
+def test_replay_patient_reads() -> None:
+    fixtures = Path(__file__).resolve().parents[1] / "fixtures" / "opendental"
+    c = _client(replay_dir=str(fixtures))
+    procs = c.get_procedures_for_patient(1)
+    claims = c.get_claims_for_patient(1)
+    assert procs[0]["ProcCode"] == "D1110"
+    assert claims[0]["ClaimNum"] == 77
+
+
+def test_replay_od_read_layer() -> None:
+    fixtures = Path(__file__).resolve().parents[1] / "fixtures" / "opendental"
+    c = _client(replay_dir=str(fixtures))
+    assert c.get_appointments_for_patient(1)[0]["AptStatus"] == "Scheduled"
+    assert c.get_treatment_plan_for_patient(1)[0]["ProcCode"] == "D2393"
+    assert c.get_account_summary_for_patient(1)[0]["BalTotal"] == 240.0
+    assert c.get_payments_for_patient(1)[0]["PayAmt"] == 50.0
+    assert c.get_adjustments_for_patient(1)[0]["AdjAmt"] == -24.0
+    assert c.get_claim_procedures_for_patient(1)[0]["Status"] == "Received"
+    assert c.get_recalls_for_patient(1)[0]["RecallNum"] == 12
+    assert c.get_commlogs_for_patient(1)[0]["CommlogNum"] == 77
+    assert c.get_documents_for_patient(1)[0]["DocNum"] == 19
+    assert c.get_referrals_for_patient(1)[0]["LName"] == "Endo"
+    assert c.get_statements_for_patient(1)[0]["StatementNum"] == 61
+    assert c.get_medications_for_patient(1)[0]["MedName"] == "Amoxicillin"
+    assert c.get_allergies_for_patient(1)[0]["Description"] == "Penicillin"
+    assert c.get_problems_for_patient(1)[0]["ProbStatus"] == "Active"
+    assert c.get_perio_exams_for_patient(1)[0]["PerioExamNum"] == 2
+    assert c.get_clinical_notes_for_patient(1)[0]["Note"].startswith("Prophy")
+    assert len(c.get_family_members_for_patient(1)) == 2
+
+
 def test_missing_keys_raise() -> None:
     try:
         OpenDentalClient(

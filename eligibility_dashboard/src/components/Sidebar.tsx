@@ -1,5 +1,6 @@
 "use client";
 
+import { ClinicSwitcher } from "@/components/ClinicSwitcher";
 import {
   dashboardAppName,
   dashboardAppSubtitle,
@@ -14,7 +15,7 @@ import {
   useStaffSession,
   type StaffRole,
 } from "@/hooks/useStaffSession";
-import { Phone, PlugZap, Settings, ShieldCheck } from "lucide-react";
+import { Phone, PlugZap, Settings, ShieldCheck, Smile } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -38,6 +39,12 @@ const NAV: NavItem[] = [
     label: "OpenDental",
     href: "/opendental",
     icon: PlugZap,
+    roles: ["admin", "billing_lead"],
+  },
+  {
+    label: "SmileSuites Copilot",
+    href: "/copilot",
+    icon: Smile,
     roles: ["admin", "billing_lead"],
   },
   { label: "Settings", href: "/settings", icon: Settings, roles: ["admin"] },
@@ -109,6 +116,7 @@ export function Sidebar() {
           </div>
         </div>
       </div>
+      <ClinicSwitcher />
 
       <nav className="mt-1 flex-1 space-y-0.5 px-2">
         {visibleNav.map((item) => {

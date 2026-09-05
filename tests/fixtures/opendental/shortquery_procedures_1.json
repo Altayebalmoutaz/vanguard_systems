@@ -1,0 +1,14 @@
+[
+  {
+    "ProcNum": 11,
+    "PatNum": 1,
+    "AptNum": 42,
+    "ProcDate": "2026-08-01",
+    "ProcStatus": "C",
+    "ProcFee": 120.0,
+    "ToothNum": "",
+    "Surf": "",
+    "ProcCode": "D1110",
+    "Descript": "Prophylaxis adult"
+  }
+]

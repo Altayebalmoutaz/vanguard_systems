@@ -870,3 +870,122 @@ def get_patient_360(
         "latest_eligibility_check": _serialize_row(dict(latest_check)) if latest_check else None,
         "agent_runs": agent_runs,
     }
+
+
+def get_patient_copilot_anchor(
+    settings: Settings,
+    *,
+    practice_id: str,
+    patient_id: UUID,
+) -> dict[str, Any]:
+    """Latest eligibility request for this patient: request id + OD PatNum."""
+    _require_neon(settings)
+    with (
+        neon_connection(settings, practice_id=practice_id) as conn,
+        conn.cursor(row_factory=dict_row) as cur,
+    ):
+        cur.execute(
+            """
+            select id, input_json->>'pat_num' as od_pat_num
+            from rcm.eligibility_requests
+            where practice_id = %s and patient_id = %s
+            order by created_at desc
+            limit 1
+            """,
+            (practice_id, patient_id),
+        )
+        row = cur.fetchone()
+    if not row:
+        return {"request_id": None, "od_pat_num": None}
+    raw = row.get("od_pat_num")
+    pat_num: int | None = None
+    if raw is not None and str(raw).strip():
+        try:
+            pat_num = int(str(raw).strip())
+        except ValueError:
+            pat_num = None
+    return {"request_id": row["id"], "od_pat_num": pat_num}
+
+
+def get_patient_eligibility_profile(
+    settings: Settings,
+    *,
+    practice_id: str,
+    patient_id: UUID,
+) -> dict[str, Any] | None:
+    """Copilot fallback anchor for patients that exist only as eligibility
+    requests (no ``patient.patients`` row yet).
+
+    Returns a profile shaped like :func:`get_patient_360` (``patient`` +
+    ``latest_eligibility_check`` + ``agent_runs``) plus the OpenDental PatNum,
+    or ``None`` when this patient has no eligibility request for the practice.
+    """
+    _require_neon(settings)
+    with (
+        neon_connection(settings, practice_id=practice_id) as conn,
+        conn.cursor(row_factory=dict_row) as cur,
+    ):
+        cur.execute(
+            """
+            select patient_id, first_name, last_name, dob, subscriber_id,
+                   primary_payer_id, secondary_payer_id, plan_id,
+                   input_json->>'pat_num' as od_pat_num
+            from rcm.eligibility_requests
+            where practice_id = %s and patient_id = %s
+            order by created_at desc
+            limit 1
+            """,
+            (practice_id, patient_id),
+        )
+        request = cur.fetchone()
+        if not request:
+            return None
+        cur.execute(
+            """
+            select *
+            from rcm.eligibility_checks
+            where practice_id = %s and patient_id = %s
+            order by checked_at desc
+            limit 1
+            """,
+            (practice_id, patient_id),
+        )
+        latest_check = cur.fetchone()
+    raw_pat = request.pop("od_pat_num", None)
+    od_pat_num: int | None = None
+    if raw_pat is not None and str(raw_pat).strip():
+        try:
+            od_pat_num = int(str(raw_pat).strip())
+        except ValueError:
+            od_pat_num = None
+    return {
+        "patient": _serialize_row(dict(request)),
+        "latest_eligibility_check": _serialize_row(dict(latest_check)) if latest_check else None,
+        "agent_runs": [],
+        "od_pat_num": od_pat_num,
+    }
+
+
+def list_procedure_estimates_for_check(
+    settings: Settings,
+    *,
+    practice_id: str,
+    eligibility_check_id: UUID,
+) -> list[dict[str, Any]]:
+    _require_neon(settings)
+    with (
+        neon_connection(settings, practice_id=practice_id) as conn,
+        conn.cursor(row_factory=dict_row) as cur,
+    ):
+        cur.execute(
+            """
+            select *
+            from rcm.procedure_estimates
+            where practice_id = %s
+              and eligibility_check_id = %s
+            order by created_at asc
+            """,
+            (practice_id, eligibility_check_id),
+        )
+        rows = cur.fetchall()
+    return [_serialize_row(dict(row)) for row in rows]

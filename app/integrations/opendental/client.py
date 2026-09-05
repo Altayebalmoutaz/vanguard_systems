@@ -133,10 +133,27 @@ class OpenDentalClient:
             raise OpenDentalAPIError(f"Replay fixture not found: {p}")
         return json.loads(p.read_text(encoding="utf-8"))
 
-    def _get_json(self, path: str) -> object:
+    def _request(self, method: str, path: str, **kwargs: object) -> httpx.Response:
+        """HTTP call with transport failures mapped to ``OpenDentalAPIError``."""
         url = urljoin(self.base_url, path.lstrip("/"))
-        with httpx.Client(timeout=self.timeout_seconds) as client:
-            resp = client.get(url, headers=self._headers())
+        try:
+            with httpx.Client(timeout=self.timeout_seconds) as client:
+                return client.request(method, url, headers=self._headers(), **kwargs)
+        except httpx.TimeoutException as exc:
+            raise OpenDentalAPIError(
+                f"OpenDental {method} timed out for {path}",
+                status_code=504,
+                body="504 Gateway Time-out: The server didn't respond in time.",
+            ) from exc
+        except httpx.TransportError as exc:
+            raise OpenDentalAPIError(
+                f"OpenDental {method} transport failed for {path}: {exc}",
+                status_code=None,
+                body=str(exc),
+            ) from exc
+
+    def _get_json(self, path: str) -> object:
+        resp = self._request("GET", path)
         if resp.status_code >= 400:
             raise OpenDentalAPIError(
                 f"OpenDental GET failed for {path}",
@@ -151,9 +168,7 @@ class OpenDentalClient:
             ) from exc
 
     def _put_json(self, path: str, payload: dict[str, object]) -> object:
-        url = urljoin(self.base_url, path.lstrip("/"))
-        with httpx.Client(timeout=self.timeout_seconds) as client:
-            resp = client.put(url, headers=self._headers(), json=payload)
+        resp = self._request("PUT", path, json=payload)
         if resp.status_code >= 400:
             raise OpenDentalAPIError(
                 f"OpenDental PUT failed for {path}",
@@ -169,9 +184,7 @@ class OpenDentalClient:
 
     def _send_json(self, method: str, path: str, payload: dict[str, object]) -> object:
         """Send a JSON request tolerating empty/non-JSON bodies (OD often returns bare '200 OK')."""
-        url = urljoin(self.base_url, path.lstrip("/"))
-        with httpx.Client(timeout=self.timeout_seconds) as client:
-            resp = client.request(method, url, headers=self._headers(), json=payload)
+        resp = self._request(method, path, json=payload)
         if resp.status_code >= 400:
             raise OpenDentalAPIError(
                 f"OpenDental {method} failed for {path}",
@@ -428,3 +441,269 @@ class OpenDentalClient:
             except Exception:  # pragma: no cover - defensive
                 pass
         return ODBenefit(BenefitNum=benefit_num, **payload.model_dump(exclude_none=True))
+
+    def short_query(
+        self, sql: str, *, offset: int = 0, replay_stem: str | None = None
+    ) -> list[dict[str, object]]:
+        """
+        PUT /queries/ShortQuery — read-only SELECT helper (ApiQueries permission).
+
+        Only SELECT statements are allowed. ``replay_stem`` selects a fixture
+        file when ``replay_dir`` is set.
+        """
+        command = (sql or "").strip()
+        if not command:
+            raise OpenDentalAPIError("ShortQuery SQL is empty")
+        lowered = f" {command.lstrip().lower()} "
+        if not command.lstrip().lower().startswith("select"):
+            raise OpenDentalAPIError("ShortQuery only permits SELECT statements")
+        for bad in (" insert ", " update ", " delete ", " drop ", " alter ", " truncate "):
+            if bad in lowered:
+                raise OpenDentalAPIError("ShortQuery rejects mutating SQL")
+        if ";" in command.rstrip().rstrip(";"):
+            raise OpenDentalAPIError("ShortQuery rejects multi-statement SQL")
+
+        body: dict[str, object] = {"SqlCommand": command, "Offset": int(offset)}
+        if self.replay_dir:
+            if not replay_stem:
+                raise OpenDentalAPIError("Replay ShortQuery requires replay_stem")
+            payload = self._read_fixture(replay_stem)
+        else:
+            payload = self._send_json("PUT", "/queries/ShortQuery", body)
+        if isinstance(payload, dict) and isinstance(payload.get("Table"), list):
+            rows = payload["Table"]
+        elif isinstance(payload, list):
+            rows = payload
+        else:
+            raise OpenDentalAPIError("OpenDental ShortQuery payload was not a row list")
+        return [dict(row) for row in rows if isinstance(row, dict)]
+
+    def get_procedures_for_patient(self, pat_num: int) -> list[dict[str, object]]:
+        """Recent procedurelog rows for one patient (fixed SELECT, int-coerced PatNum)."""
+        safe_pat = int(pat_num)
+        sql = (
+            "SELECT pl.ProcNum, pl.PatNum, pl.AptNum, pl.ProcDate, pl.ProcStatus, "
+            "pl.ProcFee, pl.ToothNum, pl.Surf, pc.ProcCode, pc.Descript "
+            "FROM procedurelog pl "
+            "LEFT JOIN procedurecode pc ON pc.CodeNum = pl.CodeNum "
+            f"WHERE pl.PatNum = {safe_pat} "
+            "ORDER BY pl.ProcDate DESC LIMIT 25"
+        )
+        return self.short_query(sql, replay_stem=f"shortquery_procedures_{safe_pat}")
+
+    def get_claims_for_patient(self, pat_num: int) -> list[dict[str, object]]:
+        """Recent claim headers for one patient (fixed SELECT, int-coerced PatNum)."""
+        safe_pat = int(pat_num)
+        sql = (
+            "SELECT ClaimNum, PatNum, DateService, ClaimStatus, ClaimFee, "
+            "InsPayAmt, ClaimIdentifier "
+            f"FROM claim WHERE PatNum = {safe_pat} "
+            "ORDER BY DateService DESC LIMIT 25"
+        )
+        return self.short_query(sql, replay_stem=f"shortquery_claims_{safe_pat}")
+
+    def get_appointments_for_patient(self, pat_num: int) -> list[dict[str, object]]:
+        """Recent appointments for one patient (status decoded, provider abbr)."""
+        safe_pat = int(pat_num)
+        sql = (
+            "SELECT a.AptNum, a.PatNum, a.AptDateTime, "
+            "CASE a.AptStatus "
+            "WHEN 1 THEN 'Scheduled' WHEN 2 THEN 'Complete' WHEN 3 THEN 'UnschedList' "
+            "WHEN 4 THEN 'ASAP' WHEN 5 THEN 'Broken' WHEN 6 THEN 'Planned' "
+            "ELSE CAST(a.AptStatus AS CHAR) END AS AptStatus, "
+            "a.Pattern, a.Confirmed, a.IsHygiene, a.Op, p.Abbr AS ProvAbbr, a.Note "
+            "FROM appointment a "
+            "LEFT JOIN provider p ON p.ProvNum = a.ProvNum "
+            f"WHERE a.PatNum = {safe_pat} "
+            "ORDER BY a.AptDateTime DESC LIMIT 25"
+        )
+        return self.short_query(sql, replay_stem=f"shortquery_appointments_{safe_pat}")
+
+    def get_treatment_plan_for_patient(self, pat_num: int) -> list[dict[str, object]]:
+        """Treatment-planned procedurelog rows (ProcStatus = 1 / TP)."""
+        safe_pat = int(pat_num)
+        sql = (
+            "SELECT pl.ProcNum, pl.PatNum, pl.ProcDate, pl.ProcFee, pl.ToothNum, "
+            "pl.Surf, pc.ProcCode, pc.Descript "
+            "FROM procedurelog pl "
+            "LEFT JOIN procedurecode pc ON pc.CodeNum = pl.CodeNum "
+            f"WHERE pl.PatNum = {safe_pat} AND pl.ProcStatus = 1 "
+            "ORDER BY pl.ProcDate DESC LIMIT 25"
+        )
+        return self.short_query(sql, replay_stem=f"shortquery_treatmentplan_{safe_pat}")
+
+    def get_account_summary_for_patient(self, pat_num: int) -> list[dict[str, object]]:
+        """Aging and estimated balance from the patient row."""
+        safe_pat = int(pat_num)
+        sql = (
+            "SELECT PatNum, BalTotal, Bal_0_30, Bal_31_60, Bal_61_90, BalOver90, "
+            "InsEst, EstBalance, PayPlanDue "
+            f"FROM patient WHERE PatNum = {safe_pat} LIMIT 1"
+        )
+        return self.short_query(sql, replay_stem=f"shortquery_account_{safe_pat}")
+
+    def get_payments_for_patient(self, pat_num: int) -> list[dict[str, object]]:
+        """Recent payment rows for one patient."""
+        safe_pat = int(pat_num)
+        sql = (
+            "SELECT PayNum, PatNum, PayDate, PayAmt, PayType, CheckNum, PayNote "
+            f"FROM payment WHERE PatNum = {safe_pat} "
+            "ORDER BY PayDate DESC LIMIT 25"
+        )
+        return self.short_query(sql, replay_stem=f"shortquery_payments_{safe_pat}")
+
+    def get_adjustments_for_patient(self, pat_num: int) -> list[dict[str, object]]:
+        """Recent adjustment rows for one patient."""
+        safe_pat = int(pat_num)
+        sql = (
+            "SELECT AdjNum, PatNum, AdjDate, AdjAmt, AdjType, ProcNum, ProvNum, AdjNote "
+            f"FROM adjustment WHERE PatNum = {safe_pat} "
+            "ORDER BY AdjDate DESC LIMIT 25"
+        )
+        return self.short_query(sql, replay_stem=f"shortquery_adjustments_{safe_pat}")
+
+    def get_claim_procedures_for_patient(self, pat_num: int) -> list[dict[str, object]]:
+        """Recent claimproc rows with decoded Status."""
+        safe_pat = int(pat_num)
+        sql = (
+            "SELECT ClaimProcNum, ClaimNum, ProcNum, "
+            "CASE Status "
+            "WHEN 0 THEN 'NotReceived' WHEN 1 THEN 'Received' WHEN 2 THEN 'Preauth' "
+            "WHEN 3 THEN 'Adjustment' WHEN 4 THEN 'Supplemental' WHEN 5 THEN 'CapClaim' "
+            "WHEN 6 THEN 'Estimate' WHEN 7 THEN 'CapEstimate' WHEN 8 THEN 'CapComplete' "
+            "WHEN 9 THEN 'InsHist' ELSE CAST(Status AS CHAR) END AS Status, "
+            "InsPayEst, InsPayAmt, DedApplied, WriteOff, DateCP "
+            f"FROM claimproc WHERE PatNum = {safe_pat} "
+            "ORDER BY DateCP DESC LIMIT 25"
+        )
+        return self.short_query(sql, replay_stem=f"shortquery_claimprocs_{safe_pat}")
+
+    def get_recalls_for_patient(self, pat_num: int) -> list[dict[str, object]]:
+        """Recall rows for one patient."""
+        safe_pat = int(pat_num)
+        sql = (
+            "SELECT RecallNum, PatNum, DateDue, DateScheduled, DatePrevious, "
+            "RecallStatus, RecallTypeNum, IsDisabled "
+            f"FROM recall WHERE PatNum = {safe_pat} "
+            "ORDER BY DateDue DESC LIMIT 25"
+        )
+        return self.short_query(sql, replay_stem=f"shortquery_recalls_{safe_pat}")
+
+    def get_commlogs_for_patient(self, pat_num: int) -> list[dict[str, object]]:
+        """Recent communication-log notes for one patient."""
+        safe_pat = int(pat_num)
+        sql = (
+            "SELECT CommlogNum, PatNum, CommDateTime, CommType, Mode_, "
+            "SentOrReceived, Note "
+            f"FROM commlog WHERE PatNum = {safe_pat} "
+            "ORDER BY CommDateTime DESC LIMIT 25"
+        )
+        return self.short_query(sql, replay_stem=f"shortquery_commlogs_{safe_pat}")
+
+    def get_documents_for_patient(self, pat_num: int) -> list[dict[str, object]]:
+        """Document metadata only (no bytes) for one patient."""
+        safe_pat = int(pat_num)
+        sql = (
+            "SELECT DocNum, PatNum, DateCreated, Description, FileName, "
+            "DocCategory, ImgType "
+            f"FROM document WHERE PatNum = {safe_pat} "
+            "ORDER BY DateCreated DESC LIMIT 25"
+        )
+        return self.short_query(sql, replay_stem=f"shortquery_documents_{safe_pat}")
+
+    def get_referrals_for_patient(self, pat_num: int) -> list[dict[str, object]]:
+        """Referral attachments joined to the referral directory."""
+        safe_pat = int(pat_num)
+        sql = (
+            "SELECT ra.RefAttachNum, ra.PatNum, ra.RefType, ra.RefDate, "
+            "r.LName, r.FName, r.Specialty, ra.Note "
+            "FROM refattach ra "
+            "LEFT JOIN referral r ON r.ReferralNum = ra.ReferralNum "
+            f"WHERE ra.PatNum = {safe_pat} "
+            "ORDER BY ra.RefDate DESC LIMIT 25"
+        )
+        return self.short_query(sql, replay_stem=f"shortquery_referrals_{safe_pat}")
+
+    def get_statements_for_patient(self, pat_num: int) -> list[dict[str, object]]:
+        """Recent billing statements for one patient."""
+        safe_pat = int(pat_num)
+        sql = (
+            "SELECT StatementNum, PatNum, DateSent, Mode_, IsSent, DocNum, Note "
+            f"FROM statement WHERE PatNum = {safe_pat} "
+            "ORDER BY DateSent DESC LIMIT 25"
+        )
+        return self.short_query(sql, replay_stem=f"shortquery_statements_{safe_pat}")
+
+    def get_medications_for_patient(self, pat_num: int) -> list[dict[str, object]]:
+        """Medication history (medicationpat + catalog name)."""
+        safe_pat = int(pat_num)
+        sql = (
+            "SELECT mp.MedicationPatNum, mp.PatNum, "
+            "COALESCE(m.MedName, mp.MedDescript) AS MedName, "
+            "mp.PatNote, mp.DateStart, mp.DateStop "
+            "FROM medicationpat mp "
+            "LEFT JOIN medication m ON m.MedicationNum = mp.MedicationNum "
+            f"WHERE mp.PatNum = {safe_pat} "
+            "ORDER BY mp.DateStart DESC LIMIT 25"
+        )
+        return self.short_query(sql, replay_stem=f"shortquery_medications_{safe_pat}")
+
+    def get_allergies_for_patient(self, pat_num: int) -> list[dict[str, object]]:
+        """Allergy rows joined to allergydef."""
+        safe_pat = int(pat_num)
+        sql = (
+            "SELECT a.AllergyNum, a.PatNum, d.Description, a.Reaction, "
+            "a.DateAdverseReaction, a.StatusIsActive "
+            "FROM allergy a "
+            "LEFT JOIN allergydef d ON d.AllergyDefNum = a.AllergyDefNum "
+            f"WHERE a.PatNum = {safe_pat} "
+            "ORDER BY a.DateAdverseReaction DESC LIMIT 25"
+        )
+        return self.short_query(sql, replay_stem=f"shortquery_allergies_{safe_pat}")
+
+    def get_problems_for_patient(self, pat_num: int) -> list[dict[str, object]]:
+        """Problem / disease list with decoded ProbStatus."""
+        safe_pat = int(pat_num)
+        sql = (
+            "SELECT ds.DiseaseNum, ds.PatNum, dd.DiseaseName, "
+            "CASE ds.ProbStatus WHEN 0 THEN 'Active' WHEN 1 THEN 'Resolved' "
+            "WHEN 2 THEN 'Inactive' ELSE CAST(ds.ProbStatus AS CHAR) END AS ProbStatus, "
+            "ds.DateStart, ds.DateStop, ds.PatNote "
+            "FROM disease ds "
+            "LEFT JOIN diseasedef dd ON dd.DiseaseDefNum = ds.DiseaseDefNum "
+            f"WHERE ds.PatNum = {safe_pat} "
+            "ORDER BY ds.DateStart DESC LIMIT 25"
+        )
+        return self.short_query(sql, replay_stem=f"shortquery_problems_{safe_pat}")
+
+    def get_perio_exams_for_patient(self, pat_num: int) -> list[dict[str, object]]:
+        """Perio exam headers only (no measures, to bound payload)."""
+        safe_pat = int(pat_num)
+        sql = (
+            "SELECT PerioExamNum, PatNum, ExamDate, ProvNum "
+            f"FROM perioexam WHERE PatNum = {safe_pat} "
+            "ORDER BY ExamDate DESC LIMIT 25"
+        )
+        return self.short_query(sql, replay_stem=f"shortquery_perioexams_{safe_pat}")
+
+    def get_clinical_notes_for_patient(self, pat_num: int) -> list[dict[str, object]]:
+        """Recent procedure notes (procnote) for one patient."""
+        safe_pat = int(pat_num)
+        sql = (
+            "SELECT ProcNoteNum, PatNum, ProcNum, EntryDateTime, UserNum, Note "
+            f"FROM procnote WHERE PatNum = {safe_pat} "
+            "ORDER BY EntryDateTime DESC LIMIT 25"
+        )
+        return self.short_query(sql, replay_stem=f"shortquery_procnotes_{safe_pat}")
+
+    def get_family_members_for_patient(self, pat_num: int) -> list[dict[str, object]]:
+        """Patient rows that share this patient's Guarantor."""
+        safe_pat = int(pat_num)
+        sql = (
+            "SELECT p.PatNum, p.FName, p.LName, p.Position, p.Birthdate, p.Guarantor "
+            "FROM patient p "
+            "WHERE p.Guarantor = ("
+            f"SELECT Guarantor FROM patient WHERE PatNum = {safe_pat}"
+            ") ORDER BY p.PatNum LIMIT 25"
+        )
+        return self.short_query(sql, replay_stem=f"shortquery_family_{safe_pat}")

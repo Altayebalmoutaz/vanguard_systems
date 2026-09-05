@@ -19,10 +19,10 @@ export function PageHeader({
           <Icon size={18} className="text-white" strokeWidth={2} />
         </div>
         <div>
-          <h1 className="text-[20px] font-semibold leading-tight tracking-tight text-slate-900">
+          <h1 className="text-[20px] font-bold leading-tight tracking-tight text-slate-900">
             {title}
           </h1>
-          <p className="mt-0.5 text-[12.5px] text-slate-500">{subtitle}</p>
+          <p className="mt-0.5 text-[12.5px] font-medium text-slate-600">{subtitle}</p>
         </div>
       </div>
       {actions ? (

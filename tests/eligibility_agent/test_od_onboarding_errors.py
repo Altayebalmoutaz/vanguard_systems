@@ -18,3 +18,17 @@ def test_friendly_auth_error() -> None:
 def test_friendly_timeout_error() -> None:
     out = friendly_opendental_test_error("ConnectError: timed out")
     assert out["code"] == "network"
+
+
+def test_friendly_gateway_timeout() -> None:
+    out = friendly_opendental_test_error(
+        "504 Gateway Time-out: The server didn't respond in time."
+    )
+    assert out["code"] == "econnector_timeout"
+    assert out["recovery_step"] == "econnector"
+
+
+def test_friendly_disabled_by_customer() -> None:
+    out = friendly_opendental_test_error('"API key has been disabled by customer."')
+    assert out["code"] == "auth"
+    assert "disabled" in out["message"].lower()

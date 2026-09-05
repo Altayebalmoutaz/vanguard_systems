@@ -1,0 +1,11 @@
+[
+  {
+    "PayNum": 501,
+    "PatNum": 1,
+    "PayDate": "2026-08-15",
+    "PayAmt": 50.0,
+    "PayType": 71,
+    "CheckNum": "1042",
+    "PayNote": "Patient payment"
+  }
+]

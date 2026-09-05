@@ -37,6 +37,18 @@ class Settings(BaseSettings):
     openrouter_timeout_seconds: float = 120.0
     openrouter_max_retries: int = 3
 
+    # Read-only patient-scoped OD chat copilot (dashboard). On for the
+    # synthetic/non-PHI pilot; set COPILOT_ENABLED=0 to hide it.
+    copilot_enabled: bool = True
+    # Scrub tool outputs before the third-party LLM. Off while data is not real
+    # patients; set COPILOT_SCRUB_PHI=1 before any real PHI.
+    copilot_scrub_phi: bool = False
+    copilot_model: str | None = "google/gemini-3.8-flash"
+    copilot_max_tool_iterations: int = 6
+    # Flash defaults to a 65k completion cap; OpenRouter 402s when remaining
+    # credits cannot reserve that many tokens. Copilot replies stay short.
+    copilot_max_tokens: int = 1024
+
     # Optional: Jina + Supabase RPC `match_cdt_codes` injects vector-retrieved CDT hints into the coding LLM.
     jina_api_key: str | None = None
     cdt_vector_match_count: int = 8
