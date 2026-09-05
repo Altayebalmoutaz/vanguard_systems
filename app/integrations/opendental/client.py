@@ -17,13 +17,10 @@ from app.integrations.opendental.models import (
     ODBenefitCreate,
     ODBenefitUpdate,
     ODCarrier,
-    ODClaimPayment,
     ODClaimProcInsAdjust,
     ODCommlogCreate,
     ODCommlogResponse,
     ODCovCat,
-    ODDeposit,
-    ODEtransMessageText,
     ODInsHistCreate,
     ODInsHistRow,
     ODInsSubBenefitNotesUpdate,
@@ -445,52 +442,14 @@ class OpenDentalClient:
                 pass
         return ODBenefit(BenefitNum=benefit_num, **payload.model_dump(exclude_none=True))
 
-    # --- Remit Control reads (no claimpayment / claimproc payment writes) ---
-
-    def get_claimpayments(self) -> list[ODClaimPayment]:
-        """GET /claimpayments — posted insurance checks / EFTs."""
-        if self.replay_dir:
-            payload = self._read_fixture("claimpayments")
-        else:
-            payload = self._get_json("/claimpayments")
-        if not isinstance(payload, list):
-            raise OpenDentalAPIError("OpenDental claimpayments payload was not a list")
-        return [ODClaimPayment.model_validate(row) for row in payload]
-
-    def get_deposits(self) -> list[ODDeposit]:
-        """GET /deposits — deposit slips (optional recon input)."""
-        try:
-            if self.replay_dir:
-                payload = self._read_fixture("deposits")
-            else:
-                payload = self._get_json("/deposits")
-        except OpenDentalAPIError:
-            return []
-        if not isinstance(payload, list):
-            return []
-        return [ODDeposit.model_validate(row) for row in payload]
-
-    def get_etrans_message_text(self, etrans_message_text_num: int) -> ODEtransMessageText:
-        """GET /etransmessagetexts/{id} — raw ISA/ST*835 MessageText."""
-        stem = f"etransmessagetext_{int(etrans_message_text_num)}"
-        if self.replay_dir:
-            payload = self._read_fixture(stem)
-        else:
-            payload = self._get_json(f"/etransmessagetexts/{int(etrans_message_text_num)}")
-        if not isinstance(payload, dict):
-            raise OpenDentalAPIError("OpenDental etransmessagetext payload was not an object")
-        return ODEtransMessageText.model_validate(payload)
-
     def short_query(
         self, sql: str, *, offset: int = 0, replay_stem: str | None = None
     ) -> list[dict[str, object]]:
         """
         PUT /queries/ShortQuery — read-only SELECT helper (ApiQueries permission).
 
-        Only SELECT statements are allowed. Used for clinic-wide ERA etrans discovery
-        (GET /etranss requires PatNum and cannot poll practice-wide).
-        ``replay_stem`` selects a fixture file when ``replay_dir`` is set; the
-        default keeps the ERA etrans fixture used by remit ingest.
+        Only SELECT statements are allowed. ``replay_stem`` selects a fixture
+        file when ``replay_dir`` is set.
         """
         command = (sql or "").strip()
         if not command:
@@ -506,10 +465,9 @@ class OpenDentalClient:
 
         body: dict[str, object] = {"SqlCommand": command, "Offset": int(offset)}
         if self.replay_dir:
-            stem = replay_stem or (
-                "shortquery_era_etrans" if offset == 0 else f"shortquery_era_etrans_{offset}"
-            )
-            payload = self._read_fixture(stem)
+            if not replay_stem:
+                raise OpenDentalAPIError("Replay ShortQuery requires replay_stem")
+            payload = self._read_fixture(replay_stem)
         else:
             payload = self._send_json("PUT", "/queries/ShortQuery", body)
         if isinstance(payload, dict) and isinstance(payload.get("Table"), list):
@@ -519,31 +477,6 @@ class OpenDentalClient:
         else:
             raise OpenDentalAPIError("OpenDental ShortQuery payload was not a row list")
         return [dict(row) for row in rows if isinstance(row, dict)]
-
-    def list_era_835_etrans(
-        self,
-        *,
-        after_datetime: str | None = None,
-        after_etrans_num: int | None = None,
-        offset: int = 0,
-    ) -> list[dict[str, object]]:
-        """
-        Clinic-wide ERA_835 etrans rows newer than the ingest watermark.
-
-        Open Dental stores ERA type as EtransType.ERA_835 (= 17 in classic builds).
-        """
-        clauses = ["Etype = 17"]
-        if after_datetime:
-            safe = after_datetime.replace("'", "")
-            clauses.append(f"DateTimeTrans > '{safe}'")
-        if after_etrans_num is not None:
-            clauses.append(f"EtransNum > {int(after_etrans_num)}")
-        where = " AND ".join(clauses)
-        sql = (
-            "SELECT EtransNum, EtransMessageTextNum, DateTimeTrans, Etype "
-            f"FROM etrans WHERE {where} ORDER BY DateTimeTrans, EtransNum"
-        )
-        return self.short_query(sql, offset=offset)
 
     def get_procedures_for_patient(self, pat_num: int) -> list[dict[str, object]]:
         """Recent procedurelog rows for one patient (fixed SELECT, int-coerced PatNum)."""
