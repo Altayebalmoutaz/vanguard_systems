@@ -15,6 +15,35 @@ def friendly_opendental_test_error(raw: str | None) -> dict[str, str]:
             "message": "The eConnector service on the OpenDental server must be Working (eServices → eConnector Service) before we can connect.",
             "recovery_step": "econnector",
         }
+    # HQ accepted the key but the office never answered (504 from api.opendental.com,
+    # or our client timed out waiting). Common with multi-database installs where
+    # eConnector is still pointed at a different MySQL database.
+    if (
+        "504" in low
+        or "gateway time-out" in low
+        or "gateway timeout" in low
+        or "readtimeout" in low
+        or "the server didn't respond in time" in low
+    ):
+        return {
+            "code": "econnector_timeout",
+            "title": "OpenDental’s bridge isn’t answering",
+            "message": (
+                "Open Dental’s cloud reached your clinic key, but the eConnector "
+                "did not respond in time. On a multi-database server, install a "
+                "separate eConnector pointed at this SmileSuites database "
+                "(Service Manager → database name in OpenDentalWebConfig.xml), "
+                "keep that PC awake, then retry."
+            ),
+            "recovery_step": "econnector",
+        }
+    if "disabled by customer" in low:
+        return {
+            "code": "auth",
+            "title": "Key is disabled in OpenDental",
+            "message": "In Setup → Advanced Setup → API, enable this Customer Key (not Disabled), then retry.",
+            "recovery_step": "paste_key",
+        }
     if (
         "401" in low
         or "not authorized" in low
